@@ -16,11 +16,11 @@ interface GmMonsterViewProps {
 }
 
 const inputCls =
-  'h-7 rounded border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none';
+  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 
 const DEFAULT_FORM = {
   name: '',
@@ -73,18 +73,18 @@ export function GmMonsterView(props: GmMonsterViewProps) {
   return (
     <div className="space-y-3">
       {/* 怪物模板 */}
-      <section className="rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
+      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
         <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-zinc-200">怪物与惧魔模板</span>
+          <span className="text-xs font-semibold text-card-foreground">怪物与惧魔模板</span>
           <button type="button" onClick={onToggleAddForm} className={btnCls}>
             + 自定义怪物
           </button>
         </div>
 
         {showAddForm && (
-          <form onSubmit={handleSubmit} className="mb-3 rounded border border-zinc-800 bg-zinc-950/70 p-3">
+          <form onSubmit={handleSubmit} className="mb-3 rounded border border-border bg-background/70 p-3">
             <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <label className="col-span-2 flex flex-col gap-1 text-[11px] text-zinc-400">
+              <label className="col-span-2 flex flex-col gap-1 text-[11px] text-muted-foreground">
                 <span>怪物名称</span>
                 <input
                   required
@@ -109,7 +109,7 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                 ['uncon', '意识丧失'],
                 ['death', '死亡'],
               ].map(([key, label]) => (
-                <label key={key} className="flex flex-col gap-1 text-[11px] text-zinc-400">
+                <label key={key} className="flex flex-col gap-1 text-[11px] text-muted-foreground">
                   <span>{label}</span>
                   <input
                     type="number"
@@ -130,32 +130,32 @@ export function GmMonsterView(props: GmMonsterViewProps) {
 
         <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
           {templates.map((t) => (
-            <div key={t.id} className="rounded border border-zinc-800 bg-zinc-950/70 p-2.5">
+            <div key={t.id} className="rounded border border-border bg-background/70 p-2.5">
               <div className="mb-2 flex items-center justify-between">
-                <b className="text-sm text-zinc-100">{t.name}</b>
+                <b className="text-sm text-foreground">{t.name}</b>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-zinc-300 tabular-nums">先攻 Step {t.initStep}</span>
+                  <span className="text-xs font-semibold text-foreground/90 tabular-nums">先攻 Step {t.initStep}</span>
                   <button
                     type="button"
                     onClick={() => onDeleteTemplate(t.id)}
-                    className="h-6 rounded border border-zinc-800 bg-zinc-900 px-2 text-[11px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 cursor-pointer"
+                    className="h-6 rounded border border-border bg-secondary px-2 text-[11px] text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
                   >
                     删除
                   </button>
                 </div>
               </div>
-              <div className="mb-2.5 grid grid-cols-4 gap-1 text-[11px] text-zinc-400 tabular-nums">
-                <div>物防 <b className="text-zinc-100">{t.pd}</b></div>
-                <div>秘防 <b className="text-zinc-100">{t.md}</b></div>
-                <div>物甲 <b className="text-zinc-100">{t.pa}</b></div>
-                <div>秘甲 <b className="text-zinc-100">{t.ma}</b></div>
-                <div>攻击 <b className="text-zinc-100">Step {t.atkStep}</b></div>
-                <div>伤害 <b className="text-zinc-100">Step {t.dmgStep}</b></div>
-                <div>击倒 <b className="text-zinc-100">Step {t.kdStep}</b></div>
-                <div>回复 <b className="text-zinc-100">Step {t.recStep}</b></div>
-                <div>负伤阈值 <b className="text-zinc-100">{t.woundThreshold}</b></div>
-                <div>意识丧失 <b className="text-zinc-100">{t.uncon}</b></div>
-                <div>死亡 <b className="text-zinc-100">{t.death}</b></div>
+              <div className="mb-2.5 grid grid-cols-4 gap-1 text-[11px] text-muted-foreground tabular-nums">
+                <div>物防 <b className="text-foreground">{t.pd}</b></div>
+                <div>秘防 <b className="text-foreground">{t.md}</b></div>
+                <div>物甲 <b className="text-foreground">{t.pa}</b></div>
+                <div>秘甲 <b className="text-foreground">{t.ma}</b></div>
+                <div>攻击 <b className="text-foreground">Step {t.atkStep}</b></div>
+                <div>伤害 <b className="text-foreground">Step {t.dmgStep}</b></div>
+                <div>击倒 <b className="text-foreground">Step {t.kdStep}</b></div>
+                <div>回复 <b className="text-foreground">Step {t.recStep}</b></div>
+                <div>负伤阈值 <b className="text-foreground">{t.woundThreshold}</b></div>
+                <div>意识丧失 <b className="text-foreground">{t.uncon}</b></div>
+                <div>死亡 <b className="text-foreground">{t.death}</b></div>
               </div>
               <div className="flex items-center gap-1.5">
                 <button type="button" onClick={() => onSpawnMonster(t.id, 1)} className={btnPrimaryCls}>
@@ -171,10 +171,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
       </section>
 
       {/* 已加入战斗的怪物 */}
-      <section className="rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
-        <div className="mb-2.5 text-xs font-semibold text-zinc-200">已加入战斗的怪物 ({monsters.length})</div>
+      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
+        <div className="mb-2.5 text-xs font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</div>
         {monsters.length === 0 ? (
-          <div className="text-xs text-zinc-500">暂无已加入战斗的怪物，可从上方模板生成。</div>
+          <div className="text-xs text-muted-foreground">暂无已加入战斗的怪物，可从上方模板生成。</div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
             {monsters.map((m) => {
@@ -182,15 +182,15 @@ export function GmMonsterView(props: GmMonsterViewProps) {
               return (
                 <div
                   key={m.instanceId}
-                  className={`rounded border border-zinc-800 bg-zinc-950/70 p-2.5 ${isDead ? 'opacity-50' : ''}`}
+                  className={`rounded border border-border bg-background/70 p-2.5 ${isDead ? 'opacity-50' : ''}`}
                 >
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                      <b className="text-zinc-100">{m.name}</b>
-                      {isDead && <span className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-300">死亡</span>}
-                      {m.knockedDown && <span className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-300">倒地</span>}
-                      {m.blindsided && <span className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-300">盲区</span>}
-                      {m.harried && <span className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-300">受扰</span>}
+                      <b className="text-foreground">{m.name}</b>
+                      {isDead && <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">死亡</span>}
+                      {m.knockedDown && <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">倒地</span>}
+                      {m.blindsided && <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">盲区</span>}
+                      {m.harried && <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">受扰</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -206,10 +206,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-zinc-400 tabular-nums">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground tabular-nums">
                     <span>
-                      伤害 <b className="text-zinc-100">{m.currentDamage}</b> / 意识丧失 {m.uncon} / 死亡 {m.death} · 负伤{' '}
-                      <b className="text-zinc-100">{m.wounds}</b>
+                      伤害 <b className="text-foreground">{m.currentDamage}</b> / 意识丧失 {m.uncon} / 死亡 {m.death} · 负伤{' '}
+                      <b className="text-foreground">{m.wounds}</b>
                     </span>
                     <div className="flex items-center gap-1">
                       {([
@@ -221,10 +221,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                           key={flag}
                           type="button"
                           onClick={() => onToggleMonsterFlag(m.instanceId, flag)}
-                          className={`h-5 rounded border px-1.5 text-[10px] cursor-pointer ${
+                          className={`h-5 rounded border px-1.5 text-[10px] transition-colors cursor-pointer ${
                             m[flag]
-                              ? 'border-zinc-300 bg-zinc-200 font-semibold text-zinc-950'
-                              : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-200'
+                              ? 'border-primary bg-primary font-semibold text-primary-foreground'
+                              : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                           }`}
                         >
                           {label}
@@ -240,8 +240,8 @@ export function GmMonsterView(props: GmMonsterViewProps) {
       </section>
 
       {/* 快捷受创与击倒结算器 */}
-      <section className="rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
-        <div className="mb-2 text-xs font-semibold text-zinc-200">快捷受创结算器</div>
+      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
+        <div className="mb-2 text-xs font-semibold text-card-foreground">快捷受创结算器</div>
         <div className="flex flex-wrap items-center gap-2">
           <select value={calcTarget} onChange={(e) => setCalcTarget(e.target.value)} className={`${inputCls} w-40`}>
             <option value="pl">{plName}（PL）</option>

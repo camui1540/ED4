@@ -37,14 +37,14 @@ interface PlSheetViewProps {
 }
 
 const inputCls =
-  'h-7 rounded border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none';
+  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnSmCls =
-  'inline-flex h-6 items-center justify-center rounded border border-zinc-800 bg-zinc-900 px-2 text-[11px] font-medium text-zinc-300 transition-colors hover:bg-zinc-800 hover:text-zinc-50 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const sectionCls = 'rounded-md border border-zinc-800 bg-zinc-900/50 p-3';
+  'inline-flex h-6 items-center justify-center rounded border border-border bg-secondary px-2 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+const sectionCls = 'rounded-md border border-border bg-card p-3 text-card-foreground';
 
 export function PlSheetView(props: PlSheetViewProps) {
   const {
@@ -286,7 +286,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 </option>
               ))}
             </select>
-            <label className="flex items-center gap-1 text-xs text-zinc-400">
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
               <span>环数</span>
               <input
                 type="number"
@@ -297,12 +297,12 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} w-14 text-center tabular-nums`}
               />
             </label>
-            <div className="inline-flex overflow-hidden rounded border border-zinc-800">
+            <div className="inline-flex overflow-hidden rounded border border-border">
               <button
                 type="button"
                 onClick={() => onUpdatePl((prev) => ({ ...prev, karmaDie: 6 }))}
                 className={`h-7 px-2 text-xs cursor-pointer ${
-                  pl.karmaDie === 6 ? 'bg-zinc-100 font-semibold text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-100'
+                  pl.karmaDie === 6 ? 'bg-primary font-semibold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
               >
                 D6
@@ -310,8 +310,8 @@ export function PlSheetView(props: PlSheetViewProps) {
               <button
                 type="button"
                 onClick={() => onUpdatePl((prev) => ({ ...prev, karmaDie: 8 }))}
-                className={`h-7 border-l border-zinc-800 px-2 text-xs cursor-pointer ${
-                  pl.karmaDie === 8 ? 'bg-zinc-100 font-semibold text-zinc-950' : 'bg-zinc-950 text-zinc-400 hover:text-zinc-100'
+                className={`h-7 border-l border-border px-2 text-xs cursor-pointer ${
+                  pl.karmaDie === 8 ? 'bg-primary font-semibold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
               >
                 D8
@@ -332,18 +332,18 @@ export function PlSheetView(props: PlSheetViewProps) {
               导入角色卡 (.xlsx / .txt)
             </button>
           </div>
-          <div className="text-xs text-zinc-400 tabular-nums">
-            剩余属性点：<span className="font-semibold text-zinc-100">{d.remainingPoints}</span> / 25
+          <div className="text-xs text-muted-foreground tabular-nums">
+            剩余属性点：<span className="font-semibold text-foreground">{d.remainingPoints}</span> / 25
           </div>
         </div>
 
         {/* 种族与门类特征数据栏 */}
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-zinc-800/80 pb-2 text-[11px] text-zinc-400 tabular-nums">
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 text-[11px] text-muted-foreground tabular-nums">
           <span>移速 {d.race.move} 码</span>
           <span>负重 {d.carry} 磅</span>
-          <span className="text-zinc-300">{d.race.traits}</span>
+          <span className="text-card-foreground">{d.race.traits}</span>
           {bonusTags.map((b) => (
-            <span key={b} className="rounded border border-zinc-800 bg-zinc-950 px-1.5 py-0.5 text-zinc-300">
+            <span key={b} className="rounded border border-border bg-background px-1.5 py-0.5 text-foreground">
               {b}
             </span>
           ))}
@@ -352,13 +352,13 @@ export function PlSheetView(props: PlSheetViewProps) {
         {/* 六维属性 */}
         <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {Object.entries(ED4Engine.ATTR_NAMES).map(([k, label]) => (
-            <div key={k} className="flex flex-col items-center rounded border border-zinc-800 bg-zinc-950/70 p-2">
-              <div className="text-[11px] text-zinc-400">{label}</div>
-              <div className="my-0.5 text-lg font-bold text-zinc-50 tabular-nums">{d.attrs[k]}</div>
+            <div key={k} className="flex flex-col items-center rounded border border-border bg-background/70 p-2">
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+              <div className="my-0.5 text-lg font-bold text-foreground tabular-nums">{d.attrs[k]}</div>
               <button
                 type="button"
                 onClick={() => onRollAttr(k)}
-                className="mb-1.5 rounded border border-zinc-700 bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-zinc-100 hover:bg-zinc-800 cursor-pointer tabular-nums"
+                className="mb-1.5 rounded border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer tabular-nums"
               >
                 Step {d.steps[k]}
               </button>
@@ -366,7 +366,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 <button type="button" onClick={() => onAdjustAttr(k, -1)} className={`${btnSmCls} w-6 px-0`}>
                   -
                 </button>
-                <span className="min-w-6 text-center text-[11px] text-zinc-400 tabular-nums">
+                <span className="min-w-6 text-center text-[11px] text-muted-foreground tabular-nums">
                   {pl.attrMods[k] >= 0 ? `+${pl.attrMods[k]}` : pl.attrMods[k]}
                 </span>
                 <button type="button" onClick={() => onAdjustAttr(k, 1)} className={`${btnSmCls} w-6 px-0`}>
@@ -379,9 +379,9 @@ export function PlSheetView(props: PlSheetViewProps) {
 
         {/* 衍生战斗数值 */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-          <div className="flex flex-col items-center justify-center rounded border border-zinc-800 bg-zinc-950/70 p-2">
-            <div className="text-[11px] text-zinc-400">先攻</div>
-            <div className="my-0.5 text-sm font-semibold text-zinc-100 tabular-nums">
+          <div className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
+            <div className="text-[11px] text-muted-foreground">先攻</div>
+            <div className="my-0.5 text-sm font-semibold text-foreground tabular-nums">
               Step {Math.max(1, d.initStep + actionMod)}
             </div>
             <button type="button" onClick={onRollInitiative} className={`${btnPrimaryCls} h-6 px-2 text-[11px]`}>
@@ -395,9 +395,9 @@ export function PlSheetView(props: PlSheetViewProps) {
             ['物理护甲', d.pa],
             ['秘法护甲', d.ma],
           ].map(([label, val]) => (
-            <div key={String(label)} className="flex flex-col items-center justify-center rounded border border-zinc-800 bg-zinc-950/70 p-2">
-              <div className="text-[11px] text-zinc-400">{label}</div>
-              <div className="mt-0.5 text-lg font-bold text-zinc-50 tabular-nums">{val}</div>
+            <div key={String(label)} className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
+              <div className="text-[11px] text-muted-foreground">{label}</div>
+              <div className="mt-0.5 text-lg font-bold text-foreground tabular-nums">{val}</div>
             </div>
           ))}
         </div>
@@ -406,8 +406,8 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 常用检定 */}
       <section className={sectionCls}>
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-zinc-200">常用检定</span>
-          <span className="text-zinc-400 tabular-nums">
+          <span className="font-semibold text-card-foreground">常用检定</span>
+          <span className="text-muted-foreground tabular-nums">
             动作修正：{actionMod >= 0 ? `+${actionMod}` : actionMod} Step
           </span>
         </div>
@@ -445,14 +445,14 @@ export function PlSheetView(props: PlSheetViewProps) {
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <section className={sectionCls}>
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1 text-xs">
-            <span className="font-semibold text-zinc-200">健康轨与资源</span>
-            <span className="text-[11px] text-zinc-400 tabular-nums">
+            <span className="font-semibold text-card-foreground">健康轨与资源</span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
               意识丧失 {d.effUncon} / 死亡 {d.effDeath}（负伤阈值 {d.woundThreshold}）
             </span>
           </div>
           <div className="mb-3 grid grid-cols-3 gap-2">
-            <div className="rounded border border-zinc-800 bg-zinc-950/70 p-2">
-              <div className="mb-1 text-[11px] text-zinc-400">当前伤害</div>
+            <div className="rounded border border-border bg-background/70 p-2">
+              <div className="mb-1 text-[11px] text-muted-foreground">当前伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -461,7 +461,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-zinc-100 tabular-nums">{pl.currentDamage}</span>
+                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.currentDamage}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, currentDamage: p.currentDamage + 1 }))}
@@ -471,8 +471,8 @@ export function PlSheetView(props: PlSheetViewProps) {
                 </button>
               </div>
             </div>
-            <div className="rounded border border-zinc-800 bg-zinc-950/70 p-2">
-              <div className="mb-1 text-[11px] text-zinc-400">血魔法伤害</div>
+            <div className="rounded border border-border bg-background/70 p-2">
+              <div className="mb-1 text-[11px] text-muted-foreground">血魔法伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -481,7 +481,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-zinc-100 tabular-nums">{pl.bloodDamage}</span>
+                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.bloodDamage}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, bloodDamage: p.bloodDamage + 1 }))}
@@ -491,8 +491,8 @@ export function PlSheetView(props: PlSheetViewProps) {
                 </button>
               </div>
             </div>
-            <div className="rounded border border-zinc-800 bg-zinc-950/70 p-2">
-              <div className="mb-1 text-[11px] text-zinc-400">负伤 (-{pl.wounds})</div>
+            <div className="rounded border border-border bg-background/70 p-2">
+              <div className="mb-1 text-[11px] text-muted-foreground">负伤 (-{pl.wounds})</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -501,7 +501,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-zinc-100 tabular-nums">{pl.wounds}</span>
+                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.wounds}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, wounds: p.wounds + 1 }))}
@@ -513,14 +513,14 @@ export function PlSheetView(props: PlSheetViewProps) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums">
-            <span className="text-zinc-400">
-              业力(D{pl.karmaDie})：<b className="text-zinc-100">{pl.karmaCurrent}/{d.karmaMax}</b>
+            <span className="text-muted-foreground">
+              业力(D{pl.karmaDie})：<b className="text-foreground">{pl.karmaCurrent}/{d.karmaMax}</b>
             </span>
             <button type="button" onClick={onKarmaRitual} className={btnSmCls}>
               业力仪式
             </button>
-            <span className="text-zinc-400">
-              回复：<b className="text-zinc-100">{pl.recoveryCurrent}/{d.recoveryMax}</b>
+            <span className="text-muted-foreground">
+              回复：<b className="text-foreground">{pl.recoveryCurrent}/{d.recoveryMax}</b>
             </span>
             <button
               type="button"
@@ -534,9 +534,9 @@ export function PlSheetView(props: PlSheetViewProps) {
         </section>
 
         <section className={sectionCls}>
-          <div className="mb-2.5 text-xs font-semibold text-zinc-200">护甲、盾牌与战斗选项</div>
+          <div className="mb-2.5 text-xs font-semibold text-card-foreground">护甲、盾牌与战斗选项</div>
           <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               <span>物理护甲</span>
               <input
                 type="number"
@@ -545,7 +545,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               <span>护甲先攻减值</span>
               <input
                 type="number"
@@ -554,7 +554,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               <span>盾牌物防</span>
               <input
                 type="number"
@@ -563,7 +563,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-zinc-400">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               <span>先攻修正</span>
               <input
                 type="number"
@@ -589,8 +589,8 @@ export function PlSheetView(props: PlSheetViewProps) {
                 onClick={() => onToggleOption(key)}
                 className={`h-6 rounded border px-2 text-[11px] transition-colors cursor-pointer ${
                   pl.options[key]
-                    ? 'border-zinc-200 bg-zinc-100 font-semibold text-zinc-950'
-                    : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                    ? 'border-primary bg-primary font-semibold text-primary-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
                 {label}
@@ -612,8 +612,8 @@ export function PlSheetView(props: PlSheetViewProps) {
                 onClick={() => onToggleStatus(key)}
                 className={`h-6 rounded border px-2 text-[11px] transition-colors cursor-pointer ${
                   pl.statuses[key]
-                    ? 'border-zinc-300 bg-zinc-200 font-semibold text-zinc-950'
-                    : 'border-zinc-800 bg-zinc-950 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                    ? 'border-primary bg-primary font-semibold text-primary-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
                 {label}
@@ -626,8 +626,8 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 天赋与技能 + 武器伤害 */}
       <section className={sectionCls}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-zinc-200">天赋与技能检定</span>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <span className="text-xs font-semibold text-card-foreground">天赋与技能检定</span>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>当前目标</span>
             <select
               aria-label="当前目标"
@@ -656,9 +656,9 @@ export function PlSheetView(props: PlSheetViewProps) {
 
         <div className="mb-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
           {/* 门类天赋 */}
-          <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
+          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-zinc-300">门类天赋 ({pl.talents.length})</span>
+              <span className="text-xs font-medium text-card-foreground">门类天赋 ({pl.talents.length})</span>
               <input
                 type="text"
                 placeholder="筛选天赋..."
@@ -670,14 +670,14 @@ export function PlSheetView(props: PlSheetViewProps) {
             <div className="mb-2 max-h-60 flex-1 overflow-y-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-left text-[11px] text-zinc-500">
+                  <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                     <th className="py-1 font-medium">天赋</th>
                     <th className="py-1 font-medium">等级</th>
                     <th className="py-1 font-medium">Step</th>
                     <th className="py-1 text-right font-medium">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60">
+                <tbody className="divide-y divide-border">
                   {pl.talents
                     .filter((t: any) => !talentFilter || t.name.toLowerCase().includes(talentFilter.toLowerCase()))
                     .map((t: any) => {
@@ -686,11 +686,11 @@ export function PlSheetView(props: PlSheetViewProps) {
                         d.steps[t.attr] + t.rank + actionMod + (t.isAttack && pl.options.aggressive ? 3 : 0)
                       );
                       return (
-                        <tr key={t.id} className="hover:bg-zinc-900/60">
+                        <tr key={t.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
-                            <span className="font-medium text-zinc-100">{t.name}</span>{' '}
-                            <span className="text-[10px] text-zinc-500">{ED4Engine.ATTR_NAMES[t.attr]}</span>
-                            {t.strain ? <span className="ml-1 text-[10px] text-zinc-400">劳累{t.strain}</span> : null}
+                            <span className="font-medium text-foreground">{t.name}</span>{' '}
+                            <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
+                            {t.strain ? <span className="ml-1 text-[10px] text-muted-foreground">劳累{t.strain}</span> : null}
                           </td>
                           <td className="py-1.5 pr-1 tabular-nums">
                             <div className="flex items-center gap-1">
@@ -721,15 +721,15 @@ export function PlSheetView(props: PlSheetViewProps) {
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-semibold text-zinc-200 tabular-nums">Step {effStep}</td>
+                          <td className="py-1.5 pr-1 font-semibold text-foreground tabular-nums">Step {effStep}</td>
                           <td className="py-1.5 text-right">
                             <div className="inline-flex items-center gap-1">
-                              <label className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-zinc-400">
+                              <label className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-muted-foreground">
                                 <input
                                   type="checkbox"
                                   checked={!!talentKarmaMap[t.id]}
                                   onChange={(e) => setTalentKarmaMap((m) => ({ ...m, [t.id]: e.target.checked }))}
-                                  className="accent-zinc-200"
+                                  className="accent-primary"
                                 />
                                 业力
                               </label>
@@ -745,7 +745,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                 onClick={() =>
                                   onUpdatePl((p) => ({ ...p, talents: p.talents.filter((x: any) => x.id !== t.id) }))
                                 }
-                                className={`${btnSmCls} h-6 w-6 px-0 text-zinc-500 hover:text-zinc-200`}
+                                className={`${btnSmCls} h-6 w-6 px-0 text-muted-foreground hover:text-foreground`}
                               >
                                 ×
                               </button>
@@ -757,7 +757,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 </tbody>
               </table>
             </div>
-            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-2">
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
               <input
                 type="text"
                 placeholder="天赋名"
@@ -794,12 +794,12 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} w-12 tabular-nums`}
                 title="劳累值"
               />
-              <label className="inline-flex items-center gap-1 text-[11px] text-zinc-400">
+              <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={newTalent.isAttack}
                   onChange={(e) => setNewTalent((s) => ({ ...s, isAttack: e.target.checked }))}
-                  className="accent-zinc-200"
+                  className="accent-primary"
                 />
                 攻击
               </label>
@@ -810,9 +810,9 @@ export function PlSheetView(props: PlSheetViewProps) {
           </div>
 
           {/* 角色技能 */}
-          <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
+          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-zinc-300">角色技能 ({(pl.skills || []).length})</span>
+              <span className="text-xs font-medium text-card-foreground">角色技能 ({(pl.skills || []).length})</span>
               <input
                 type="text"
                 placeholder="筛选技能..."
@@ -824,14 +824,14 @@ export function PlSheetView(props: PlSheetViewProps) {
             <div className="mb-2 max-h-60 flex-1 overflow-y-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-left text-[11px] text-zinc-500">
+                  <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                     <th className="py-1 font-medium">技能</th>
                     <th className="py-1 font-medium">等级</th>
                     <th className="py-1 font-medium">Step</th>
                     <th className="py-1 text-right font-medium">操作</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60">
+                <tbody className="divide-y divide-border">
                   {(pl.skills || [])
                     .filter((sk: any) => !skillFilter || sk.name.toLowerCase().includes(skillFilter.toLowerCase()))
                     .map((sk: any) => {
@@ -840,13 +840,13 @@ export function PlSheetView(props: PlSheetViewProps) {
                         d.steps[sk.attr] + sk.rank + actionMod + (sk.isAttack && pl.options.aggressive ? 3 : 0)
                       );
                       return (
-                        <tr key={sk.id} className="hover:bg-zinc-900/60">
+                        <tr key={sk.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
                             {sk.category ? (
-                              <span className="mr-1 text-[10px] text-zinc-500">[{sk.category.replace('技能', '')}]</span>
+                              <span className="mr-1 text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
                             ) : null}
-                            <span className="font-medium text-zinc-100">{sk.name}</span>{' '}
-                            <span className="text-[10px] text-zinc-500">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
+                            <span className="font-medium text-foreground">{sk.name}</span>{' '}
+                            <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
                           </td>
                           <td className="py-1.5 pr-1 tabular-nums">
                             <div className="flex items-center gap-1">
@@ -877,7 +877,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-semibold text-zinc-200 tabular-nums">Step {effStep}</td>
+                          <td className="py-1.5 pr-1 font-semibold text-foreground tabular-nums">Step {effStep}</td>
                           <td className="py-1.5 text-right">
                             <div className="inline-flex items-center gap-1">
                               <button
@@ -892,7 +892,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                 onClick={() =>
                                   onUpdatePl((p) => ({ ...p, skills: p.skills.filter((x: any) => x.id !== sk.id) }))
                                 }
-                                className={`${btnSmCls} h-6 w-6 px-0 text-zinc-500 hover:text-zinc-200`}
+                                className={`${btnSmCls} h-6 w-6 px-0 text-muted-foreground hover:text-foreground`}
                               >
                                 ×
                               </button>
@@ -903,7 +903,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     })}
                   {(pl.skills || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-3 text-center text-zinc-500">
+                      <td colSpan={4} className="py-3 text-center text-muted-foreground">
                         暂无技能
                       </td>
                     </tr>
@@ -911,7 +911,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 </tbody>
               </table>
             </div>
-            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-2">
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
               <select
                 value={newSkill.category}
                 onChange={(e) => setNewSkill((s) => ({ ...s, category: e.target.value }))}
@@ -957,7 +957,7 @@ export function PlSheetView(props: PlSheetViewProps) {
 
         {/* 武器伤害 */}
         <div className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="font-semibold text-zinc-200">
+          <span className="font-semibold text-card-foreground">
             武器伤害{lastExtraDamageBonus ? `（额外成功 +${lastExtraDamageBonus}）` : ''}
           </span>
         </div>
@@ -967,12 +967,12 @@ export function PlSheetView(props: PlSheetViewProps) {
             return (
               <div
                 key={w.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded border border-zinc-800 bg-zinc-950/70 px-2.5 py-1.5 text-xs"
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-border bg-background/70 px-2.5 py-1.5 text-xs"
               >
                 <div className="tabular-nums">
-                  <span className="font-semibold text-zinc-100">{w.name}</span>{' '}
-                  <span className="text-zinc-500">基础 +{w.dmgStep}</span> ·{' '}
-                  <span className="font-semibold text-zinc-200">伤害 Step {dmgStep}</span>
+                  <span className="font-semibold text-foreground">{w.name}</span>{' '}
+                  <span className="text-muted-foreground">基础 +{w.dmgStep}</span> ·{' '}
+                  <span className="font-semibold text-foreground">伤害 Step {dmgStep}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => onRollWeaponDamage(w.id)} className={btnPrimaryCls}>
@@ -981,7 +981,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                   <button
                     type="button"
                     onClick={() => onUpdatePl((p) => ({ ...p, weapons: p.weapons.filter((x: any) => x.id !== w.id) }))}
-                    className={`${btnSmCls} w-6 px-0 text-zinc-500 hover:text-zinc-200`}
+                    className={`${btnSmCls} w-6 px-0 text-muted-foreground hover:text-foreground`}
                   >
                     ×
                   </button>
@@ -1016,14 +1016,14 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 法术列表与施放 */}
       <section className={sectionCls}>
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-zinc-200">法术矩阵与法术书</span>
+          <span className="text-xs font-semibold text-card-foreground">法术矩阵与法术书</span>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-zinc-400">
+            <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
               <input
                 type="checkbox"
                 checked={showAllSpells}
                 onChange={(e) => onToggleShowAllSpells(e.target.checked)}
-                className="accent-zinc-200"
+                className="accent-primary"
               />
               显示全部
             </label>
@@ -1060,10 +1060,10 @@ export function PlSheetView(props: PlSheetViewProps) {
               onDragLeave={() => setDragOverZone(null)}
               onDrop={(e) => handleDropZone(true, e)}
               className={`rounded border border-dashed p-2.5 transition-colors ${
-                dragOverZone === 'matrix' ? 'border-zinc-400 bg-zinc-800/40' : 'border-zinc-700 bg-zinc-950/50'
+                dragOverZone === 'matrix' ? 'border-primary bg-accent/50' : 'border-border bg-background/50'
               }`}
             >
-              <div className="mb-2 text-[11px] font-semibold text-zinc-300">
+              <div className="mb-2 text-[11px] font-semibold text-card-foreground">
                 ★ 常备法术矩阵 ({matrixSpells.length})
               </div>
               {matrixSpells.length > 0 ? (
@@ -1084,23 +1084,23 @@ export function PlSheetView(props: PlSheetViewProps) {
                         onDragEnd={() => setDraggedSpellId(null)}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => handleDropOnCard(sp.instanceId, e)}
-                        className="rounded border border-zinc-700 bg-zinc-900 p-2 text-xs"
+                        className="rounded border border-border bg-card p-2 text-xs text-card-foreground"
                       >
                         <div className="mb-1 flex items-start justify-between gap-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="cursor-grab text-zinc-500">⠿</span>
-                            <b className="text-zinc-100">{sp.nameCn}</b>
-                            <span className="text-[11px] text-zinc-400 tabular-nums">{sp.circle}环</span>
-                            <span className="text-[11px] text-zinc-300 tabular-nums">
+                            <span className="cursor-grab text-muted-foreground">⠿</span>
+                            <b className="text-foreground">{sp.nameCn}</b>
+                            <span className="text-[11px] text-muted-foreground tabular-nums">{sp.circle}环</span>
+                            <span className="text-[11px] text-foreground tabular-nums">
                               脉路 {curThreads}/{reqThreads}
                             </span>
-                            <span className="text-[11px] text-zinc-400 tabular-nums">
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
                               编织 {sp.weavingBase}/{sp.weavingHigh}
                             </span>
-                            <span className="text-[11px] text-zinc-400 tabular-nums">
+                            <span className="text-[11px] text-muted-foreground tabular-nums">
                               施法 {sp.castingType === 'fixed' ? sp.castingDn : sp.aoe ? '群体TMD' : 'TMD'}
                             </span>
-                            <span className="text-[11px] text-zinc-300">{sp.effectFormula}</span>
+                            <span className="text-[11px] text-foreground">{sp.effectFormula}</span>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
                             <button
@@ -1118,23 +1118,23 @@ export function PlSheetView(props: PlSheetViewProps) {
                                   spells: p.spells.filter((x: any) => x.instanceId !== sp.instanceId),
                                 }))
                               }
-                              className={`${btnSmCls} w-6 px-0 text-zinc-500 hover:text-zinc-200`}
+                              className={`${btnSmCls} w-6 px-0 text-muted-foreground hover:text-foreground`}
                             >
                               ×
                             </button>
                           </div>
                         </div>
-                        <div className="mb-2 text-[11px] text-zinc-400">
+                        <div className="mb-2 text-[11px] text-muted-foreground">
                           {sp.range} · {sp.duration}
                           {sp.aoe ? ` · ${sp.aoe}` : ''} — {sp.desc}
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-zinc-400">
+                          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
                             <input
                               type="checkbox"
                               checked={!!spellKarmaMap[sp.instanceId]}
                               onChange={(e) => setSpellKarmaMap((m) => ({ ...m, [sp.instanceId]: e.target.checked }))}
-                              className="accent-zinc-200"
+                              className="accent-primary"
                             />
                             业力
                           </label>
@@ -1162,7 +1162,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                               结算效果
                             </button>
                           ) : (
-                            <span className="text-[11px] text-zinc-500">成功即生效</span>
+                            <span className="text-[11px] text-muted-foreground">成功即生效</span>
                           )}
                         </div>
                       </div>
@@ -1170,7 +1170,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                   })}
                 </div>
               ) : (
-                <div className="py-2 text-xs text-zinc-500">暂无常备法术，可从下方法术书装入。</div>
+                <div className="py-2 text-xs text-muted-foreground">暂无常备法术，可从下方法术书装入。</div>
               )}
             </div>
 
@@ -1183,10 +1183,10 @@ export function PlSheetView(props: PlSheetViewProps) {
               onDragLeave={() => setDragOverZone(null)}
               onDrop={(e) => handleDropZone(false, e)}
               className={`rounded border border-dashed p-2.5 transition-colors ${
-                dragOverZone === 'grimoire' ? 'border-zinc-400 bg-zinc-800/40' : 'border-zinc-800 bg-zinc-950/30'
+                dragOverZone === 'grimoire' ? 'border-primary bg-accent/50' : 'border-border bg-background/30'
               }`}
             >
-              <div className="mb-2 text-[11px] font-semibold text-zinc-400">法术书 ({grimoireSpells.length})</div>
+              <div className="mb-2 text-[11px] font-semibold text-muted-foreground">法术书 ({grimoireSpells.length})</div>
               {grimoireSpells.length > 0 ? (
                 <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
                   {grimoireSpells.map((sp: any) => (
@@ -1200,17 +1200,17 @@ export function PlSheetView(props: PlSheetViewProps) {
                       onDragEnd={() => setDraggedSpellId(null)}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => handleDropOnCard(sp.instanceId, e)}
-                      className="rounded border border-zinc-800 bg-zinc-900/70 p-2 text-xs"
+                      className="rounded border border-border bg-card/80 p-2 text-xs text-card-foreground"
                     >
                       <div className="mb-1 flex items-center justify-between gap-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="cursor-grab text-zinc-500">⠿</span>
-                          <b className="text-zinc-200">{sp.nameCn}</b>
-                          <span className="text-[11px] text-zinc-400 tabular-nums">{sp.circle}环</span>
-                          <span className="text-[11px] text-zinc-400 tabular-nums">
+                          <span className="cursor-grab text-muted-foreground">⠿</span>
+                          <b className="text-foreground">{sp.nameCn}</b>
+                          <span className="text-[11px] text-muted-foreground tabular-nums">{sp.circle}环</span>
+                          <span className="text-[11px] text-muted-foreground tabular-nums">
                             {sp.threads}脉路 · 编织{sp.weavingBase}
                           </span>
-                          <span className="text-[11px] text-zinc-400">{sp.effectFormula}</span>
+                          <span className="text-[11px] text-muted-foreground">{sp.effectFormula}</span>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <button type="button" onClick={() => toggleMatrixSlot(sp.instanceId)} className={btnSmCls}>
@@ -1224,35 +1224,35 @@ export function PlSheetView(props: PlSheetViewProps) {
                                 spells: p.spells.filter((x: any) => x.instanceId !== sp.instanceId),
                               }))
                             }
-                            className={`${btnSmCls} w-6 px-0 text-zinc-500 hover:text-zinc-200`}
+                            className={`${btnSmCls} w-6 px-0 text-muted-foreground hover:text-foreground`}
                           >
                             ×
                           </button>
                         </div>
                       </div>
-                      <div className="text-[11px] text-zinc-500">
+                      <div className="text-[11px] text-muted-foreground">
                         {sp.range} · {sp.duration} — {sp.desc}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="py-1 text-xs text-zinc-500">法术书暂无其他法术。</div>
+                <div className="py-1 text-xs text-muted-foreground">法术书暂无其他法术。</div>
               )}
             </div>
           </div>
         ) : (
-          <div className="text-xs text-zinc-500">暂未录入法术，可从上方下拉框添加或导入角色卡。</div>
+          <div className="text-xs text-muted-foreground">暂未录入法术，可从上方下拉框添加或导入角色卡。</div>
         )}
       </section>
 
       {/* 装备与脉路物品 + 传说点数与财富 */}
       <section className={sectionCls}>
-        <div className="mb-2.5 text-xs font-semibold text-zinc-200">装备、脉路物品与财富</div>
+        <div className="mb-2.5 text-xs font-semibold text-card-foreground">装备、脉路物品与财富</div>
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           {/* 普通装备 */}
-          <div className="flex flex-col rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
-            <div className="mb-2 text-xs font-medium text-zinc-300">普通装备与防具 ({pl.gear.length})</div>
+          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
+            <div className="mb-2 text-xs font-medium text-card-foreground">普通装备与防具 ({pl.gear.length})</div>
             <div className="mb-2 max-h-48 flex-1 space-y-1.5 overflow-y-auto">
               {pl.gear.map((g: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-1.5">
@@ -1261,7 +1261,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     checked={g.equipped !== false}
                     onChange={(e) => updateListField('gear', idx, 'equipped', e.target.checked)}
                     title="勾选计入面板"
-                    className="shrink-0 accent-zinc-200"
+                    className="shrink-0 accent-primary"
                   />
                   <input
                     type="text"
@@ -1287,15 +1287,15 @@ export function PlSheetView(props: PlSheetViewProps) {
                   <button
                     type="button"
                     onClick={() => removeListIdx('gear', idx)}
-                    className={`${btnSmCls} w-6 shrink-0 px-0 text-zinc-500 hover:text-zinc-200`}
+                    className={`${btnSmCls} w-6 shrink-0 px-0 text-muted-foreground hover:text-foreground`}
                   >
                     ×
                   </button>
                 </div>
               ))}
-              {pl.gear.length === 0 && <div className="text-xs text-zinc-500">暂无装备</div>}
+              {pl.gear.length === 0 && <div className="text-xs text-muted-foreground">暂无装备</div>}
             </div>
-            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-zinc-800/70 pt-2">
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
               <input
                 type="text"
                 placeholder="装备名"
@@ -1333,8 +1333,8 @@ export function PlSheetView(props: PlSheetViewProps) {
           </div>
 
           {/* 脉路物品与传说财富 */}
-          <div className="rounded border border-zinc-800 bg-zinc-950/60 p-2.5">
-            <div className="mb-2 text-xs font-medium text-zinc-300">脉路物品 ({pl.threadItems.length})</div>
+          <div className="rounded border border-border bg-background/60 p-2.5">
+            <div className="mb-2 text-xs font-medium text-card-foreground">脉路物品 ({pl.threadItems.length})</div>
             <div className="mb-2 max-h-40 space-y-1.5 overflow-y-auto">
               {pl.threadItems.map((ti: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-1.5">
@@ -1343,7 +1343,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     checked={ti.equipped !== false}
                     onChange={(e) => updateListField('threadItems', idx, 'equipped', e.target.checked)}
                     title="勾选计入面板"
-                    className="shrink-0 accent-zinc-200"
+                    className="shrink-0 accent-primary"
                   />
                   <input
                     type="text"
@@ -1369,13 +1369,13 @@ export function PlSheetView(props: PlSheetViewProps) {
                   <button
                     type="button"
                     onClick={() => removeListIdx('threadItems', idx)}
-                    className={`${btnSmCls} w-6 shrink-0 px-0 text-zinc-500 hover:text-zinc-200`}
+                    className={`${btnSmCls} w-6 shrink-0 px-0 text-muted-foreground hover:text-foreground`}
                   >
                     ×
                   </button>
                 </div>
               ))}
-              {pl.threadItems.length === 0 && <div className="text-xs text-zinc-500">暂无脉路物品</div>}
+              {pl.threadItems.length === 0 && <div className="text-xs text-muted-foreground">暂无脉路物品</div>}
             </div>
             <div className="mb-3 flex flex-wrap items-center gap-1.5">
               <input
@@ -1416,10 +1416,10 @@ export function PlSheetView(props: PlSheetViewProps) {
               </button>
             </div>
 
-            <div className="border-t border-zinc-800 pt-2">
-              <div className="mb-1.5 text-xs font-medium text-zinc-400">传说点数与财富</div>
+            <div className="border-t border-border pt-2">
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">传说点数与财富</div>
               <div className="grid grid-cols-3 gap-2">
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>传说总计</span>
                   <input
                     type="text"
@@ -1428,7 +1428,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     className={`${inputCls} tabular-nums`}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>现有传说</span>
                   <input
                     type="text"
@@ -1437,7 +1437,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     className={`${inputCls} tabular-nums`}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>名望 / 声誉</span>
                   <input
                     type="text"
@@ -1446,7 +1446,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     className={inputCls}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>金币</span>
                   <input
                     type="text"
@@ -1455,7 +1455,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     className={`${inputCls} tabular-nums`}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>银币</span>
                   <input
                     type="text"
@@ -1464,7 +1464,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     className={`${inputCls} tabular-nums`}
                   />
                 </label>
-                <label className="flex flex-col gap-0.5 text-[11px] text-zinc-500">
+                <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>铜币</span>
                   <input
                     type="text"

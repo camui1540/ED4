@@ -21,11 +21,11 @@ interface RightSidebarProps {
 }
 
 const inputCls =
-  'h-7 rounded border border-zinc-800 bg-zinc-950 px-2 text-xs text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none';
+  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-zinc-800 bg-zinc-900 px-2 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800 hover:text-zinc-50 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-zinc-50 px-2.5 text-xs font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer whitespace-nowrap';
 
 function renderExplodingTrace(detail: string) {
   const parts = detail.split(/((?:业力)?D\d+\[[^\]]*!→[^\]]*\])/g);
@@ -38,8 +38,8 @@ function renderExplodingTrace(detail: string) {
         title={`触发爆炸骰 (${boomCount}次)`}
         className={
           boomCount >= 2
-            ? 'font-bold text-zinc-50 underline decoration-zinc-300 underline-offset-2'
-            : 'font-semibold text-zinc-200'
+            ? 'font-bold text-primary underline decoration-primary underline-offset-2'
+            : 'font-semibold text-foreground'
         }
       >
         {part}
@@ -83,10 +83,10 @@ export function RightSidebar(props: RightSidebarProps) {
   return (
     <div className="flex h-full flex-col gap-3">
       {/* 先攻追踪 */}
-      <section className="rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
+      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-zinc-200">先攻追踪</span>
-          <span className="text-zinc-400 tabular-nums">第 {round} 轮</span>
+          <span className="font-semibold text-card-foreground">先攻追踪</span>
+          <span className="text-muted-foreground tabular-nums">第 {round} 轮</span>
         </div>
         <div className="mb-2.5 flex flex-wrap gap-1.5">
           <button type="button" onClick={onRollAllInitiative} className={btnPrimaryCls}>
@@ -104,7 +104,7 @@ export function RightSidebar(props: RightSidebarProps) {
         </div>
 
         {initiativeList.length === 0 ? (
-          <div className="py-1 text-[11px] text-zinc-500">点击「全员投先攻」或角色卡「投先攻」生成序列</div>
+          <div className="py-1 text-[11px] text-muted-foreground">点击「全员投先攻」或角色卡「投先攻」生成序列</div>
         ) : (
           <div className="space-y-1.5">
             {initiativeList.map((item, idx) => {
@@ -135,29 +135,29 @@ export function RightSidebar(props: RightSidebarProps) {
                   key={item.id}
                   className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-xs ${
                     isCurrent
-                      ? 'border-zinc-300 bg-zinc-800/80 text-zinc-50'
-                      : 'border-zinc-800 bg-zinc-950/60 text-zinc-300'
+                      ? 'border-primary bg-accent text-accent-foreground'
+                      : 'border-border bg-background/70 text-card-foreground'
                   }`}
                 >
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <span className="min-w-5 font-bold text-zinc-100 tabular-nums">{item.initVal}</span>
-                    <span className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-400">
+                    <span className="min-w-5 font-bold text-foreground tabular-nums">{item.initVal}</span>
+                    <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">
                       {item.type === 'pl' ? 'PL' : 'GM'}
                     </span>
                     <b className="truncate">{item.name}</b>
                     {tags.map((t) => (
-                      <span key={t} className="rounded border border-zinc-700 px-1 text-[10px] text-zinc-300">
+                      <span key={t} className="rounded border border-border px-1 text-[10px] text-muted-foreground">
                         {t}
                       </span>
                     ))}
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    <span className="text-[11px] text-zinc-400 tabular-nums">{hpInfo}</span>
+                    <span className="text-[11px] text-muted-foreground tabular-nums">{hpInfo}</span>
                     {item.type === 'gm' && (
                       <button
                         type="button"
                         onClick={() => onRemoveMonster(item.id)}
-                        className="h-5 w-5 rounded border border-zinc-800 bg-zinc-900 text-[11px] text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 cursor-pointer"
+                        className="h-5 w-5 rounded border border-border bg-secondary text-[11px] text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
                       >
                         ×
                       </button>
@@ -172,12 +172,12 @@ export function RightSidebar(props: RightSidebarProps) {
 
       {/* 待确认反应 */}
       {pendingReaction && (
-        <section className="rounded-md border border-zinc-400 bg-zinc-900 p-3 text-xs">
-          <div className="mb-1 font-semibold text-zinc-50">
+        <section className="rounded-md border border-primary bg-card p-3 text-xs text-card-foreground">
+          <div className="mb-1 font-semibold text-foreground">
             待确认反应：{pendingReaction.attackerName} → {pendingReaction.targetName}
           </div>
-          <div className="mb-2 text-[11px] text-zinc-300 tabular-nums">
-            {pendingReaction.attackName} 检定 <b>{pendingReaction.atkTotal}</b>（额外成功 +{pendingReaction.extraSuccesses}）
+          <div className="mb-2 text-[11px] text-muted-foreground tabular-nums">
+            {pendingReaction.attackName} 检定 <b className="text-foreground">{pendingReaction.atkTotal}</b>（额外成功 +{pendingReaction.extraSuccesses}）
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button type="button" onClick={() => onResolveReaction('accept')} className={btnPrimaryCls}>
@@ -198,16 +198,16 @@ export function RightSidebar(props: RightSidebarProps) {
       )}
 
       {/* 自由检定与战报 */}
-      <section className="flex min-h-0 flex-1 flex-col rounded-md border border-zinc-800 bg-zinc-900/50 p-3">
+      <section className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card p-3 text-card-foreground">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-zinc-200">自由检定与战报</span>
-          <button type="button" onClick={onClearLogs} className="text-[11px] text-zinc-400 hover:text-zinc-100 cursor-pointer">
+          <span className="font-semibold text-card-foreground">自由检定与战报</span>
+          <button type="button" onClick={onClearLogs} className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer">
             清空
           </button>
         </div>
 
-        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 border-b border-zinc-800 pb-2.5">
-          <label className="flex items-center gap-1 text-[11px] text-zinc-400">
+        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 border-b border-border pb-2.5">
+          <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <span>Step</span>
             <input
               type="number"
@@ -225,12 +225,12 @@ export function RightSidebar(props: RightSidebarProps) {
             onChange={(e) => setFreeDn(e.target.value)}
             className={`${inputCls} w-16 tabular-nums`}
           />
-          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-zinc-400">
+          <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
             <input
               type="checkbox"
               checked={freeKarma}
               onChange={(e) => setFreeKarma(e.target.checked)}
-              className="accent-zinc-200"
+              className="accent-primary"
             />
             业力
           </label>
@@ -241,26 +241,26 @@ export function RightSidebar(props: RightSidebarProps) {
 
         <div className="min-h-48 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
           {logs.length === 0 ? (
-            <div className="py-4 text-center text-xs text-zinc-600">暂无战报记录</div>
+            <div className="py-4 text-center text-xs text-muted-foreground">暂无战报记录</div>
           ) : (
             logs.map((l) => (
-              <div key={l.id} className="rounded border border-zinc-800/80 bg-zinc-950/70 px-2.5 py-1.5 text-xs">
+              <div key={l.id} className="rounded border border-border bg-background/70 px-2.5 py-1.5 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <span
                     className={
                       l.type === 'hit'
-                        ? 'font-medium text-zinc-100'
+                        ? 'font-medium text-foreground'
                         : l.type === 'fail'
-                        ? 'text-zinc-400'
-                        : 'text-zinc-200'
+                        ? 'text-muted-foreground'
+                        : 'text-foreground/90'
                     }
                   >
                     {l.text}
                   </span>
-                  <span className="shrink-0 text-[10px] text-zinc-500 tabular-nums">{l.time}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">{l.time}</span>
                 </div>
                 {l.detail && (
-                  <div className="mt-0.5 font-mono text-[11px] text-zinc-400 tabular-nums">
+                  <div className="mt-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">
                     {renderExplodingTrace(l.detail)}
                   </div>
                 )}

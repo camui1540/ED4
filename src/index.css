@@ -2,8 +2,30 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* shadcn/ui 默认极简暗色模式（Zinc 灰度调色板） */
-:root,
+/* shadcn/ui 标准变量（支持 :root 浅色与 .dark 暗色及外部主题实时切换） */
+:root {
+  --background: #ffffff;
+  --foreground: #09090b;
+  --card: #f4f4f5;
+  --card-foreground: #09090b;
+  --popover: #ffffff;
+  --popover-foreground: #09090b;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #e4e4e7;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #e4e4e7;
+  --accent-foreground: #18181b;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #18181b;
+  --radius: 0.375rem;
+}
+
 .dark {
   --background: #09090b;
   --foreground: #fafafa;
@@ -72,7 +94,7 @@
   }
 }
 
-/* 细滚动条 */
+/* 细滚动条（随主题变量联动） */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -81,9 +103,9 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: var(--border);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: var(--muted-foreground);
 }

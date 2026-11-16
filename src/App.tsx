@@ -860,12 +860,12 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 lg:h-screen lg:overflow-hidden">
+    <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden">
       {/* 顶部导航栏 */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold tracking-tight text-zinc-50">Earthdawn 4E</span>
-          <nav className="flex items-center gap-1 rounded border border-zinc-800 bg-zinc-900/70 p-0.5">
+          <span className="text-sm font-bold tracking-tight text-foreground">Earthdawn 4E</span>
+          <nav className="flex items-center gap-1 rounded border border-border bg-muted/70 p-0.5">
             {([
               ['pl', '角色卡（PL）'],
               ['gm', '怪物面板（GM）'],
@@ -877,8 +877,8 @@ export default function App() {
                 onClick={() => setState((p) => ({ ...p, activeTab: tabId }))}
                 className={`h-7 rounded px-2.5 text-xs transition-colors cursor-pointer whitespace-nowrap ${
                   state.activeTab === tabId
-                    ? 'bg-zinc-100 font-semibold text-zinc-950'
-                    : 'text-zinc-400 hover:text-zinc-100'
+                    ? 'bg-primary font-semibold text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
@@ -891,23 +891,23 @@ export default function App() {
           <button
             type="button"
             onClick={() => setSpellJsonOpen(true)}
-            className="inline-flex h-7 items-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 cursor-pointer whitespace-nowrap"
+            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap"
           >
             结构化法术 JSON
           </button>
           <button
             type="button"
             onClick={() => setManualOpen(true)}
-            className="inline-flex h-7 items-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 cursor-pointer whitespace-nowrap"
+            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap"
           >
             使用说明书
           </button>
-          <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-300 whitespace-nowrap">
+          <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded border border-border bg-secondary px-2.5 text-xs text-secondary-foreground whitespace-nowrap">
             <input
               type="checkbox"
               checked={state.gmBlind}
               onChange={(e) => setState((p) => ({ ...p, gmBlind: e.target.checked }))}
-              className="accent-zinc-200"
+              className="accent-primary"
             />
             GM脱敏显示
           </label>
@@ -1006,15 +1006,15 @@ export default function App() {
           aria-orientation="vertical"
           onMouseDown={() => setDraggingResizer(true)}
           onTouchStart={() => setDraggingResizer(true)}
-          className={`hidden w-1.5 shrink-0 cursor-col-resize border-x border-zinc-800/80 transition-colors lg:block ${
-            draggingResizer ? 'bg-zinc-500' : 'bg-zinc-900 hover:bg-zinc-700'
+          className={`hidden w-1.5 shrink-0 cursor-col-resize border-x border-border transition-colors lg:block ${
+            draggingResizer ? 'bg-ring' : 'bg-muted hover:bg-accent'
           }`}
         />
 
         {/* 右侧边栏（桌面固定可调宽度，移动端全宽堆叠） */}
         <aside
           style={{ ['--sidebar-w' as any]: `${sidebarWidth}px` }}
-          className="ed4-sidebar w-full shrink-0 border-t border-zinc-800 bg-zinc-950 p-3 lg:overflow-y-auto lg:border-t-0"
+          className="ed4-sidebar w-full shrink-0 border-t border-border bg-background p-3 lg:overflow-y-auto lg:border-t-0"
         >
           <RightSidebar
             round={state.round}
