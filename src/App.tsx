@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import * as XLSX from 'xlsx';
+import { Moon, Sun } from 'lucide-react';
 import ED4Engine from './engine/ed4_engine.js';
 import {
   applyDamageToMonsterPure,
@@ -28,6 +29,19 @@ export default function App() {
     return saved >= 280 && saved <= 720 ? saved : 360;
   });
   const [draggingResizer, setDraggingResizer] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document === 'undefined') return true;
+    return document.documentElement.classList.contains('dark');
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+    try {
+      localStorage.setItem('ed4_theme', isDark ? 'dark' : 'light');
+    } catch {
+      // 忽略本地存储受限场景
+    }
+  }, [isDark]);
 
   // 桌面端拖拽分栏逻辑
   useEffect(() => {
@@ -862,9 +876,9 @@ export default function App() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden">
       {/* 顶部导航栏 */}
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-background px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold tracking-tight text-foreground">Earthdawn 4E</span>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="font-mono text-base font-bold tracking-tight text-foreground">Earthdawn 4E</span>
           <nav className="flex items-center gap-1 rounded border border-border bg-muted/70 p-0.5">
             {([
               ['pl', '角色卡（PL）'],
@@ -877,8 +891,8 @@ export default function App() {
                 onClick={() => setState((p) => ({ ...p, activeTab: tabId }))}
                 className={`h-7 rounded px-2.5 text-xs transition-colors cursor-pointer whitespace-nowrap ${
                   state.activeTab === tabId
-                    ? 'bg-primary font-semibold text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary font-semibold text-primary-foreground shadow-2xs'
+                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
                 }`}
               >
                 {label}
@@ -891,18 +905,18 @@ export default function App() {
           <button
             type="button"
             onClick={() => setSpellJsonOpen(true)}
-            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap"
+            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap"
           >
             结构化法术 JSON
           </button>
           <button
             type="button"
             onClick={() => setManualOpen(true)}
-            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap"
+            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap"
           >
             使用说明书
           </button>
-          <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded border border-border bg-secondary px-2.5 text-xs text-secondary-foreground whitespace-nowrap">
+          <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded border border-border bg-secondary px-2.5 text-xs text-secondary-foreground transition-colors hover:bg-muted whitespace-nowrap">
             <input
               type="checkbox"
               checked={state.gmBlind}
@@ -911,6 +925,16 @@ export default function App() {
             />
             GM脱敏显示
           </label>
+          <button
+            type="button"
+            onClick={() => setIsDark((prev) => !prev)}
+            aria-label={isDark ? '切换为做旧档案纸白天模式' : '切换为深岩灰夜间模式'}
+            title={isDark ? '切换白天模式（做旧档案纸）' : '切换夜间模式（深岩灰）'}
+            className="inline-flex h-7 items-center gap-1.5 rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap"
+          >
+            {isDark ? <Sun className="h-3.5 w-3.5 text-primary" /> : <Moon className="h-3.5 w-3.5 text-primary" />}
+            <span>{isDark ? '日间' : '夜间'}</span>
+          </button>
         </div>
       </header>
 
@@ -1007,14 +1031,14 @@ export default function App() {
           onMouseDown={() => setDraggingResizer(true)}
           onTouchStart={() => setDraggingResizer(true)}
           className={`hidden w-1.5 shrink-0 cursor-col-resize border-x border-border transition-colors lg:block ${
-            draggingResizer ? 'bg-ring' : 'bg-muted hover:bg-accent'
+            draggingResizer ? 'bg-primary' : 'bg-muted hover:bg-primary/60'
           }`}
         />
 
         {/* 右侧边栏（桌面固定可调宽度，移动端全宽堆叠） */}
         <aside
           style={{ ['--sidebar-w' as any]: `${sidebarWidth}px` }}
-          className="ed4-sidebar w-full shrink-0 border-t border-border bg-background p-3 lg:overflow-y-auto lg:border-t-0"
+          className="ed4-sidebar w-full shrink-0 border-t border-sidebar-border bg-sidebar p-3 text-sidebar-foreground lg:overflow-y-auto lg:border-t-0"
         >
           <RightSidebar
             round={state.round}

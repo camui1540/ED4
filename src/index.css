@@ -1,52 +1,125 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:is(.dark *));
 
-/* shadcn/ui 标准变量（支持 :root 浅色与 .dark 暗色及外部主题实时切换） */
 :root {
-  --background: #ffffff;
-  --foreground: #09090b;
-  --card: #f4f4f5;
-  --card-foreground: #09090b;
-  --popover: #ffffff;
-  --popover-foreground: #09090b;
-  --primary: #18181b;
-  --primary-foreground: #fafafa;
-  --secondary: #e4e4e7;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #e4e4e7;
-  --accent-foreground: #18181b;
-  --destructive: #ef4444;
-  --destructive-foreground: #fafafa;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
-  --ring: #18181b;
-  --radius: 0.375rem;
+  /* 白天模式：做旧档案纸 + 深墨蓝框线 + 哑光黄铜 */
+  --background: oklch(0.9550 0.0080 82);
+  --foreground: oklch(0.2000 0.0200 245);
+  --card: oklch(0.9850 0.0040 82);
+  --card-foreground: oklch(0.2000 0.0200 245);
+  --popover: oklch(0.9900 0.0030 82);
+  --popover-foreground: oklch(0.2000 0.0200 245);
+
+  --primary: oklch(0.5600 0.1200 72);
+  --primary-foreground: oklch(0.9850 0.0050 82);
+
+  --secondary: oklch(0.9150 0.0120 82);
+  --secondary-foreground: oklch(0.2200 0.0200 245);
+  --muted: oklch(0.9250 0.0100 82);
+  --muted-foreground: oklch(0.4500 0.0150 245);
+
+  /* 爆炸骰/核心高亮：哑光赤陶橙 */
+  --accent: oklch(0.6200 0.1450 42);
+  --accent-foreground: oklch(0.9850 0.0050 42);
+
+  /* 负伤/危险警告：低饱和暗绯红 */
+  --destructive: oklch(0.5400 0.1550 24);
+  --destructive-foreground: oklch(0.9850 0.0050 24);
+
+  /* 粗野主义结构框线：深墨蓝灰 */
+  --border: oklch(0.3200 0.0250 245);
+  --input: oklch(0.3200 0.0250 245);
+  --ring: oklch(0.5600 0.1200 72);
+
+  --chart-1: oklch(0.5600 0.1200 72);
+  --chart-2: oklch(0.6200 0.1450 42);
+  --chart-3: oklch(0.5400 0.1550 24);
+  --chart-4: oklch(0.4800 0.1000 245);
+  --chart-5: oklch(0.4600 0.1000 175);
+
+  --sidebar: oklch(0.9350 0.0100 82);
+  --sidebar-foreground: oklch(0.2000 0.0200 245);
+  --sidebar-primary: oklch(0.5600 0.1200 72);
+  --sidebar-primary-foreground: oklch(0.9850 0.0050 82);
+  --sidebar-accent: oklch(0.8900 0.0140 82);
+  --sidebar-accent-foreground: oklch(0.2000 0.0200 245);
+  --sidebar-border: oklch(0.3200 0.0250 245);
+  --sidebar-ring: oklch(0.5600 0.1200 72);
+
+  --font-serif: "装甲明朝", "Noto Serif SC", Georgia, serif;
+  --font-sans: "汇文明朝体", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "汇文明朝体", ui-monospace, monospace;
+
+  /* 微圆角（2px）+ 零模糊微粗野硬投影 */
+  --radius: 0.125rem;
+  --shadow-2xs: 1px 1px 0px 0px oklch(0.26 0.025 245 / 0.85);
+  --shadow-xs: 2px 2px 0px 0px oklch(0.26 0.025 245 / 0.85);
+  --shadow-sm: 3px 3px 0px 0px oklch(0.26 0.025 245 / 0.85);
+  --shadow: 3px 3px 0px 0px oklch(0.26 0.025 245 / 0.85);
+  --shadow-md: 4px 4px 0px 0px oklch(0.26 0.025 245 / 0.90);
+  --shadow-lg: 5px 5px 0px 0px oklch(0.26 0.025 245 / 0.90);
+  --shadow-xl: 6px 6px 0px 0px oklch(0.26 0.025 245 / 0.95);
+  --shadow-2xl: 8px 8px 0px 0px oklch(0.26 0.025 245);
+  --tracking-normal: 0.015em;
+  --spacing: 0.25rem;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --card: #111114;
-  --card-foreground: #fafafa;
-  --popover: #111114;
-  --popover-foreground: #fafafa;
-  --primary: #fafafa;
-  --primary-foreground: #18181b;
-  --secondary: #27272a;
-  --secondary-foreground: #fafafa;
-  --muted: #18181b;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #3f3f46;
-  --destructive-foreground: #fafafa;
-  --border: #27272a;
-  --input: #27272a;
-  --ring: #d4d4d8;
-  --radius: 0.375rem;
+  /* 夜间模式：北欧峡湾深岩灰 + 钢蓝结构线 + 哑光古铜金 */
+  --background: oklch(0.1550 0.0140 245);
+  --foreground: oklch(0.8900 0.0080 82);
+  --card: oklch(0.2000 0.0170 245);
+  --card-foreground: oklch(0.8900 0.0080 82);
+  --popover: oklch(0.2150 0.0180 245);
+  --popover-foreground: oklch(0.8900 0.0080 82);
+
+  --primary: oklch(0.6800 0.1200 76);
+  --primary-foreground: oklch(0.1500 0.0150 245);
+
+  --secondary: oklch(0.2550 0.0200 245);
+  --secondary-foreground: oklch(0.8700 0.0080 82);
+  --muted: oklch(0.2350 0.0180 245);
+  --muted-foreground: oklch(0.6500 0.0140 245);
+
+  --accent: oklch(0.6900 0.1450 44);
+  --accent-foreground: oklch(0.1500 0.0150 44);
+
+  --destructive: oklch(0.6200 0.1650 25);
+  --destructive-foreground: oklch(0.9700 0.0050 25);
+
+  --border: oklch(0.3750 0.0260 245);
+  --input: oklch(0.3750 0.0260 245);
+  --ring: oklch(0.6800 0.1200 76);
+
+  --chart-1: oklch(0.6800 0.1200 76);
+  --chart-2: oklch(0.6900 0.1450 44);
+  --chart-3: oklch(0.6200 0.1650 25);
+  --chart-4: oklch(0.6000 0.1000 240);
+  --chart-5: oklch(0.6200 0.1000 175);
+
+  --sidebar: oklch(0.1750 0.0150 245);
+  --sidebar-foreground: oklch(0.8900 0.0080 82);
+  --sidebar-primary: oklch(0.6800 0.1200 76);
+  --sidebar-primary-foreground: oklch(0.1500 0.0150 245);
+  --sidebar-accent: oklch(0.2550 0.0200 245);
+  --sidebar-accent-foreground: oklch(0.8900 0.0080 82);
+  --sidebar-border: oklch(0.3750 0.0260 245);
+  --sidebar-ring: oklch(0.6800 0.1200 76);
+
+  --font-serif: "装甲明朝", "Noto Serif SC", Georgia, serif;
+  --font-sans: "汇文明朝体", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "汇文明朝体", ui-monospace, monospace;
+
+  --radius: 0.125rem;
+  --shadow-2xs: 1px 1px 0px 0px oklch(0.06 0.015 245 / 0.90);
+  --shadow-xs: 2px 2px 0px 0px oklch(0.06 0.015 245 / 0.90);
+  --shadow-sm: 3px 3px 0px 0px oklch(0.06 0.015 245 / 0.90);
+  --shadow: 3px 3px 0px 0px oklch(0.06 0.015 245 / 0.90);
+  --shadow-md: 4px 4px 0px 0px oklch(0.06 0.015 245 / 0.95);
+  --shadow-lg: 5px 5px 0px 0px oklch(0.06 0.015 245 / 0.95);
+  --shadow-xl: 6px 6px 0px 0px oklch(0.06 0.015 245);
+  --shadow-2xl: 8px 8px 0px 0px oklch(0.06 0.015 245);
 }
 
 @theme inline {
@@ -69,6 +142,37 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+
+  --radius-sm: calc(var(--radius) - 1px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
 }
 
 @layer base {
@@ -78,14 +182,55 @@
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--font-sans);
     font-size: 13px;
-    line-height: 1.45;
+    line-height: 1.5;
+    letter-spacing: var(--tracking-normal);
+    -webkit-font-smoothing: antialiased;
+  }
+  .tabular-nums,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
+.font-noto-serif {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Noto Serif TC", Georgia, serif;
+}
+
+@layer components {
+  /* 战术主卡片与局部机械键帽微粗野交互 */
+  .tactile-card {
+    background-color: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* 仅应用于投先攻、常用检定、战斗姿态与状态开关 */
+  .tactile-btn {
+    box-shadow: var(--shadow-xs);
+    transition: transform 80ms cubic-bezier(0.2, 0, 0, 1),
+                box-shadow 80ms cubic-bezier(0.2, 0, 0, 1),
+                background-color 120ms ease,
+                border-color 120ms ease,
+                color 120ms ease;
+  }
+  .tactile-btn:not(:disabled):hover {
+    transform: translate(-0.5px, -0.5px);
+    box-shadow: var(--shadow-sm);
+  }
+  .tactile-btn:not(:disabled):active {
+    transform: translate(2px, 2px);
+    box-shadow: none;
+  }
+
+  /* 属性与健康轨大号醒目数字：沿用原本几何无衬线数字字体 */
+  .font-num {
+    font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -104,7 +249,7 @@
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 9999px;
+  border-radius: var(--radius);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);

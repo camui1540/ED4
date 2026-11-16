@@ -35,30 +35,30 @@ export function SpellJsonModal({ open, onClose, onCopied }: SpellJsonModalProps)
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-xs"
     >
-      <div className="flex w-full max-w-3xl flex-col gap-3 rounded-md border border-border bg-card p-4 text-card-foreground shadow-lg">
+      <div className="tactile-card flex w-full max-w-3xl flex-col gap-3 p-4 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <b className="text-sm text-card-foreground">
+          <b className="font-serif text-sm text-card-foreground">
             结构化法术库 JSON（共 {ED4Engine.SPELLS_DB.length} 条）
           </b>
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex h-7 items-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+              className="inline-flex h-7 items-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
             >
               复制 JSON
             </button>
             <button
               type="button"
               onClick={handleDownload}
-              className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+              className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
             >
               下载 .json
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+              className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
             >
               关闭
             </button>
@@ -89,13 +89,13 @@ export function ManualModal({ open, onClose }: ManualModalProps) {
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-xs"
     >
-      <div className="flex max-h-[82vh] w-full max-w-2xl flex-col gap-3 rounded-md border border-border bg-card p-4 text-card-foreground shadow-lg">
+      <div className="tactile-card flex max-h-[82vh] w-full max-w-2xl flex-col gap-3 p-4 shadow-lg">
         <div className="flex items-center justify-between border-b border-border pb-2">
-          <b className="text-sm text-card-foreground">使用说明书</b>
+          <b className="font-serif text-sm text-card-foreground">使用说明书</b>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            className="inline-flex h-7 items-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
           >
             关闭
           </button>

@@ -39,12 +39,12 @@ interface PlSheetViewProps {
 const inputCls =
   'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnSmCls =
-  'inline-flex h-6 items-center justify-center rounded border border-border bg-secondary px-2 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const sectionCls = 'rounded-md border border-border bg-card p-3 text-card-foreground';
+  'inline-flex h-6 items-center justify-center rounded border border-border bg-secondary px-2 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+const sectionCls = 'tactile-card p-3';
 
 export function PlSheetView(props: PlSheetViewProps) {
   const {
@@ -297,12 +297,12 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} w-14 text-center tabular-nums`}
               />
             </label>
-            <div className="inline-flex overflow-hidden rounded border border-border">
+            <div className="inline-flex overflow-hidden rounded border border-border font-mono">
               <button
                 type="button"
                 onClick={() => onUpdatePl((prev) => ({ ...prev, karmaDie: 6 }))}
                 className={`h-7 px-2 text-xs cursor-pointer ${
-                  pl.karmaDie === 6 ? 'bg-primary font-semibold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
+                  pl.karmaDie === 6 ? 'bg-primary font-bold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
               >
                 D6
@@ -311,7 +311,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 type="button"
                 onClick={() => onUpdatePl((prev) => ({ ...prev, karmaDie: 8 }))}
                 className={`h-7 border-l border-border px-2 text-xs cursor-pointer ${
-                  pl.karmaDie === 8 ? 'bg-primary font-semibold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
+                  pl.karmaDie === 8 ? 'bg-primary font-bold text-primary-foreground' : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
               >
                 D8
@@ -333,7 +333,8 @@ export function PlSheetView(props: PlSheetViewProps) {
             </button>
           </div>
           <div className="text-xs text-muted-foreground tabular-nums">
-            剩余属性点：<span className="font-semibold text-foreground">{d.remainingPoints}</span> / 25
+            剩余属性点：<span className="font-mono font-bold text-foreground">{d.remainingPoints}</span>{' '}
+            <span className="font-mono">/ 25</span>
           </div>
         </div>
 
@@ -349,16 +350,16 @@ export function PlSheetView(props: PlSheetViewProps) {
           ))}
         </div>
 
-        {/* 六维属性 */}
+        {/* 六维属性（保留细框线） */}
         <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {Object.entries(ED4Engine.ATTR_NAMES).map(([k, label]) => (
             <div key={k} className="flex flex-col items-center rounded border border-border bg-background/70 p-2">
-              <div className="text-[11px] text-muted-foreground">{label}</div>
-              <div className="my-0.5 text-lg font-bold text-foreground tabular-nums">{d.attrs[k]}</div>
+              <div className="font-noto-serif text-xs font-semibold text-foreground/85">{label}</div>
+              <div className="my-0.5 font-mono text-2xl font-bold leading-tight text-foreground tabular-nums">{d.attrs[k]}</div>
               <button
                 type="button"
                 onClick={() => onRollAttr(k)}
-                className="mb-1.5 rounded border border-border bg-secondary px-2 py-0.5 text-[11px] font-medium text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer tabular-nums"
+                className="mb-1.5 rounded border border-border bg-secondary px-2 py-0.5 font-mono text-[11px] font-bold text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer tabular-nums"
               >
                 Step {d.steps[k]}
               </button>
@@ -366,7 +367,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 <button type="button" onClick={() => onAdjustAttr(k, -1)} className={`${btnSmCls} w-6 px-0`}>
                   -
                 </button>
-                <span className="min-w-6 text-center text-[11px] text-muted-foreground tabular-nums">
+                <span className="min-w-6 text-center font-mono text-[11px] text-muted-foreground tabular-nums">
                   {pl.attrMods[k] >= 0 ? `+${pl.attrMods[k]}` : pl.attrMods[k]}
                 </span>
                 <button type="button" onClick={() => onAdjustAttr(k, 1)} className={`${btnSmCls} w-6 px-0`}>
@@ -380,11 +381,11 @@ export function PlSheetView(props: PlSheetViewProps) {
         {/* 衍生战斗数值 */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           <div className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
-            <div className="text-[11px] text-muted-foreground">先攻</div>
-            <div className="my-0.5 text-sm font-semibold text-foreground tabular-nums">
+            <div className="font-noto-serif text-xs font-semibold text-foreground/85">先攻</div>
+            <div className="my-0.5 font-mono text-base font-bold text-foreground tabular-nums">
               Step {Math.max(1, d.initStep + actionMod)}
             </div>
-            <button type="button" onClick={onRollInitiative} className={`${btnPrimaryCls} h-6 px-2 text-[11px]`}>
+            <button type="button" onClick={onRollInitiative} className={`${btnPrimaryCls} tactile-btn h-6 px-2.5 text-[11px]`}>
               投先攻
             </button>
           </div>
@@ -396,8 +397,8 @@ export function PlSheetView(props: PlSheetViewProps) {
             ['秘法护甲', d.ma],
           ].map(([label, val]) => (
             <div key={String(label)} className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
-              <div className="text-[11px] text-muted-foreground">{label}</div>
-              <div className="mt-0.5 text-lg font-bold text-foreground tabular-nums">{val}</div>
+              <div className="font-noto-serif text-xs font-semibold text-foreground/85">{label}</div>
+              <div className="mt-0.5 font-mono text-2xl font-bold leading-tight text-foreground tabular-nums">{val}</div>
             </div>
           ))}
         </div>
@@ -406,35 +407,35 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 常用检定 */}
       <section className={sectionCls}>
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-card-foreground">常用检定</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">常用检定</span>
           <span className="text-muted-foreground tabular-nums">
             动作修正：{actionMod >= 0 ? `+${actionMod}` : actionMod} Step
           </span>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => onRollQuickCheck('init')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('init')} className={`${btnCls} tactile-btn`}>
             先攻检定
           </button>
-          <button type="button" onClick={() => onRollQuickCheck('recovery')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('recovery')} className={`${btnCls} tactile-btn`}>
             回复检定 (Step {Math.max(1, d.steps.TOU - pl.wounds)})
           </button>
-          <button type="button" onClick={() => onRollQuickCheck('knockdown')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('knockdown')} className={`${btnCls} tactile-btn`}>
             击倒检定
           </button>
-          <button type="button" onClick={() => onRollQuickCheck('awareness')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('awareness')} className={`${btnCls} tactile-btn`}>
             察觉 / 防埋伏
           </button>
-          <button type="button" onClick={() => onRollQuickCheck('astral')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('astral')} className={`${btnCls} tactile-btn`}>
             星界感知
           </button>
-          <button type="button" onClick={() => onRollQuickCheck('willpower')} className={btnCls}>
+          <button type="button" onClick={() => onRollQuickCheck('willpower')} className={`${btnCls} tactile-btn`}>
             意志抵抗
           </button>
           <button
             type="button"
             disabled={!pl.statuses.knockedDown}
             onClick={() => onRollQuickCheck('jumpup')}
-            className={btnCls}
+            className={`${btnCls} tactile-btn`}
           >
             跃起 (2劳累)
           </button>
@@ -445,14 +446,16 @@ export function PlSheetView(props: PlSheetViewProps) {
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <section className={sectionCls}>
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1 text-xs">
-            <span className="font-semibold text-card-foreground">健康轨与资源</span>
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              意识丧失 {d.effUncon} / 死亡 {d.effDeath}（负伤阈值 {d.woundThreshold}）
+            <span className="font-serif text-sm font-semibold text-card-foreground">健康轨与资源</span>
+            <span className="font-noto-serif text-xs font-medium text-foreground/80 tabular-nums">
+              意识丧失 <span className="font-mono font-semibold text-foreground">{d.effUncon}</span> / 死亡{' '}
+              <span className="font-mono font-semibold text-foreground">{d.effDeath}</span>（负伤阈值{' '}
+              <span className="font-mono font-semibold text-foreground">{d.woundThreshold}</span>）
             </span>
           </div>
           <div className="mb-3 grid grid-cols-3 gap-2">
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 text-[11px] text-muted-foreground">当前伤害</div>
+              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">当前伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -461,7 +464,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.currentDamage}</span>
+                <span className="flex-1 text-center font-mono text-lg font-bold text-foreground tabular-nums">{pl.currentDamage}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, currentDamage: p.currentDamage + 1 }))}
@@ -472,7 +475,7 @@ export function PlSheetView(props: PlSheetViewProps) {
               </div>
             </div>
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 text-[11px] text-muted-foreground">血魔法伤害</div>
+              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">血魔法伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -481,7 +484,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.bloodDamage}</span>
+                <span className="flex-1 text-center font-mono text-lg font-bold text-foreground tabular-nums">{pl.bloodDamage}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, bloodDamage: p.bloodDamage + 1 }))}
@@ -492,7 +495,9 @@ export function PlSheetView(props: PlSheetViewProps) {
               </div>
             </div>
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 text-[11px] text-muted-foreground">负伤 (-{pl.wounds})</div>
+              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">
+                负伤 (<span className="font-mono">-{pl.wounds}</span>)
+              </div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -501,7 +506,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 >
                   -
                 </button>
-                <span className="flex-1 text-center font-semibold text-foreground tabular-nums">{pl.wounds}</span>
+                <span className="flex-1 text-center font-mono text-lg font-bold text-foreground tabular-nums">{pl.wounds}</span>
                 <button
                   type="button"
                   onClick={() => onUpdatePl((p) => ({ ...p, wounds: p.wounds + 1 }))}
@@ -513,14 +518,15 @@ export function PlSheetView(props: PlSheetViewProps) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums">
-            <span className="text-muted-foreground">
-              业力(D{pl.karmaDie})：<b className="text-foreground">{pl.karmaCurrent}/{d.karmaMax}</b>
+            <span className="font-noto-serif font-semibold text-foreground/85">
+              业力(<span className="font-mono">D{pl.karmaDie}</span>)：
+              <b className="font-mono font-bold text-foreground">{pl.karmaCurrent}/{d.karmaMax}</b>
             </span>
             <button type="button" onClick={onKarmaRitual} className={btnSmCls}>
               业力仪式
             </button>
-            <span className="text-muted-foreground">
-              回复：<b className="text-foreground">{pl.recoveryCurrent}/{d.recoveryMax}</b>
+            <span className="font-noto-serif font-semibold text-foreground/85">
+              回复：<b className="font-mono font-bold text-foreground">{pl.recoveryCurrent}/{d.recoveryMax}</b>
             </span>
             <button
               type="button"
@@ -534,9 +540,9 @@ export function PlSheetView(props: PlSheetViewProps) {
         </section>
 
         <section className={sectionCls}>
-          <div className="mb-2.5 text-xs font-semibold text-card-foreground">护甲、盾牌与战斗选项</div>
+          <div className="mb-2.5 font-serif text-sm font-semibold text-card-foreground">护甲、盾牌与战斗选项</div>
           <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
               <span>物理护甲</span>
               <input
                 type="number"
@@ -545,7 +551,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
               <span>护甲先攻减值</span>
               <input
                 type="number"
@@ -554,7 +560,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
               <span>盾牌物防</span>
               <input
                 type="number"
@@ -563,7 +569,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
               <span>先攻修正</span>
               <input
                 type="number"
@@ -574,7 +580,7 @@ export function PlSheetView(props: PlSheetViewProps) {
             </label>
           </div>
 
-          <div className="mb-1.5 flex flex-wrap gap-1.5">
+          <div className="mb-2 flex flex-wrap gap-1.5">
             {[
               ['aggressive', '猛烈攻击 (+3攻伤/-3防/1劳累)'],
               ['defensive', '防御姿态 (+3防/-3检定)'],
@@ -587,10 +593,10 @@ export function PlSheetView(props: PlSheetViewProps) {
                 key={key}
                 type="button"
                 onClick={() => onToggleOption(key)}
-                className={`h-6 rounded border px-2 text-[11px] transition-colors cursor-pointer ${
+                className={`tactile-btn h-6 rounded border px-2 text-[11px] cursor-pointer ${
                   pl.options[key]
                     ? 'border-primary bg-primary font-semibold text-primary-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {label}
@@ -610,10 +616,10 @@ export function PlSheetView(props: PlSheetViewProps) {
                 key={key}
                 type="button"
                 onClick={() => onToggleStatus(key)}
-                className={`h-6 rounded border px-2 text-[11px] transition-colors cursor-pointer ${
+                className={`tactile-btn h-6 rounded border px-2 text-[11px] cursor-pointer ${
                   pl.statuses[key]
                     ? 'border-primary bg-primary font-semibold text-primary-foreground'
-                    : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
                 {label}
@@ -626,7 +632,7 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 天赋与技能 + 武器伤害 */}
       <section className={sectionCls}>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-card-foreground">天赋与技能检定</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">天赋与技能检定</span>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span>当前目标</span>
             <select
@@ -654,11 +660,11 @@ export function PlSheetView(props: PlSheetViewProps) {
           </label>
         </div>
 
-        <div className="mb-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {/* 门类天赋 */}
-          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-card-foreground">门类天赋 ({pl.talents.length})</span>
+        <div className="mb-4 grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {/* 门类天赋（去盒化无外套框） */}
+          <div className="flex flex-col">
+            <div className="mb-2 flex items-center justify-between gap-2 border-b border-border pb-1.5">
+              <span className="font-serif text-xs font-semibold text-card-foreground">门类天赋 ({pl.talents.length})</span>
               <input
                 type="text"
                 placeholder="筛选天赋..."
@@ -721,7 +727,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-semibold text-foreground tabular-nums">Step {effStep}</td>
+                          <td className="py-1.5 pr-1 font-mono font-bold text-foreground tabular-nums">Step {effStep}</td>
                           <td className="py-1.5 text-right">
                             <div className="inline-flex items-center gap-1">
                               <label className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-muted-foreground">
@@ -809,10 +815,10 @@ export function PlSheetView(props: PlSheetViewProps) {
             </div>
           </div>
 
-          {/* 角色技能 */}
-          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-xs font-medium text-card-foreground">角色技能 ({(pl.skills || []).length})</span>
+          {/* 角色技能（去盒化无外套框） */}
+          <div className="flex flex-col">
+            <div className="mb-2 flex items-center justify-between gap-2 border-b border-border pb-1.5">
+              <span className="font-serif text-xs font-semibold text-card-foreground">角色技能 ({(pl.skills || []).length})</span>
               <input
                 type="text"
                 placeholder="筛选技能..."
@@ -877,7 +883,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-semibold text-foreground tabular-nums">Step {effStep}</td>
+                          <td className="py-1.5 pr-1 font-mono font-bold text-foreground tabular-nums">Step {effStep}</td>
                           <td className="py-1.5 text-right">
                             <div className="inline-flex items-center gap-1">
                               <button
@@ -956,8 +962,8 @@ export function PlSheetView(props: PlSheetViewProps) {
         </div>
 
         {/* 武器伤害 */}
-        <div className="mb-1.5 flex items-center justify-between text-xs">
-          <span className="font-semibold text-card-foreground">
+        <div className="mb-1.5 flex items-center justify-between border-t border-border pt-2.5 text-xs">
+          <span className="font-serif text-xs font-semibold text-card-foreground">
             武器伤害{lastExtraDamageBonus ? `（额外成功 +${lastExtraDamageBonus}）` : ''}
           </span>
         </div>
@@ -971,8 +977,10 @@ export function PlSheetView(props: PlSheetViewProps) {
               >
                 <div className="tabular-nums">
                   <span className="font-semibold text-foreground">{w.name}</span>{' '}
-                  <span className="text-muted-foreground">基础 +{w.dmgStep}</span> ·{' '}
-                  <span className="font-semibold text-foreground">伤害 Step {dmgStep}</span>
+                  <span className="text-muted-foreground">基础 <span className="font-mono">+{w.dmgStep}</span></span> ·{' '}
+                  <span className="font-semibold text-foreground">
+                    伤害 <span className="font-mono font-bold">Step {dmgStep}</span>
+                  </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => onRollWeaponDamage(w.id)} className={btnPrimaryCls}>
@@ -1016,7 +1024,7 @@ export function PlSheetView(props: PlSheetViewProps) {
       {/* 法术列表与施放 */}
       <section className={sectionCls}>
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold text-card-foreground">法术矩阵与法术书</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">法术矩阵与法术书</span>
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
               <input
@@ -1060,7 +1068,7 @@ export function PlSheetView(props: PlSheetViewProps) {
               onDragLeave={() => setDragOverZone(null)}
               onDrop={(e) => handleDropZone(true, e)}
               className={`rounded border border-dashed p-2.5 transition-colors ${
-                dragOverZone === 'matrix' ? 'border-primary bg-accent/50' : 'border-border bg-background/50'
+                dragOverZone === 'matrix' ? 'border-primary bg-primary/10' : 'border-border bg-background/50'
               }`}
             >
               <div className="mb-2 text-[11px] font-semibold text-card-foreground">
@@ -1183,7 +1191,7 @@ export function PlSheetView(props: PlSheetViewProps) {
               onDragLeave={() => setDragOverZone(null)}
               onDrop={(e) => handleDropZone(false, e)}
               className={`rounded border border-dashed p-2.5 transition-colors ${
-                dragOverZone === 'grimoire' ? 'border-primary bg-accent/50' : 'border-border bg-background/30'
+                dragOverZone === 'grimoire' ? 'border-primary bg-primary/10' : 'border-border bg-background/30'
               }`}
             >
               <div className="mb-2 text-[11px] font-semibold text-muted-foreground">法术书 ({grimoireSpells.length})</div>
@@ -1248,11 +1256,13 @@ export function PlSheetView(props: PlSheetViewProps) {
 
       {/* 装备与脉路物品 + 传说点数与财富 */}
       <section className={sectionCls}>
-        <div className="mb-2.5 text-xs font-semibold text-card-foreground">装备、脉路物品与财富</div>
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-          {/* 普通装备 */}
-          <div className="flex flex-col rounded border border-border bg-background/60 p-2.5">
-            <div className="mb-2 text-xs font-medium text-card-foreground">普通装备与防具 ({pl.gear.length})</div>
+        <div className="mb-3 font-serif text-sm font-semibold text-card-foreground">装备、脉路物品与财富</div>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+          {/* 普通装备（去盒化无外套框） */}
+          <div className="flex flex-col">
+            <div className="mb-2 border-b border-border pb-1.5 font-serif text-xs font-semibold text-card-foreground">
+              普通装备与防具 ({pl.gear.length})
+            </div>
             <div className="mb-2 max-h-48 flex-1 space-y-1.5 overflow-y-auto">
               {pl.gear.map((g: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-1.5">
@@ -1332,9 +1342,11 @@ export function PlSheetView(props: PlSheetViewProps) {
             </div>
           </div>
 
-          {/* 脉路物品与传说财富 */}
-          <div className="rounded border border-border bg-background/60 p-2.5">
-            <div className="mb-2 text-xs font-medium text-card-foreground">脉路物品 ({pl.threadItems.length})</div>
+          {/* 脉路物品与传说财富（去盒化无外套框） */}
+          <div className="flex flex-col">
+            <div className="mb-2 border-b border-border pb-1.5 font-serif text-xs font-semibold text-card-foreground">
+              脉路物品 ({pl.threadItems.length})
+            </div>
             <div className="mb-2 max-h-40 space-y-1.5 overflow-y-auto">
               {pl.threadItems.map((ti: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-1.5">
@@ -1416,8 +1428,8 @@ export function PlSheetView(props: PlSheetViewProps) {
               </button>
             </div>
 
-            <div className="border-t border-border pt-2">
-              <div className="mb-1.5 text-xs font-medium text-muted-foreground">传说点数与财富</div>
+            <div className="border-t border-border pt-2.5">
+              <div className="mb-1.5 font-serif text-xs font-semibold text-muted-foreground">传说点数与财富</div>
               <div className="grid grid-cols-3 gap-2">
                 <label className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
                   <span>传说总计</span>

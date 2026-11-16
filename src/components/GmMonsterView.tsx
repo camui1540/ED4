@@ -18,9 +18,9 @@ interface GmMonsterViewProps {
 const inputCls =
   'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 
 const DEFAULT_FORM = {
   name: '',
@@ -73,9 +73,9 @@ export function GmMonsterView(props: GmMonsterViewProps) {
   return (
     <div className="space-y-3">
       {/* 怪物模板 */}
-      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
+      <section className="tactile-card p-3">
         <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-xs font-semibold text-card-foreground">怪物与惧魔模板</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">怪物与惧魔模板</span>
           <button type="button" onClick={onToggleAddForm} className={btnCls}>
             + 自定义怪物
           </button>
@@ -132,30 +132,30 @@ export function GmMonsterView(props: GmMonsterViewProps) {
           {templates.map((t) => (
             <div key={t.id} className="rounded border border-border bg-background/70 p-2.5">
               <div className="mb-2 flex items-center justify-between">
-                <b className="text-sm text-foreground">{t.name}</b>
+                <b className="font-serif text-sm text-foreground">{t.name}</b>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-foreground/90 tabular-nums">先攻 Step {t.initStep}</span>
+                  <span className="font-mono text-xs font-bold text-foreground/90 tabular-nums">先攻 Step {t.initStep}</span>
                   <button
                     type="button"
                     onClick={() => onDeleteTemplate(t.id)}
-                    className="h-6 rounded border border-border bg-secondary px-2 text-[11px] text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                    className="h-6 rounded border border-border bg-secondary px-2 text-[11px] text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
                   >
                     删除
                   </button>
                 </div>
               </div>
               <div className="mb-2.5 grid grid-cols-4 gap-1 text-[11px] text-muted-foreground tabular-nums">
-                <div>物防 <b className="text-foreground">{t.pd}</b></div>
-                <div>秘防 <b className="text-foreground">{t.md}</b></div>
-                <div>物甲 <b className="text-foreground">{t.pa}</b></div>
-                <div>秘甲 <b className="text-foreground">{t.ma}</b></div>
-                <div>攻击 <b className="text-foreground">Step {t.atkStep}</b></div>
-                <div>伤害 <b className="text-foreground">Step {t.dmgStep}</b></div>
-                <div>击倒 <b className="text-foreground">Step {t.kdStep}</b></div>
-                <div>回复 <b className="text-foreground">Step {t.recStep}</b></div>
-                <div>负伤阈值 <b className="text-foreground">{t.woundThreshold}</b></div>
-                <div>意识丧失 <b className="text-foreground">{t.uncon}</b></div>
-                <div>死亡 <b className="text-foreground">{t.death}</b></div>
+                <div>物防 <b className="font-mono font-bold text-foreground">{t.pd}</b></div>
+                <div>秘防 <b className="font-mono font-bold text-foreground">{t.md}</b></div>
+                <div>物甲 <b className="font-mono font-bold text-foreground">{t.pa}</b></div>
+                <div>秘甲 <b className="font-mono font-bold text-foreground">{t.ma}</b></div>
+                <div>攻击 <b className="font-mono font-bold text-foreground">Step {t.atkStep}</b></div>
+                <div>伤害 <b className="font-mono font-bold text-foreground">Step {t.dmgStep}</b></div>
+                <div>击倒 <b className="font-mono font-bold text-foreground">Step {t.kdStep}</b></div>
+                <div>回复 <b className="font-mono font-bold text-foreground">Step {t.recStep}</b></div>
+                <div>负伤阈值 <b className="font-mono font-bold text-foreground">{t.woundThreshold}</b></div>
+                <div>意识丧失 <b className="font-mono font-bold text-foreground">{t.uncon}</b></div>
+                <div>死亡 <b className="font-mono font-bold text-foreground">{t.death}</b></div>
               </div>
               <div className="flex items-center gap-1.5">
                 <button type="button" onClick={() => onSpawnMonster(t.id, 1)} className={btnPrimaryCls}>
@@ -171,8 +171,8 @@ export function GmMonsterView(props: GmMonsterViewProps) {
       </section>
 
       {/* 已加入战斗的怪物 */}
-      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
-        <div className="mb-2.5 text-xs font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</div>
+      <section className="tactile-card p-3">
+        <div className="mb-2.5 font-serif text-sm font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</div>
         {monsters.length === 0 ? (
           <div className="text-xs text-muted-foreground">暂无已加入战斗的怪物，可从上方模板生成。</div>
         ) : (
@@ -208,8 +208,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground tabular-nums">
                     <span>
-                      伤害 <b className="text-foreground">{m.currentDamage}</b> / 意识丧失 {m.uncon} / 死亡 {m.death} · 负伤{' '}
-                      <b className="text-foreground">{m.wounds}</b>
+                      伤害 <b className="font-mono text-sm font-bold text-foreground">{m.currentDamage}</b> / 意识丧失{' '}
+                      <span className="font-mono font-semibold text-foreground/90">{m.uncon}</span> / 死亡{' '}
+                      <span className="font-mono font-semibold text-foreground/90">{m.death}</span> · 负伤{' '}
+                      <b className="font-mono text-sm font-bold text-foreground">{m.wounds}</b>
                     </span>
                     <div className="flex items-center gap-1">
                       {([
@@ -221,10 +223,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                           key={flag}
                           type="button"
                           onClick={() => onToggleMonsterFlag(m.instanceId, flag)}
-                          className={`h-5 rounded border px-1.5 text-[10px] transition-colors cursor-pointer ${
+                          className={`tactile-btn h-5 rounded border px-1.5 text-[10px] cursor-pointer ${
                             m[flag]
                               ? 'border-primary bg-primary font-semibold text-primary-foreground'
-                              : 'border-border bg-secondary text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                              : 'border-border bg-secondary text-muted-foreground hover:bg-muted hover:text-foreground'
                           }`}
                         >
                           {label}
@@ -240,8 +242,8 @@ export function GmMonsterView(props: GmMonsterViewProps) {
       </section>
 
       {/* 快捷受创与击倒结算器 */}
-      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
-        <div className="mb-2 text-xs font-semibold text-card-foreground">快捷受创结算器</div>
+      <section className="tactile-card p-3">
+        <div className="mb-2 font-serif text-sm font-semibold text-card-foreground">快捷受创结算器</div>
         <div className="flex flex-wrap items-center gap-2">
           <select value={calcTarget} onChange={(e) => setCalcTarget(e.target.value)} className={`${inputCls} w-40`}>
             <option value="pl">{plName}（PL）</option>

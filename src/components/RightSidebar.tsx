@@ -23,9 +23,9 @@ interface RightSidebarProps {
 const inputCls =
   'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-accent hover:text-accent-foreground cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer whitespace-nowrap';
+  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer whitespace-nowrap';
 
 function renderExplodingTrace(detail: string) {
   const parts = detail.split(/((?:业力)?D\d+\[[^\]]*!→[^\]]*\])/g);
@@ -38,8 +38,8 @@ function renderExplodingTrace(detail: string) {
         title={`触发爆炸骰 (${boomCount}次)`}
         className={
           boomCount >= 2
-            ? 'font-bold text-primary underline decoration-primary underline-offset-2'
-            : 'font-semibold text-foreground'
+            ? 'font-bold text-accent underline decoration-accent underline-offset-2'
+            : 'font-semibold text-accent'
         }
       >
         {part}
@@ -83,13 +83,13 @@ export function RightSidebar(props: RightSidebarProps) {
   return (
     <div className="flex h-full flex-col gap-3">
       {/* 先攻追踪 */}
-      <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
+      <section className="tactile-card p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-card-foreground">先攻追踪</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">先攻追踪</span>
           <span className="text-muted-foreground tabular-nums">第 {round} 轮</span>
         </div>
         <div className="mb-2.5 flex flex-wrap gap-1.5">
-          <button type="button" onClick={onRollAllInitiative} className={btnPrimaryCls}>
+          <button type="button" onClick={onRollAllInitiative} className={`${btnPrimaryCls} tactile-btn`}>
             全员投先攻
           </button>
           <button type="button" onClick={onNextTurn} className={btnCls}>
@@ -135,13 +135,15 @@ export function RightSidebar(props: RightSidebarProps) {
                   key={item.id}
                   className={`flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-xs ${
                     isCurrent
-                      ? 'border-primary bg-accent text-accent-foreground'
+                      ? 'border-primary bg-primary/15 text-foreground shadow-2xs'
                       : 'border-border bg-background/70 text-card-foreground'
                   }`}
                 >
                   <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    <span className="min-w-5 font-bold text-foreground tabular-nums">{item.initVal}</span>
-                    <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">
+                    <span className={`min-w-6 font-mono text-base font-bold tabular-nums ${isCurrent ? 'text-primary' : 'text-foreground'}`}>
+                      {item.initVal}
+                    </span>
+                    <span className="rounded border border-border px-1 font-mono text-[10px] font-semibold text-muted-foreground">
                       {item.type === 'pl' ? 'PL' : 'GM'}
                     </span>
                     <b className="truncate">{item.name}</b>
@@ -157,7 +159,7 @@ export function RightSidebar(props: RightSidebarProps) {
                       <button
                         type="button"
                         onClick={() => onRemoveMonster(item.id)}
-                        className="h-5 w-5 rounded border border-border bg-secondary text-[11px] text-secondary-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                        className="h-5 w-5 rounded border border-border bg-secondary text-[11px] text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
                       >
                         ×
                       </button>
@@ -172,12 +174,12 @@ export function RightSidebar(props: RightSidebarProps) {
 
       {/* 待确认反应 */}
       {pendingReaction && (
-        <section className="rounded-md border border-primary bg-card p-3 text-xs text-card-foreground">
-          <div className="mb-1 font-semibold text-foreground">
+        <section className="tactile-card border-primary p-3 text-xs">
+          <div className="mb-1 font-serif text-sm font-semibold text-foreground">
             待确认反应：{pendingReaction.attackerName} → {pendingReaction.targetName}
           </div>
           <div className="mb-2 text-[11px] text-muted-foreground tabular-nums">
-            {pendingReaction.attackName} 检定 <b className="text-foreground">{pendingReaction.atkTotal}</b>（额外成功 +{pendingReaction.extraSuccesses}）
+            {pendingReaction.attackName} 检定 <b className="font-mono font-bold text-foreground">{pendingReaction.atkTotal}</b>（额外成功 +{pendingReaction.extraSuccesses}）
           </div>
           <div className="flex flex-wrap gap-1.5">
             <button type="button" onClick={() => onResolveReaction('accept')} className={btnPrimaryCls}>
@@ -198,9 +200,9 @@ export function RightSidebar(props: RightSidebarProps) {
       )}
 
       {/* 自由检定与战报 */}
-      <section className="flex min-h-0 flex-1 flex-col rounded-md border border-border bg-card p-3 text-card-foreground">
+      <section className="tactile-card flex min-h-0 flex-1 flex-col p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
-          <span className="font-semibold text-card-foreground">自由检定与战报</span>
+          <span className="font-serif text-sm font-semibold text-card-foreground">自由检定与战报</span>
           <button type="button" onClick={onClearLogs} className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer">
             清空
           </button>
@@ -244,20 +246,29 @@ export function RightSidebar(props: RightSidebarProps) {
             <div className="py-4 text-center text-xs text-muted-foreground">暂无战报记录</div>
           ) : (
             logs.map((l) => (
-              <div key={l.id} className="rounded border border-border bg-background/70 px-2.5 py-1.5 text-xs">
+              <div
+                key={l.id}
+                className={`rounded border px-2.5 py-1.5 text-xs ${
+                  l.type === 'fail'
+                    ? 'border-destructive/40 bg-destructive/10'
+                    : l.type === 'warn'
+                    ? 'border-primary/40 bg-background/70'
+                    : 'border-border bg-background/70'
+                }`}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <span
                     className={
                       l.type === 'hit'
                         ? 'font-medium text-foreground'
                         : l.type === 'fail'
-                        ? 'text-muted-foreground'
+                        ? 'text-destructive'
                         : 'text-foreground/90'
                     }
                   >
                     {l.text}
                   </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">{l.time}</span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">{l.time}</span>
                 </div>
                 {l.detail && (
                   <div className="mt-0.5 font-mono text-[11px] text-muted-foreground tabular-nums">

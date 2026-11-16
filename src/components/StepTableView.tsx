@@ -18,8 +18,10 @@ export function StepTableView({ onQuickRollStep }: StepTableViewProps) {
   });
 
   return (
-    <section className="rounded-md border border-border bg-card p-3 text-card-foreground">
-      <div className="mb-2.5 text-xs font-semibold text-card-foreground">ED4E 官方 STEP 对照表（点击行直接掷骰）</div>
+    <section className="tactile-card p-3">
+      <div className="mb-2.5 font-serif text-sm font-semibold text-card-foreground">
+        ED4E 官方 STEP 对照表（点击行直接掷骰）
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-xs tabular-nums">
           <thead>
@@ -35,25 +37,25 @@ export function StepTableView({ onQuickRollStep }: StepTableViewProps) {
               <tr key={r.stepA}>
                 <td
                   onClick={() => onQuickRollStep(r.stepA)}
-                  className="cursor-pointer px-2 py-1.5 font-semibold text-foreground hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer px-2 py-1.5 font-mono font-bold text-foreground transition-colors hover:bg-muted"
                 >
                   Step {r.stepA}
                 </td>
                 <td
                   onClick={() => onQuickRollStep(r.stepA)}
-                  className="cursor-pointer px-2 py-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer px-2 py-1.5 font-mono text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   {r.labelA}
                 </td>
                 <td
                   onClick={() => onQuickRollStep(r.stepB)}
-                  className="cursor-pointer border-l border-border px-2 py-1.5 font-semibold text-foreground hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer border-l border-border px-2 py-1.5 font-mono font-bold text-foreground transition-colors hover:bg-muted"
                 >
                   Step {r.stepB}
                 </td>
                 <td
                   onClick={() => onQuickRollStep(r.stepB)}
-                  className="cursor-pointer px-2 py-1.5 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  className="cursor-pointer px-2 py-1.5 font-mono text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   {r.labelB}
                 </td>
