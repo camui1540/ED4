@@ -18,12 +18,21 @@ import { PlSheetView } from './components/PlSheetView';
 import { GmMonsterView } from './components/GmMonsterView';
 import { StepTableView } from './components/StepTableView';
 import { RightSidebar } from './components/RightSidebar';
-import { ManualModal, SpellJsonModal } from './components/Modals';
+import { ExportModal, ManualModal, SpellJsonModal } from './components/Modals';
+import { PrintSheetView } from './components/PrintSheetView';
+import {
+  buildCharacterWorkbook,
+  downloadTextFile,
+  downloadWorkbookFile,
+  getExportBaseName,
+  serializeCharacterToTxt,
+} from './engine/characterExport';
 
 export default function App() {
   const [state, setState] = useState(() => createInitialState());
   const [spellJsonOpen, setSpellJsonOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('ed4_sidebar_width'));
     return saved >= 280 && saved <= 720 ? saved : 360;
@@ -873,8 +882,81 @@ export default function App() {
     pushLog(`自由检定 (Step ${step}) → ${res.total}${suffix}`, res.trace, res.isSuccess === true ? 'hit' : res.isSuccess === false ? 'fail' : '');
   };
 
+  // 角色卡导出：TXT / 剪贴板 / Excel / PDF 打印
+  const handleExportTxt = () => {
+    const txt = serializeCharacterToTxt(state.pl);
+    const fileName = `${getExportBaseName(state.pl)}.txt`;
+    downloadTextFile(fileName, txt);
+    pushLog(`已导出角色卡 TXT：${fileName}`, '', 'hit');
+  };
+
+  const handleCopyTxt = async (): Promise<boolean> => {
+    const txt = serializeCharacterToTxt(state.pl);
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(txt);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+
+    if (!copied) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = txt;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        copied = document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        copied = false;
+      }
+    }
+
+    if (copied) {
+      pushLog(`已复制角色卡【${state.pl.name}】TXT 文本到剪贴板`, '', 'hit');
+      return true;
+    }
+    pushLog('复制到剪贴板失败，请尝试下载 TXT 文件', '', 'fail');
+    return false;
+  };
+
+  const handleExportExcel = () => {
+    const wb = buildCharacterWorkbook(state.pl);
+    const fileName = `${getExportBaseName(state.pl)}.xlsx`;
+    downloadWorkbookFile(fileName, wb);
+    pushLog(`已导出角色卡 Excel：${fileName}`, '', 'hit');
+  };
+
+  const handleExportPdf = () => {
+    const originalTitle = document.title;
+    const printTitle = getExportBaseName(state.pl);
+    let restored = false;
+    const restoreTitle = () => {
+      if (restored) return;
+      restored = true;
+      document.title = originalTitle;
+    };
+
+    setExportModalOpen(false);
+    document.title = printTitle;
+    window.addEventListener('afterprint', restoreTitle, { once: true });
+
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(restoreTitle, 1000);
+    }, 60);
+    pushLog(`已调用浏览器打印 / 另存为 PDF：${printTitle}.pdf`, '', 'hit');
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden">
+    <>
+    <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden print:hidden">
       {/* 顶部导航栏 */}
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <div className="flex flex-wrap items-center gap-2.5">
@@ -973,6 +1055,7 @@ export default function App() {
               onCastSpell={handleCastSpell}
               onRollSpellEffect={handleRollSpellEffect}
               onImportFile={handleImportFile}
+              onOpenExport={() => setExportModalOpen(true)}
               onLog={(t, d, ty) => pushLog(t, d, ty)}
             />
           )}
@@ -1078,6 +1161,18 @@ export default function App() {
         onCopied={() => pushLog('已复制结构化法术 JSON 到剪贴板', '', 'hit')}
       />
       <ManualModal open={manualOpen} onClose={() => setManualOpen(false)} />
+      <ExportModal
+        open={exportModalOpen}
+        characterName={state.pl.name}
+        circle={state.pl.circle}
+        onClose={() => setExportModalOpen(false)}
+        onExportTxt={handleExportTxt}
+        onCopyTxt={handleCopyTxt}
+        onExportExcel={handleExportExcel}
+        onExportPdf={handleExportPdf}
+      />
     </div>
+    <PrintSheetView pl={state.pl} />
+    </>
   );
 }

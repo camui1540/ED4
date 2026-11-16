@@ -33,6 +33,7 @@ interface PlSheetViewProps {
   onCastSpell: (instanceId: string, useKarma: boolean) => void;
   onRollSpellEffect: (instanceId: string, useKarma: boolean) => void;
   onImportFile: (file: File) => void;
+  onOpenExport: () => void;
   onLog: (text: string, detail?: string, type?: string) => void;
 }
 
@@ -78,6 +79,7 @@ export function PlSheetView(props: PlSheetViewProps) {
     onCastSpell,
     onRollSpellEffect,
     onImportFile,
+    onOpenExport,
   } = props;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -330,6 +332,9 @@ export function PlSheetView(props: PlSheetViewProps) {
             />
             <button type="button" onClick={() => fileInputRef.current?.click()} className={btnCls}>
               导入角色卡 (.xlsx / .txt)
+            </button>
+            <button type="button" onClick={onOpenExport} className={btnCls}>
+              导出角色卡
             </button>
           </div>
           <div className="text-xs text-muted-foreground tabular-nums">
