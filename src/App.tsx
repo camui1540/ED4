@@ -1,0 +1,1059 @@
+import React, { useEffect, useState } from 'react';
+import * as XLSX from 'xlsx';
+import ED4Engine from './engine/ed4_engine.js';
+import {
+  applyDamageToMonsterPure,
+  applyDamageToPlPure,
+  applyImportedCharacter,
+  createInitialState,
+  createMonsterInstance,
+  formatTime,
+  getEffectiveActionMod,
+  getMonsterEffectiveDef,
+  getPlDerivedView,
+  sortInitiativeList,
+} from './engine/combatHelpers';
+import { PlSheetView } from './components/PlSheetView';
+import { GmMonsterView } from './components/GmMonsterView';
+import { StepTableView } from './components/StepTableView';
+import { RightSidebar } from './components/RightSidebar';
+import { ManualModal, SpellJsonModal } from './components/Modals';
+
+export default function App() {
+  const [state, setState] = useState(() => createInitialState());
+  const [spellJsonOpen, setSpellJsonOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('ed4_sidebar_width'));
+    return saved >= 280 && saved <= 720 ? saved : 360;
+  });
+  const [draggingResizer, setDraggingResizer] = useState(false);
+
+  // 桌面端拖拽分栏逻辑
+  useEffect(() => {
+    if (!draggingResizer) return;
+    const onMove = (clientX: number) => {
+      const next = Math.max(280, Math.min(720, window.innerWidth - clientX));
+      setSidebarWidth(next);
+    };
+    const onMouseMove = (e: MouseEvent) => onMove(e.clientX);
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches[0]) onMove(e.touches[0].clientX);
+    };
+    const stop = () => {
+      setDraggingResizer(false);
+      localStorage.setItem('ed4_sidebar_width', String(sidebarWidth));
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', stop);
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', stop);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', stop);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', stop);
+    };
+  }, [draggingResizer, sidebarWidth]);
+
+  // 统一日志追加函数
+  const makeLog = (text: string, detail = '', type = '', blindText = '', gmBlind = state.gmBlind) => ({
+    id: Date.now() + Math.random(),
+    time: formatTime(),
+    text: gmBlind && blindText ? blindText : text,
+    detail: gmBlind && blindText ? '（GM脱敏模式已隐藏具体抗性与阈值）' : detail,
+    type,
+  });
+
+  const pushLog = (text: string, detail = '', type = '', blindText = '') => {
+    setState((prev) => ({
+      ...prev,
+      logs: [makeLog(text, detail, type, blindText, prev.gmBlind), ...prev.logs].slice(0, 60),
+    }));
+  };
+
+  const updatePl = (updater: (prevPl: any) => any) => {
+    setState((prev) => ({ ...prev, pl: updater(prev.pl) }));
+  };
+
+  // 切换门类
+  const handleChangeDiscipline = (disciplineId: string) => {
+    if (!ED4Engine.DISCIPLINES[disciplineId]) return;
+    setState((prev) => {
+      const nextPl = { ...prev.pl, disciplineId };
+      const d = getPlDerivedView(nextPl);
+      nextPl.karmaCurrent = Math.min(nextPl.karmaCurrent, d.karmaMax);
+      nextPl.recoveryCurrent = Math.min(nextPl.recoveryCurrent, d.recoveryMax);
+      const log = makeLog(
+        `切换门类为【${d.prog.disc.name}】，耐久加值 +${d.durabilityTotal}`,
+        `意识丧失 ${d.effUncon} / 死亡 ${d.effDeath} · 业力上限 ${d.karmaMax}`,
+        '',
+        '',
+        prev.gmBlind
+      );
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 调整环数
+  const handleChangeCircle = (val: number) => {
+    const c = Math.max(1, Math.min(15, Math.floor(val || 1)));
+    setState((prev) => {
+      const nextPl = { ...prev.pl, circle: c, karmaDie: c >= 9 ? 8 : prev.pl.karmaDie };
+      const d = getPlDerivedView(nextPl);
+      nextPl.karmaCurrent = d.karmaMax;
+      nextPl.recoveryCurrent = d.recoveryMax;
+      const log = makeLog(
+        `调整环数为第 ${c} 环（${d.prog.disc.name}），耐久 +${d.durabilityTotal}`,
+        `意识丧失 ${d.effUncon} / 死亡 ${d.effDeath} · 业力上限 ${d.karmaMax} (D${nextPl.karmaDie})`,
+        '',
+        '',
+        prev.gmBlind
+      );
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 切换种族
+  const handleChangeRace = (raceId: string) => {
+    setState((prev) => {
+      const nextPl = {
+        ...prev.pl,
+        raceId,
+        options: raceId === 'tskrang' ? prev.pl.options : { ...prev.pl.options, tailAttack: false },
+      };
+      const d = getPlDerivedView(nextPl);
+      nextPl.karmaCurrent = d.karmaMax;
+      nextPl.recoveryCurrent = d.recoveryMax;
+      return { ...prev, pl: nextPl };
+    });
+  };
+
+  // 属性加减点
+  const handleAdjustAttr = (attr: string, delta: number) => {
+    setState((prev) => {
+      const cur = prev.pl.attrMods[attr];
+      const next = cur + delta;
+      if (next < -2 || next > 8) return prev;
+      const d = getPlDerivedView(prev.pl);
+      const costDiff = ED4Engine.ATTR_COST[next] - ED4Engine.ATTR_COST[cur];
+      if (d.remainingPoints - costDiff < 0) return prev;
+      const nextPl = { ...prev.pl, attrMods: { ...prev.pl.attrMods, [attr]: next } };
+      const updated = getPlDerivedView(nextPl);
+      nextPl.karmaCurrent = Math.min(nextPl.karmaCurrent, updated.karmaMax);
+      nextPl.recoveryCurrent = Math.min(nextPl.recoveryCurrent, updated.recoveryMax);
+      return { ...prev, pl: nextPl };
+    });
+  };
+
+  // 属性掷骰
+  const handleRollAttr = (attr: string) => {
+    const d = getPlDerivedView(state.pl);
+    const step = Math.max(1, d.steps[attr] + getEffectiveActionMod(state.pl));
+    const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: state.pl.karmaDie });
+    pushLog(
+      `${state.pl.name} 进行 ${ED4Engine.ATTR_NAMES[attr]}检定 (Step ${step}) → ${res.total}${res.isRuleOfOne ? ' [全一规则大失败]' : ''}`,
+      res.trace,
+      res.isRuleOfOne ? 'fail' : ''
+    );
+  };
+
+  // 玩家投先攻
+  const handleRollPlInitiative = () => {
+    setState((prev) => {
+      const d = getPlDerivedView(prev.pl);
+      const step = Math.max(1, d.initStep + getEffectiveActionMod(prev.pl));
+      const res = ED4Engine.rollStepTest(step, { isAction: false, karmaDie: prev.pl.karmaDie });
+      const entry = { id: 'pl', type: 'pl', name: prev.pl.name, initVal: res.total, initStep: step, dexVal: d.attrs.DEX };
+      const idx = prev.initiativeList.findIndex((x) => x.type === 'pl');
+      const nextInit = idx >= 0 ? prev.initiativeList.map((x, i) => (i === idx ? entry : x)) : [...prev.initiativeList, entry];
+      const log = makeLog(`${prev.pl.name} 投掷先攻 (Step ${step}) → ${res.total}`, res.trace, 'warn', '', prev.gmBlind);
+      return { ...prev, initiativeList: sortInitiativeList(nextInit), logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 常用检定
+  const handleRollQuickCheck = (type: string) => {
+    if (type === 'init') {
+      handleRollPlInitiative();
+      return;
+    }
+    setState((prev) => {
+      const pl = { ...prev.pl, statuses: { ...prev.pl.statuses } };
+      const d = getPlDerivedView(pl);
+
+      if (type === 'recovery') {
+        if (pl.recoveryCurrent <= 0) {
+          return { ...prev, logs: [makeLog(`${pl.name} 今日回复次数已耗尽`, '', 'fail', '', prev.gmBlind), ...prev.logs].slice(0, 60) };
+        }
+        pl.recoveryCurrent -= 1;
+        const step = Math.max(1, d.steps.TOU - pl.wounds);
+        const res = ED4Engine.rollStepTest(step, { isAction: false, karmaDie: pl.karmaDie });
+        const healed = Math.max(1, res.total);
+        pl.currentDamage = Math.max(0, pl.currentDamage - healed);
+        const log = makeLog(`${pl.name} 回复检定 (Step ${step}) → 恢复 ${healed} 点 (剩余 ${pl.recoveryCurrent})`, res.trace, 'hit', '', prev.gmBlind);
+        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      if (type === 'knockdown') {
+        const wb = pl.talents.find((t: any) => t.name.includes('负伤平衡') || t.name.toLowerCase().includes('wound balance'));
+        const step = Math.max(1, d.steps.STR + (wb ? wb.rank : 0) + getEffectiveActionMod(pl));
+        const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: pl.karmaDie });
+        const log = makeLog(`${pl.name} 击倒检定${wb ? `（负伤平衡 ${wb.rank} 级）` : ''} (Step ${step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
+        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      if (type === 'jumpup') {
+        if (!pl.statuses.knockedDown) return prev;
+        pl.currentDamage += 2;
+        const step = Math.max(1, d.steps.DEX - ((Number(pl.armor.initPen) || 0) + (Number(pl.shield.initPen) || 0)) - pl.wounds);
+        const res = ED4Engine.rollStepTest(step, { dn: 6, isAction: true, karmaDie: pl.karmaDie });
+        if (res.isSuccess) pl.statuses.knockedDown = false;
+        const log = makeLog(
+          `${pl.name} 跃起（2 劳累，难度 6）→ ${res.isSuccess ? '成功起身' : '起身失败'} (${res.total})`,
+          res.trace,
+          res.isSuccess ? 'hit' : 'fail',
+          '',
+          prev.gmBlind
+        );
+        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      const map: Record<string, { label: string; step: number }> = {
+        awareness: { label: '察觉/防埋伏检定', step: d.steps.PER },
+        astral: { label: '星界感知检定', step: d.steps.PER },
+        willpower: { label: '意志抵抗检定', step: d.steps.WIL },
+      };
+      const item = map[type];
+      const step = Math.max(1, item.step + getEffectiveActionMod(pl));
+      const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: pl.karmaDie });
+      const log = makeLog(`${pl.name} ${item.label} (Step ${step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
+      return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 业力仪式 & 休整消伤
+  const handleKarmaRitual = () => {
+    setState((prev) => {
+      const d = getPlDerivedView(prev.pl);
+      const log = makeLog(`${prev.pl.name} 完成业力仪式，业力恢复至 ${d.karmaMax}`, '', 'hit', '', prev.gmBlind);
+      return { ...prev, pl: { ...prev.pl, karmaCurrent: d.karmaMax }, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  const handleHealWoundRest = () => {
+    setState((prev) => {
+      const pl = prev.pl;
+      if (pl.currentDamage > 0 || pl.wounds <= 0 || pl.recoveryCurrent <= 0) return prev;
+      const nextPl = { ...pl, recoveryCurrent: pl.recoveryCurrent - 1, wounds: pl.wounds - 1 };
+      const log = makeLog(`${pl.name} 整夜休整消除 1 处负伤（剩余 ${nextPl.wounds}）`, '', 'hit', '', prev.gmBlind);
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 切换战斗选项与状态
+  const handleToggleOption = (key: string) => {
+    setState((prev) => {
+      const opts: Record<string, boolean> = { ...prev.pl.options };
+      if (key === 'aggressive' && !opts.aggressive) opts.defensive = false;
+      if (key === 'defensive' && !opts.defensive) opts.aggressive = false;
+      opts[key] = !opts[key];
+      const extraStrain = key === 'splitMove' && opts.splitMove ? 1 : 0;
+      return {
+        ...prev,
+        pl: { ...prev.pl, options: opts as typeof prev.pl.options, currentDamage: prev.pl.currentDamage + extraStrain },
+      };
+    });
+  };
+
+  const handleToggleStatus = (key: string) => {
+    updatePl((p) => ({ ...p, statuses: { ...p.statuses, [key]: !p.statuses[key] } }));
+  };
+
+  // 天赋与技能检定
+  const handleRollTalentOrSkill = (listType: 'talent' | 'skill', itemId: string, wantKarma: boolean) => {
+    setState((prev) => {
+      const pl = { ...prev.pl };
+      const list = listType === 'skill' ? pl.skills : pl.talents;
+      const t = list.find((x: any) => x.id === itemId);
+      if (!t) return prev;
+      if (pl.statuses.surprised) {
+        return { ...prev, logs: [makeLog(`${pl.name} 处于惊愕状态，本轮无法执行检定`, '', 'fail', '', prev.gmBlind), ...prev.logs].slice(0, 60) };
+      }
+
+      const d = getPlDerivedView(pl);
+      const useKarma = listType === 'talent' && wantKarma && pl.karmaCurrent > 0;
+      if (useKarma) pl.karmaCurrent -= 1;
+
+      let strainCost = Number(t.strain) || 0;
+      if (t.isAttack && pl.options.aggressive) strainCost += 1;
+      if (strainCost > 0) pl.currentDamage += strainCost;
+
+      let step = d.steps[t.attr] + t.rank + getEffectiveActionMod(pl);
+      if (t.isAttack && pl.options.aggressive) step += 3;
+      step = Math.max(1, step);
+
+      let targetMonster: any = null;
+      let dn: number | null = null;
+      if (prev.targetValue.startsWith('m:')) {
+        targetMonster = prev.monsters.find((m) => m.instanceId === prev.targetValue.slice(2));
+        if (targetMonster) dn = getMonsterEffectiveDef(targetMonster, 'pd');
+      } else if (prev.targetValue.startsWith('dn:')) {
+        dn = Number(prev.targetValue.slice(3));
+      }
+
+      const res = ED4Engine.rollStepTest(step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
+      const strainText = strainCost > 0 ? ` [劳累 +${strainCost}]` : '';
+      const tag = listType === 'skill' ? '技能' : '天赋';
+
+      if (dn === null) {
+        const log = makeLog(
+          `${pl.name} 使用${tag}【${t.name}】 (Step ${step})${strainText} → ${res.total}${res.isRuleOfOne ? ' [全一规则大失败]' : ''}`,
+          res.trace,
+          res.isRuleOfOne ? 'fail' : '',
+          '',
+          prev.gmBlind
+        );
+        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      if (!res.isSuccess) {
+        const log = makeLog(
+          `${pl.name} 使用${tag}【${t.name}】攻击 ${targetMonster ? targetMonster.name : '目标'} → 未命中 (${res.total} vs ${dn})${strainText}`,
+          res.trace,
+          'fail',
+          `${pl.name} 使用${tag}【${t.name}】攻击目标 → 未命中 (${res.total})${strainText}`,
+          prev.gmBlind
+        );
+        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      const weapon = pl.weapons[0] || { name: '徒手', dmgStep: 0 };
+      const dmgStep = d.steps.STR + (Number(weapon.dmgStep) || 0) + (pl.options.aggressive ? 3 : 0);
+      const nextPending = targetMonster
+        ? {
+            attackerId: 'pl',
+            attackerType: 'pl',
+            attackerName: pl.name,
+            targetId: targetMonster.instanceId,
+            targetType: 'gm',
+            targetName: targetMonster.name,
+            attackName: `${t.name}（${weapon.name}）`,
+            atkTotal: res.total,
+            targetDef: dn,
+            extraSuccesses: res.extraSuccesses,
+            dmgStep,
+            isMelee: true,
+            isKnockdownOpt: pl.options.knockdown,
+            isStunOpt: pl.options.stun,
+            armorType: 'pa',
+          }
+        : prev.pendingReaction;
+
+      const log = makeLog(
+        `${pl.name} 使用${tag}【${t.name}】命中 ${targetMonster ? targetMonster.name : '目标'} (${res.total} vs ${dn}，额外成功 +${res.extraSuccesses})${strainText}`,
+        res.trace,
+        'hit',
+        `${pl.name} 使用${tag}【${t.name}】命中目标（额外成功 +${res.extraSuccesses}）${strainText}`,
+        prev.gmBlind
+      );
+      return {
+        ...prev,
+        pl,
+        lastExtraDamageBonus: res.extraSuccesses * 2,
+        pendingReaction: nextPending,
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  // 武器伤害检定
+  const handleRollWeaponDamage = (weaponId: string) => {
+    setState((prev) => {
+      const w = prev.pl.weapons.find((x: any) => x.id === weaponId);
+      if (!w) return prev;
+      const d = getPlDerivedView(prev.pl);
+      const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (prev.pl.options.aggressive ? 3 : 0));
+      const res = ED4Engine.rollStepTest(dmgStep, { isAction: false, karmaDie: prev.pl.karmaDie });
+      const bonus = prev.lastExtraDamageBonus || 0;
+      const totalDmg = res.total + bonus;
+
+      if (prev.targetValue.startsWith('m:')) {
+        const targetId = prev.targetValue.slice(2);
+        const m = prev.monsters.find((x) => x.instanceId === targetId);
+        if (m) {
+          const outcome = applyDamageToMonsterPure(
+            m,
+            totalDmg,
+            'pa',
+            prev.pl.options.knockdown,
+            prev.pl.options.stun,
+            `${prev.pl.name}【${w.name}】`
+          );
+          const log = makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind);
+          return {
+            ...prev,
+            lastExtraDamageBonus: 0,
+            monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
+            logs: [log, ...prev.logs].slice(0, 60),
+          };
+        }
+      }
+
+      const log = makeLog(
+        `${prev.pl.name} 掷出【${w.name}】伤害 (Step ${dmgStep}) → ${totalDmg} 点${bonus ? `（含额外成功 +${bonus}）` : ''}`,
+        res.trace,
+        'hit',
+        '',
+        prev.gmBlind
+      );
+      return { ...prev, lastExtraDamageBonus: 0, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 法术三阶段：编织 / 施法 / 效果结算
+  const handleWeaveSpell = (instanceId: string, wantKarma: boolean) => {
+    setState((prev) => {
+      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
+      if (!sp) return prev;
+      const pl = { ...prev.pl };
+      const useKarma = wantKarma && pl.karmaCurrent > 0;
+      if (useKarma) pl.karmaCurrent -= 1;
+      const tw = ED4Engine.getThreadWeavingStep(pl, getPlDerivedView(pl));
+      const dn = Number(sp.weavingBase) || 5;
+      const res = ED4Engine.rollStepTest(tw.step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
+
+      let nextWoven = sp.wovenThreads || 0;
+      let log;
+      if (res.isSuccess) {
+        const gained = 1 + res.extraSuccesses;
+        nextWoven = Math.min((Number(sp.threads) || 0) + 4, nextWoven + gained);
+        log = makeLog(
+          `${pl.name} 为【${sp.nameCn}】编织脉路 (Step ${tw.step} vs ${dn}) → 成功 (+${gained}，当前 ${nextWoven}/${sp.threads})`,
+          res.trace,
+          'hit',
+          '',
+          prev.gmBlind
+        );
+      } else {
+        log = makeLog(
+          `${pl.name} 为【${sp.nameCn}】编织脉路 (Step ${tw.step} vs ${dn}) → 失败 (当前 ${nextWoven}/${sp.threads})`,
+          res.trace,
+          'fail',
+          '',
+          prev.gmBlind
+        );
+      }
+
+      return {
+        ...prev,
+        pl: {
+          ...pl,
+          spells: pl.spells.map((s: any) => (s.instanceId === instanceId ? { ...s, wovenThreads: nextWoven } : s)),
+        },
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  const handleCastSpell = (instanceId: string, wantKarma: boolean) => {
+    setState((prev) => {
+      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
+      if (!sp) return prev;
+      const reqThreads = Number(sp.threads) || 0;
+      const curThreads = Number(sp.wovenThreads) || 0;
+      if (reqThreads > 0 && curThreads < reqThreads) {
+        const warnLog = makeLog(`${prev.pl.name} 无法施放【${sp.nameCn}】：尚需编织脉路 (${curThreads}/${reqThreads})`, '', 'warn', '', prev.gmBlind);
+        return { ...prev, logs: [warnLog, ...prev.logs].slice(0, 60) };
+      }
+
+      const pl = { ...prev.pl };
+      const useKarma = wantKarma && pl.karmaCurrent > 0;
+      if (useKarma) pl.karmaCurrent -= 1;
+
+      const sc = ED4Engine.getSpellcastingStep(pl, getPlDerivedView(pl));
+      let dn: number | null = sp.castingType === 'fixed' ? Number(sp.castingDn) || 6 : null;
+      let targetLabel = '目标';
+
+      if (sp.castingType !== 'fixed') {
+        if (prev.targetValue === 'aoe:all') {
+          const alive = prev.monsters.filter((m) => m.currentDamage < m.death);
+          if (alive.length > 0) {
+            dn = Math.max(...alive.map((m) => getMonsterEffectiveDef(m, 'md')));
+            targetLabel = `全场敌方 (${alive.length}名，最高秘防 ${dn})`;
+          }
+        } else if (prev.targetValue.startsWith('m:')) {
+          const targetMonster = prev.monsters.find((m) => m.instanceId === prev.targetValue.slice(2));
+          if (targetMonster) {
+            dn = getMonsterEffectiveDef(targetMonster, 'md');
+            targetLabel = targetMonster.name;
+          }
+        } else if (prev.targetValue.startsWith('dn:')) {
+          dn = Number(prev.targetValue.slice(3));
+          targetLabel = `固定难度 ${dn}`;
+        }
+      }
+
+      const res = ED4Engine.rollStepTest(sc.step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
+      const nextSpells = pl.spells.map((s: any) => (s.instanceId === instanceId ? { ...s, wovenThreads: 0 } : s));
+
+      if (dn === null) {
+        const log = makeLog(`${pl.name} 施放【${sp.nameCn}】 (Step ${sc.step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
+        return { ...prev, pl: { ...pl, spells: nextSpells }, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      if (!res.isSuccess) {
+        const log = makeLog(
+          `${pl.name} 对 ${targetLabel} 施放【${sp.nameCn}】 → 失败 (${res.total} vs ${dn})`,
+          res.trace,
+          'fail',
+          `${pl.name} 施放【${sp.nameCn}】 → 未命中 (${res.total})`,
+          prev.gmBlind
+        );
+        return { ...prev, pl: { ...pl, spells: nextSpells }, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+
+      const suffixHint = ED4Engine.hasSpellEffectRoll(sp) ? '，请点击「结算效果」掷效果骰' : `，法术效果已直接生效（${sp.effectFormula}）`;
+      const log = makeLog(
+        `${pl.name} 对 ${targetLabel} 成功施放【${sp.nameCn}】 (${res.total} vs ${dn}，额外成功 +${res.extraSuccesses})${suffixHint}`,
+        res.trace,
+        'hit',
+        `${pl.name} 成功施放【${sp.nameCn}】（额外成功 +${res.extraSuccesses}）${suffixHint}`,
+        prev.gmBlind
+      );
+      return {
+        ...prev,
+        pl: { ...pl, spells: nextSpells },
+        lastExtraDamageBonus: res.extraSuccesses * 2,
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  const handleRollSpellEffect = (instanceId: string, wantKarma: boolean) => {
+    setState((prev) => {
+      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
+      if (!sp) return prev;
+      const pl = { ...prev.pl };
+      const useKarma = wantKarma && pl.karmaCurrent > 0;
+      if (useKarma) pl.karmaCurrent -= 1;
+
+      const d = getPlDerivedView(pl);
+      const willforce = pl.talents.find((t: any) => t.name.includes('意志力') || t.name.toLowerCase().includes('willforce'));
+      const baseWilStep = willforce ? d.steps.WIL + willforce.rank : d.steps.WIL;
+      if (willforce) pl.currentDamage += 1;
+
+      let effStep = baseWilStep;
+      const f = String(sp.effectFormula || '').toUpperCase();
+      const mWil = f.match(/WIL\s*\+\s*(\d+)/);
+      const mCir = f.match(/CIRCLE\s*\+\s*(\d+)/);
+      if (mWil) effStep = baseWilStep + Number(mWil[1]);
+      else if (mCir) effStep = pl.circle + Number(mCir[1]);
+
+      const res = ED4Engine.rollStepTest(effStep, { karma: useKarma, karmaDie: pl.karmaDie, isAction: false });
+      const bonus = prev.lastExtraDamageBonus || 0;
+      const total = res.total + bonus;
+
+      if (sp.effectType === 'damage') {
+        if (prev.targetValue === 'aoe:all') {
+          const alive = prev.monsters.filter((m) => m.currentDamage < m.death);
+          if (alive.length > 0) {
+            const newLogs = [
+              makeLog(
+                `${pl.name} 掷出群体法术【${sp.nameCn}】伤害 (Step ${effStep}) → ${total} 点${bonus ? `（含额外成功 +${bonus}）` : ''}`,
+                res.trace,
+                'hit',
+                '',
+                prev.gmBlind
+              ),
+            ];
+            const nextMonsters = prev.monsters.map((m) => {
+              if (m.currentDamage >= m.death) return m;
+              const outcome = applyDamageToMonsterPure(m, total, sp.armorType || 'ma', false, false, `${pl.name}【${sp.nameCn}】`);
+              newLogs.unshift(makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind));
+              return outcome.monster;
+            });
+            return {
+              ...prev,
+              pl,
+              lastExtraDamageBonus: 0,
+              monsters: nextMonsters,
+              logs: [...newLogs, ...prev.logs].slice(0, 60),
+            };
+          }
+        } else if (prev.targetValue.startsWith('m:')) {
+          const targetId = prev.targetValue.slice(2);
+          const m = prev.monsters.find((x) => x.instanceId === targetId);
+          if (m) {
+            const outcome = applyDamageToMonsterPure(m, total, sp.armorType || 'ma', false, false, `${pl.name}【${sp.nameCn}】`);
+            const log = makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind);
+            return {
+              ...prev,
+              pl,
+              lastExtraDamageBonus: 0,
+              monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
+              logs: [log, ...prev.logs].slice(0, 60),
+            };
+          }
+        }
+      }
+
+      const log = makeLog(
+        `${pl.name} 结算【${sp.nameCn}】效果 (Step ${effStep}) → ${total}${bonus ? `（含额外成功 +${bonus}）` : ''}`,
+        res.trace,
+        'hit',
+        '',
+        prev.gmBlind
+      );
+      return { ...prev, pl, lastExtraDamageBonus: 0, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 导入角色卡 (.xlsx / .txt)
+  const handleImportFile = (file: File) => {
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (!result) return;
+      const data =
+        ext === 'txt'
+          ? ED4Engine.parseTxtSheet(String(result))
+          : ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(result as ArrayBuffer), { type: 'array' }));
+
+      setState((prev) => {
+        const nextPl = applyImportedCharacter(prev.pl, data);
+        const d = getPlDerivedView(nextPl);
+        const matchedSpells = (nextPl.spells || []).filter((s: any) => s.matchedDb).length;
+        const log = makeLog(
+          `已导入角色【${nextPl.name}】（${d.race.name} · ${d.prog.disc.name} ${nextPl.circle}环）`,
+          `天赋 ${nextPl.talents.length} 项 | 技能 ${nextPl.skills.length} 项 | 武器 ${nextPl.weapons.length} 件 | 装备 ${nextPl.gear.length} 件 | 脉路物品 ${nextPl.threadItems.length} 件 | 法术 ${nextPl.spells.length} 个（匹配库 ${matchedSpells} 个）`,
+          'hit',
+          '',
+          prev.gmBlind
+        );
+        return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+      });
+    };
+    if (ext === 'txt') reader.readAsText(file, 'utf-8');
+    else reader.readAsArrayBuffer(file);
+  };
+
+  // GM：生成怪物 / 攻击 / 删除 / 受创
+  const handleSpawnMonster = (templateId: string, count: number) => {
+    setState((prev) => {
+      const tpl = prev.monsterTemplates.find((x) => x.id === templateId);
+      if (!tpl) return prev;
+      const existing = prev.monsters.filter((m) => m.templateId === templateId).length;
+      const added = Array.from({ length: count }, (_, i) => createMonsterInstance(tpl, existing, count, i));
+      const log = makeLog(`已将 ${count} 名【${tpl.name}】加入战斗`, '', '', '', prev.gmBlind);
+      return { ...prev, monsters: [...prev.monsters, ...added], logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  const handleMonsterAttackPl = (instanceId: string) => {
+    setState((prev) => {
+      const m = prev.monsters.find((x) => x.instanceId === instanceId);
+      if (!m) return prev;
+      const d = getPlDerivedView(prev.pl);
+      const atkStep = Math.max(1, m.atkStep - m.wounds);
+      const res = ED4Engine.rollStepTest(atkStep, { dn: d.pd, isAction: true, karmaDie: prev.pl.karmaDie });
+      if (!res.isSuccess) {
+        const log = makeLog(`${m.name} 攻击 ${prev.pl.name} → 未命中 (${res.total} vs ${d.pd})`, res.trace, '', '', prev.gmBlind);
+        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+      const nextPending = {
+        attackerId: m.instanceId,
+        attackerType: 'gm',
+        attackerName: m.name,
+        targetId: 'pl',
+        targetType: 'pl',
+        targetName: prev.pl.name,
+        attackName: '近战攻击',
+        atkTotal: res.total,
+        targetDef: d.pd,
+        extraSuccesses: res.extraSuccesses,
+        dmgStep: m.dmgStep,
+        isMelee: true,
+        isKnockdownOpt: false,
+        isStunOpt: false,
+        armorType: 'pa',
+      };
+      const log = makeLog(
+        `${m.name} 命中 ${prev.pl.name} (${res.total} vs ${d.pd}，额外成功 +${res.extraSuccesses})，等待反应`,
+        res.trace,
+        'warn',
+        '',
+        prev.gmBlind
+      );
+      return { ...prev, pendingReaction: nextPending, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  // 待确认反应结算（调用 ED4Engine.resolveAvoidBlow / resolveRiposte）
+  const handleResolveReaction = (action: 'accept' | 'avoid' | 'riposte') => {
+    setState((prev) => {
+      const pr = prev.pendingReaction;
+      if (!pr) return prev;
+      let nextPl = { ...prev.pl };
+      let nextMonsters = [...prev.monsters];
+      const addedLogs: any[] = [];
+
+      if (action === 'avoid' && pr.targetType === 'pl') {
+        const d = getPlDerivedView(nextPl);
+        const t = nextPl.talents.find((x: any) => x.name.includes('回避打击') || x.name.includes('闪避') || x.name.toLowerCase().includes('avoid blow'));
+        const avoidStep = Math.max(1, (t ? d.steps[t.attr] + t.rank : d.steps.DEX) + getEffectiveActionMod(nextPl));
+        const res = ED4Engine.resolveAvoidBlow({ avoidStep, attackRollTotal: pr.atkTotal, karmaDie: nextPl.karmaDie });
+        nextPl.currentDamage += res.strainCost;
+        if (res.avoided) {
+          addedLogs.unshift(
+            makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1劳累）闪避成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
+          );
+          return { ...prev, pl: nextPl, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
+        }
+        addedLogs.unshift(
+          makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1劳累）闪避失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
+        );
+      }
+
+      if (action === 'riposte' && pr.targetType === 'pl') {
+        const d = getPlDerivedView(nextPl);
+        const t = nextPl.talents.find((x: any) => x.name.includes('反击') || x.name.toLowerCase().includes('riposte'));
+        const riposteStep = Math.max(1, (t ? d.steps[t.attr] + t.rank : d.steps.DEX) + getEffectiveActionMod(nextPl));
+        const res = ED4Engine.resolveRiposte({ riposteStep, attackRollTotal: pr.atkTotal, karmaDie: nextPl.karmaDie });
+        nextPl.currentDamage += res.strainCost;
+        if (res.riposted) {
+          addedLogs.unshift(
+            makeLog(`${nextPl.name} 发动【反击】（2劳累）格挡成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
+          );
+          if (res.rollResult.extraSuccesses >= 1 && pr.attackerType === 'gm') {
+            const w = nextPl.weapons[0] || { name: '武器', dmgStep: 0 };
+            const counterDmg =
+              ED4Engine.rollStepTest(d.steps.STR + w.dmgStep, { isAction: false, karmaDie: nextPl.karmaDie }).total +
+              Math.max(0, res.rollResult.extraSuccesses - 1) * 2;
+            const targetM = nextMonsters.find((m) => m.instanceId === pr.attackerId);
+            if (targetM) {
+              const out = applyDamageToMonsterPure(targetM, counterDmg, 'pa', false, false, `${nextPl.name} 反击`);
+              nextMonsters = nextMonsters.map((m) => (m.instanceId === pr.attackerId ? out.monster : m));
+              addedLogs.unshift(makeLog(out.log.text, out.log.detail, out.log.type, out.log.blindText, prev.gmBlind));
+            }
+          }
+          return { ...prev, pl: nextPl, monsters: nextMonsters, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
+        }
+        addedLogs.unshift(
+          makeLog(`${nextPl.name} 发动【反击】（2劳累）失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
+        );
+      }
+
+      const dmgRes = ED4Engine.rollStepTest(pr.dmgStep, { isAction: false, karmaDie: nextPl.karmaDie });
+      const totalDmg = dmgRes.total + pr.extraSuccesses * 2;
+
+      if (pr.targetType === 'gm') {
+        const targetM = nextMonsters.find((m) => m.instanceId === pr.targetId);
+        if (targetM) {
+          const out = applyDamageToMonsterPure(targetM, totalDmg, pr.armorType, pr.isKnockdownOpt, pr.isStunOpt, pr.attackerName);
+          nextMonsters = nextMonsters.map((m) => (m.instanceId === pr.targetId ? out.monster : m));
+          addedLogs.unshift(makeLog(out.log.text, out.log.detail, out.log.type, out.log.blindText, prev.gmBlind));
+        }
+      } else {
+        const out = applyDamageToPlPure(nextPl, totalDmg, pr.armorType, pr.isKnockdownOpt, pr.isStunOpt, pr.attackerName);
+        nextPl = out.pl;
+        addedLogs.unshift(makeLog(out.log.text, out.log.detail, out.log.type, '', prev.gmBlind));
+      }
+
+      return {
+        ...prev,
+        pl: nextPl,
+        monsters: nextMonsters,
+        pendingReaction: null,
+        logs: [...addedLogs, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  // 快捷受创结算
+  const handleManualApplyDamage = (target: string, rawDmg: number, armorType: 'pa' | 'ma') => {
+    setState((prev) => {
+      if (target === 'pl') {
+        const out = applyDamageToPlPure(prev.pl, rawDmg, armorType, false, false, '环境/直接伤害');
+        const log = makeLog(out.log.text, out.log.detail, out.log.type, '', prev.gmBlind);
+        return { ...prev, pl: out.pl, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+      const m = prev.monsters.find((x) => x.instanceId === target);
+      if (!m) return prev;
+      const out = applyDamageToMonsterPure(m, rawDmg, armorType, false, false, '直接伤害');
+      const log = makeLog(out.log.text, out.log.detail, out.log.type, out.log.blindText, prev.gmBlind);
+      return {
+        ...prev,
+        monsters: prev.monsters.map((x) => (x.instanceId === target ? out.monster : x)),
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  // 先攻与轮次推进
+  const handleRollAllInitiative = () => {
+    setState((prev) => {
+      const d = getPlDerivedView(prev.pl);
+      const list: any[] = [];
+      const plStep = Math.max(1, d.initStep + getEffectiveActionMod(prev.pl));
+      const plRoll = ED4Engine.rollStepTest(plStep, { isAction: false, karmaDie: prev.pl.karmaDie });
+      list.push({ id: 'pl', type: 'pl', name: prev.pl.name, initVal: plRoll.total, initStep: plStep, dexVal: d.attrs.DEX });
+
+      prev.monsters.forEach((m) => {
+        if (m.currentDamage >= m.death) return;
+        const mStep = Math.max(1, m.initStep - m.wounds - (m.knockedDown ? 3 : 0) - (m.harried ? 2 : 0));
+        const mRoll = ED4Engine.rollStepTest(mStep, { isAction: false });
+        list.push({ id: m.instanceId, type: 'gm', name: m.name, initVal: mRoll.total, initStep: mStep, dexVal: 0 });
+      });
+
+      const sorted = sortInitiativeList(list);
+      const log = makeLog(`第 ${prev.round} 轮全员投先攻完成`, sorted.map((x) => `${x.name}:${x.initVal}`).join(' | '), 'warn', '', prev.gmBlind);
+      return { ...prev, initiativeList: sorted, turnIndex: 0, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  const handleNextRound = () => {
+    setState((prev) => {
+      const nextRound = prev.round + 1;
+      const log = makeLog(`进入第 ${nextRound} 轮（已重置单轮战斗选项）`, '', 'warn', '', prev.gmBlind);
+      return {
+        ...prev,
+        round: nextRound,
+        turnIndex: 0,
+        pl: {
+          ...prev.pl,
+          options: { aggressive: false, defensive: false, knockdown: false, stun: false, splitMove: false, tailAttack: false },
+          statuses: { ...prev.pl.statuses, surprised: false, reserved: false },
+        },
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  const handlePartyFullRest = () => {
+    setState((prev) => {
+      const d = getPlDerivedView(prev.pl);
+      const log = makeLog('全队休整完成：回复次数与业力已重置，临时状态已清除', '', 'hit', '', prev.gmBlind);
+      return {
+        ...prev,
+        round: 1,
+        pl: {
+          ...prev.pl,
+          recoveryCurrent: d.recoveryMax,
+          karmaCurrent: d.karmaMax,
+          options: { aggressive: false, defensive: false, knockdown: false, stun: false, splitMove: false, tailAttack: false },
+          statuses: { knockedDown: false, blindsided: false, surprised: false, harried: false, reserved: false },
+        },
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
+    });
+  };
+
+  const handleRollFreeTest = (step: number, dn: string, karma: boolean) => {
+    const res = ED4Engine.rollStepTest(step, { karma, karmaDie: state.pl.karmaDie, dn, isAction: true });
+    let suffix = '';
+    if (res.isRuleOfOne) suffix = ' [全一规则大失败]';
+    else if (res.isSuccess === true) suffix = ` [成功，额外成功 +${res.extraSuccesses}]`;
+    else if (res.isSuccess === false) suffix = ' [失败]';
+    pushLog(`自由检定 (Step ${step}) → ${res.total}${suffix}`, res.trace, res.isSuccess === true ? 'hit' : res.isSuccess === false ? 'fail' : '');
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col bg-zinc-950 text-zinc-100 lg:h-screen lg:overflow-hidden">
+      {/* 顶部导航栏 */}
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-950 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold tracking-tight text-zinc-50">Earthdawn 4E</span>
+          <nav className="flex items-center gap-1 rounded border border-zinc-800 bg-zinc-900/70 p-0.5">
+            {([
+              ['pl', '角色卡（PL）'],
+              ['gm', '怪物面板（GM）'],
+              ['step', 'STEP表'],
+            ] as const).map(([tabId, label]) => (
+              <button
+                key={tabId}
+                type="button"
+                onClick={() => setState((p) => ({ ...p, activeTab: tabId }))}
+                className={`h-7 rounded px-2.5 text-xs transition-colors cursor-pointer whitespace-nowrap ${
+                  state.activeTab === tabId
+                    ? 'bg-zinc-100 font-semibold text-zinc-950'
+                    : 'text-zinc-400 hover:text-zinc-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSpellJsonOpen(true)}
+            className="inline-flex h-7 items-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 cursor-pointer whitespace-nowrap"
+          >
+            结构化法术 JSON
+          </button>
+          <button
+            type="button"
+            onClick={() => setManualOpen(true)}
+            className="inline-flex h-7 items-center rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 cursor-pointer whitespace-nowrap"
+          >
+            使用说明书
+          </button>
+          <label className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded border border-zinc-800 bg-zinc-900 px-2.5 text-xs text-zinc-300 whitespace-nowrap">
+            <input
+              type="checkbox"
+              checked={state.gmBlind}
+              onChange={(e) => setState((p) => ({ ...p, gmBlind: e.target.checked }))}
+              className="accent-zinc-200"
+            />
+            GM脱敏显示
+          </label>
+        </div>
+      </header>
+
+      {/* 主工作区：桌面端可拖拽分栏，移动端垂直堆叠 */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <main className="min-w-0 flex-1 overflow-y-auto p-3">
+          {state.activeTab === 'pl' && (
+            <PlSheetView
+              pl={state.pl}
+              monsters={state.monsters}
+              gmBlind={state.gmBlind}
+              targetValue={state.targetValue}
+              showAllSpells={state.showAllSpells}
+              talentFilter={state.talentFilter}
+              skillFilter={state.skillFilter}
+              lastExtraDamageBonus={state.lastExtraDamageBonus}
+              onChangeTarget={(val) => setState((p) => ({ ...p, targetValue: val }))}
+              onToggleShowAllSpells={(checked) => setState((p) => ({ ...p, showAllSpells: checked }))}
+              onChangeTalentFilter={(val) => setState((p) => ({ ...p, talentFilter: val }))}
+              onChangeSkillFilter={(val) => setState((p) => ({ ...p, skillFilter: val }))}
+              onUpdatePl={updatePl}
+              onChangeRace={handleChangeRace}
+              onChangeDiscipline={handleChangeDiscipline}
+              onChangeCircle={handleChangeCircle}
+              onAdjustAttr={handleAdjustAttr}
+              onRollAttr={handleRollAttr}
+              onRollInitiative={handleRollPlInitiative}
+              onRollQuickCheck={handleRollQuickCheck}
+              onKarmaRitual={handleKarmaRitual}
+              onHealWoundRest={handleHealWoundRest}
+              onToggleOption={handleToggleOption}
+              onToggleStatus={handleToggleStatus}
+              onRollTalentOrSkill={handleRollTalentOrSkill}
+              onRollWeaponDamage={handleRollWeaponDamage}
+              onWeaveSpell={handleWeaveSpell}
+              onCastSpell={handleCastSpell}
+              onRollSpellEffect={handleRollSpellEffect}
+              onImportFile={handleImportFile}
+              onLog={(t, d, ty) => pushLog(t, d, ty)}
+            />
+          )}
+
+          {state.activeTab === 'gm' && (
+            <GmMonsterView
+              plName={state.pl.name}
+              templates={state.monsterTemplates}
+              monsters={state.monsters}
+              showAddForm={state.showAddMonsterForm}
+              onToggleAddForm={() => setState((p) => ({ ...p, showAddMonsterForm: !p.showAddMonsterForm }))}
+              onSaveTemplate={(tpl) =>
+                setState((p) => ({
+                  ...p,
+                  monsterTemplates: [...p.monsterTemplates, tpl],
+                  showAddMonsterForm: false,
+                  logs: [makeLog(`已保存怪物模板【${tpl.name}】`, '', '', '', p.gmBlind), ...p.logs].slice(0, 60),
+                }))
+              }
+              onDeleteTemplate={(id) =>
+                setState((p) => ({ ...p, monsterTemplates: p.monsterTemplates.filter((x) => x.id !== id) }))
+              }
+              onSpawnMonster={handleSpawnMonster}
+              onAttackPl={handleMonsterAttackPl}
+              onRemoveMonster={(id) =>
+                setState((p) => ({
+                  ...p,
+                  monsters: p.monsters.filter((m) => m.instanceId !== id),
+                  initiativeList: p.initiativeList.filter((i) => i.id !== id),
+                }))
+              }
+              onToggleMonsterFlag={(id, flag) =>
+                setState((p) => ({
+                  ...p,
+                  monsters: p.monsters.map((m) => (m.instanceId === id ? { ...m, [flag]: !m[flag] } : m)),
+                }))
+              }
+              onManualApplyDamage={handleManualApplyDamage}
+            />
+          )}
+
+          {state.activeTab === 'step' && (
+            <StepTableView
+              onQuickRollStep={(step) => {
+                const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: state.pl.karmaDie });
+                pushLog(`STEP表快捷掷骰 (Step ${step}) → ${res.total}`, res.trace);
+              }}
+            />
+          )}
+        </main>
+
+        {/* 桌面端可拖拽分隔条 */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={() => setDraggingResizer(true)}
+          onTouchStart={() => setDraggingResizer(true)}
+          className={`hidden w-1.5 shrink-0 cursor-col-resize border-x border-zinc-800/80 transition-colors lg:block ${
+            draggingResizer ? 'bg-zinc-500' : 'bg-zinc-900 hover:bg-zinc-700'
+          }`}
+        />
+
+        {/* 右侧边栏（桌面固定可调宽度，移动端全宽堆叠） */}
+        <aside
+          style={{ ['--sidebar-w' as any]: `${sidebarWidth}px` }}
+          className="ed4-sidebar w-full shrink-0 border-t border-zinc-800 bg-zinc-950 p-3 lg:overflow-y-auto lg:border-t-0"
+        >
+          <RightSidebar
+            round={state.round}
+            turnIndex={state.turnIndex}
+            initiativeList={state.initiativeList}
+            pl={state.pl}
+            monsters={state.monsters}
+            gmBlind={state.gmBlind}
+            pendingReaction={state.pendingReaction}
+            logs={state.logs}
+            onRollAllInitiative={handleRollAllInitiative}
+            onNextTurn={() =>
+              setState((p) => ({
+                ...p,
+                turnIndex: p.initiativeList.length > 0 ? (p.turnIndex + 1) % p.initiativeList.length : 0,
+              }))
+            }
+            onNextRound={handleNextRound}
+            onPartyFullRest={handlePartyFullRest}
+            onRemoveMonster={(id) =>
+              setState((p) => ({
+                ...p,
+                monsters: p.monsters.filter((m) => m.instanceId !== id),
+                initiativeList: p.initiativeList.filter((i) => i.id !== id),
+              }))
+            }
+            onResolveReaction={handleResolveReaction}
+            onRollFreeTest={handleRollFreeTest}
+            onClearLogs={() => setState((p) => ({ ...p, logs: [] }))}
+          />
+        </aside>
+      </div>
+
+      <SpellJsonModal
+        open={spellJsonOpen}
+        onClose={() => setSpellJsonOpen(false)}
+        onCopied={() => pushLog('已复制结构化法术 JSON 到剪贴板', '', 'hit')}
+      />
+      <ManualModal open={manualOpen} onClose={() => setManualOpen(false)} />
+    </div>
+  );
+}
