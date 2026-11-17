@@ -1,6 +1,11 @@
 import React, { useRef, useState } from 'react';
 import ED4Engine from '../engine/ed4_engine.js';
 import { getEffectiveActionMod, getMonsterEffectiveDef, getPlDerivedView } from '../engine/combatHelpers';
+import {
+  enrichSpellWithDb,
+  getExtraThreadRuleInfo,
+  type PendingSpellCast,
+} from '../engine/spellRules';
 
 interface PlSheetViewProps {
   pl: any;
@@ -11,6 +16,7 @@ interface PlSheetViewProps {
   talentFilter: string;
   skillFilter: string;
   lastExtraDamageBonus: number;
+  pendingSpellCasts: Record<string, PendingSpellCast>;
   onChangeTarget: (val: string) => void;
   onToggleShowAllSpells: (checked: boolean) => void;
   onChangeTalentFilter: (val: string) => void;
@@ -30,7 +36,7 @@ interface PlSheetViewProps {
   onRollTalentOrSkill: (listType: 'talent' | 'skill', itemId: string, useKarma: boolean) => void;
   onRollWeaponDamage: (weaponId: string) => void;
   onWeaveSpell: (instanceId: string, useKarma: boolean) => void;
-  onCastSpell: (instanceId: string, useKarma: boolean) => void;
+  onCastSpell: (instanceId: string, useKarma: boolean, manualTmd?: string) => void;
   onRollSpellEffect: (instanceId: string, useKarma: boolean) => void;
   onImportFile: (file: File) => void;
   onOpenExport: () => void;
@@ -57,6 +63,7 @@ export function PlSheetView(props: PlSheetViewProps) {
     talentFilter,
     skillFilter,
     lastExtraDamageBonus,
+    pendingSpellCasts,
     onChangeTarget,
     onToggleShowAllSpells,
     onChangeTalentFilter,
@@ -87,6 +94,7 @@ export function PlSheetView(props: PlSheetViewProps) {
   // 本地复选与表单临时状态
   const [talentKarmaMap, setTalentKarmaMap] = useState<Record<string, boolean>>({});
   const [spellKarmaMap, setSpellKarmaMap] = useState<Record<string, boolean>>({});
+  const [spellTmdMap, setSpellTmdMap] = useState<Record<string, string>>({});
   const [draggedSpellId, setDraggedSpellId] = useState<string | null>(null);
   const [dragOverZone, setDragOverZone] = useState<'matrix' | 'grimoire' | null>(null);
 
@@ -114,7 +122,6 @@ export function PlSheetView(props: PlSheetViewProps) {
       : spellOptions[0]?.id || '';
 
   const scInfo = ED4Engine.getSpellcastingStep(pl, d);
-  const twInfo = ED4Engine.getThreadWeavingStep(pl, d);
   const matrixSpells = (pl.spells || []).filter((sp: any) => sp.inMatrix !== false);
   const grimoireSpells = (pl.spells || []).filter((sp: any) => sp.inMatrix === false);
 
@@ -1085,11 +1092,20 @@ export function PlSheetView(props: PlSheetViewProps) {
               </div>
               {matrixSpells.length > 0 ? (
                 <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-                  {matrixSpells.map((sp: any) => {
+                  {matrixSpells.map((rawSp: any) => {
+                    const sp = enrichSpellWithDb(rawSp);
+                    const rule = getExtraThreadRuleInfo(pl, sp);
+                    const spTwInfo = ED4Engine.getThreadWeavingStep(pl, d, sp);
                     const reqThreads = Number(sp.threads) || 0;
                     const curThreads = Number(sp.wovenThreads) || 0;
+                    const curExtraThreads = Math.max(0, curThreads - reqThreads);
                     const needWeave = reqThreads > 0 && curThreads < reqThreads;
-                    const showEffBtn = ED4Engine.hasSpellEffectRoll(sp);
+                    const pendingCast = pendingSpellCasts[sp.instanceId];
+                    const showEffBtn =
+                      ED4Engine.hasSpellEffectRoll(sp) ||
+                      curExtraThreads > 0 ||
+                      (pendingCast?.extraThreadsCount ?? 0) > 0 ||
+                      (pendingCast?.castingExtraSuccesses ?? 0) > 0;
                     return (
                       <div
                         key={sp.instanceId}
@@ -1110,8 +1126,27 @@ export function PlSheetView(props: PlSheetViewProps) {
                             <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground tabular-nums">
                               {sp.circle}环
                             </span>
-                            <span className="text-[11px] text-foreground tabular-nums">
+                            <span className="text-[11px] font-medium text-foreground tabular-nums">
                               脉路 {curThreads}/{reqThreads}
+                              {curExtraThreads > 0 ? (
+                                <span className="ml-1 font-mono text-primary">(+{curExtraThreads}额外)</span>
+                              ) : null}
+                            </span>
+                            <span
+                              className="rounded border border-border bg-background/60 px-1 font-mono text-[10px] text-muted-foreground tabular-nums"
+                              title={
+                                rule.reason === 'circle'
+                                  ? `${rule.circle}环门类额外脉路上限 +${rule.maxExtra}，总上限 ${rule.maxTotal}`
+                                  : rule.reason === 'versatility'
+                                    ? '多才多艺/跨门类习得脉路编织，额外脉路上限为 0'
+                                    : '该法术无可编入的额外脉路'
+                              }
+                            >
+                              {rule.maxExtra > 0
+                                ? `上限 ${rule.maxTotal} (+${rule.maxExtra}额外)`
+                                : rule.reason === 'versatility'
+                                  ? '多才多艺 额外+0'
+                                  : '额外+0'}
                             </span>
                             <span className="text-[11px] text-muted-foreground tabular-nums">
                               编织 {sp.weavingBase}/{sp.weavingHigh}
@@ -1120,6 +1155,11 @@ export function PlSheetView(props: PlSheetViewProps) {
                               施法 {sp.castingType === 'fixed' ? sp.castingDn : sp.aoe ? '群体TMD' : 'TMD'}
                             </span>
                             <span className="text-[11px] text-foreground">{sp.effectFormula}</span>
+                            {sp.extraEffectStepPerThread === 2 && (
+                              <span className="rounded border border-primary/40 bg-primary/10 px-1 font-mono text-[10px] text-primary">
+                                +2 STEP/脉路
+                              </span>
+                            )}
                           </div>
                           <div className="flex shrink-0 items-center gap-1">
                             <button
@@ -1162,12 +1202,24 @@ export function PlSheetView(props: PlSheetViewProps) {
                             onClick={() => onWeaveSpell(sp.instanceId, !!spellKarmaMap[sp.instanceId])}
                             className={needWeave ? btnPrimaryCls : btnSmCls}
                           >
-                            编织 (Step {twInfo.step})
+                            脉路编织 (Step {spTwInfo.step})
                           </button>
+                          <input
+                            type="number"
+                            min={1}
+                            aria-label={`${sp.nameCn} 目标秘法防御 (TMD)`}
+                            title="可选：目标秘法防御（TMD），留空则仅掷骰不判成功度"
+                            placeholder="TMD"
+                            value={spellTmdMap[sp.instanceId] ?? ''}
+                            onChange={(e) => setSpellTmdMap((m) => ({ ...m, [sp.instanceId]: e.target.value }))}
+                            className={`${inputCls} h-6 w-16 px-1.5 text-center font-mono text-[11px] tabular-nums`}
+                          />
                           <button
                             type="button"
                             disabled={needWeave}
-                            onClick={() => onCastSpell(sp.instanceId, !!spellKarmaMap[sp.instanceId])}
+                            onClick={() =>
+                              onCastSpell(sp.instanceId, !!spellKarmaMap[sp.instanceId], spellTmdMap[sp.instanceId])
+                            }
                             className={needWeave ? btnSmCls : btnPrimaryCls}
                           >
                             {needWeave ? `待织 (${curThreads}/${reqThreads})` : `施法 (Step ${scInfo.step})`}
@@ -1176,7 +1228,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                             <button
                               type="button"
                               onClick={() => onRollSpellEffect(sp.instanceId, !!spellKarmaMap[sp.instanceId])}
-                              className={btnSmCls}
+                              className={pendingCast ? btnPrimaryCls : btnSmCls}
                             >
                               结算效果
                             </button>
@@ -1184,6 +1236,15 @@ export function PlSheetView(props: PlSheetViewProps) {
                             <span className="text-[11px] text-muted-foreground">成功即生效</span>
                           )}
                         </div>
+                        {pendingCast && (
+                          <div className="mt-1.5 rounded border border-primary/40 bg-primary/10 px-2 py-1 font-mono text-[11px] text-foreground tabular-nums">
+                            待结算：额外脉路 {pendingCast.extraThreadsCount} 条
+                            {pendingCast.castingExtraSuccesses > 0
+                              ? ` · 施法额外成功 +${pendingCast.castingExtraSuccesses}`
+                              : ''}
+                            {pendingCast.tmdUsed !== null ? ` (TMD ${pendingCast.tmdUsed})` : ''}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

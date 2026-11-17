@@ -31,7 +31,11 @@ declare const ED4Engine: {
   getPlActionMod(pl: any): number;
   findSpellInDb(name: string): any | null;
   hasSpellEffectRoll(sp: any): boolean;
-  getThreadWeavingStep(pl: any, derived?: any): { step: number; rank: number; talentName: string };
+  getThreadWeavingStep(
+    pl: any,
+    derived?: any,
+    spell?: any
+  ): { step: number; rank: number; talentName: string; isVersatilityTalent?: boolean };
   getSpellcastingStep(pl: any, derived?: any): { step: number; rank: number };
   resolveDamage(params: {
     rawDamage: number;

@@ -9,6 +9,7 @@ import {
   type RoomRole,
   type RoomSession,
 } from '../engine/supabaseSync';
+import { unlockBrowserAudio } from '../engine/bgmAudioEngine';
 
 interface SpellJsonModalProps {
   open: boolean;
@@ -407,6 +408,7 @@ export function RoomModal({
     setBusy(true);
     const chosenRole: RoomRole = session.role || 'pl';
     if (!session.role) onSelectRole('pl');
+    if (chosenRole === 'pl') unlockBrowserAudio();
     const resolvedNick = chosenRole === 'gm' ? nickname.trim() || 'GM' : nickname.trim() || charDefaultName || '玩家';
     const err = await onJoinRoom(joinCode, resolvedNick, chosenRole);
     setBusy(false);

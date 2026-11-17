@@ -19,6 +19,15 @@ import { GmMonsterView } from './components/GmMonsterView';
 import { StepTableView } from './components/StepTableView';
 import { RightSidebar } from './components/RightSidebar';
 import { ExportModal, ManualModal, RoomModal, SpellJsonModal } from './components/Modals';
+import { SpellEffectModal } from './components/SpellEffectModal';
+import {
+  computeSpellEffectPlan,
+  enrichSpellWithDb,
+  getExtraThreadRuleInfo,
+  hydrateSpellsWithDb,
+  resolveCastingDn,
+  resolveWeavingRollOutcome,
+} from './engine/spellRules';
 import { PrintSheetView, type PdfPrintMode } from './components/PrintSheetView';
 import {
   buildCharacterWorkbook,
@@ -68,6 +77,7 @@ export default function App() {
               statuses: { ...init.pl.statuses, ...(savedPl.statuses || {}) },
               legend: { ...init.pl.legend, ...(savedPl.legend || {}) },
               wealth: { ...init.pl.wealth, ...(savedPl.wealth || {}) },
+              spells: hydrateSpellsWithDb(savedPl.spells || []),
               background: savedPl.background ?? '',
             },
           };
@@ -81,6 +91,7 @@ export default function App() {
   const [spellJsonOpen, setSpellJsonOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [spellEffectModal, setSpellEffectModal] = useState<{ instanceId: string; initialKarma: boolean } | null>(null);
   const [pdfMode, setPdfMode] = useState<PdfPrintMode>('bw');
   const [initialUrlRoom] = useState(() => extractRoomCodeFromUrl());
   const [roomModalOpen, setRoomModalOpen] = useState(() => Boolean(extractRoomCodeFromUrl()));
@@ -679,33 +690,44 @@ export default function App() {
     });
   };
 
-  // 法术三阶段：编织 / 施法 / 效果结算
+  // 法术三阶段：脉路编织 / 施法 / 效果结算（含环数/多才多艺额外脉路上限与 STEP 拆解）
   const handleWeaveSpell = (instanceId: string, wantKarma: boolean) => {
     setState((prev) => {
-      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
-      if (!sp) return prev;
+      const rawSp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
+      if (!rawSp) return prev;
+      const sp = enrichSpellWithDb(rawSp);
       const pl = { ...prev.pl };
       const useKarma = wantKarma && pl.karmaCurrent > 0;
       if (useKarma) pl.karmaCurrent -= 1;
-      const tw = ED4Engine.getThreadWeavingStep(pl, getPlDerivedView(pl));
+
+      const d = getPlDerivedView(pl);
+      const tw = ED4Engine.getThreadWeavingStep(pl, d, sp);
       const dn = Number(sp.weavingBase) || 5;
       const res = ED4Engine.rollStepTest(tw.step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
 
-      let nextWoven = sp.wovenThreads || 0;
+      const rule = getExtraThreadRuleInfo(pl, sp);
+      const curWoven = Number(sp.wovenThreads) || 0;
+      let nextWoven = curWoven;
       let log;
+
       if (res.isSuccess) {
         const gained = 1 + res.extraSuccesses;
-        nextWoven = Math.min((Number(sp.threads) || 0) + 4, nextWoven + gained);
+        const outcome = resolveWeavingRollOutcome({
+          currentWoven: curWoven,
+          gained,
+          rule,
+        });
+        nextWoven = outcome.nextWoven;
         log = makeLog(
-          `${pl.name} 为【${sp.nameCn}】编织脉路 (Step ${tw.step} vs ${dn}) → 成功 (+${gained}，当前 ${nextWoven}/${sp.threads})`,
+          `${pl.name} 为【${sp.nameCn}】脉路编织 (Step ${tw.step} vs ${dn}) → ${outcome.logText}`,
           res.trace,
-          'hit',
+          outcome.overflowed ? 'warn' : 'hit',
           '',
           prev.gmBlind
         );
       } else {
         log = makeLog(
-          `${pl.name} 为【${sp.nameCn}】编织脉路 (Step ${tw.step} vs ${dn}) → 失败 (当前 ${nextWoven}/${sp.threads})`,
+          `${pl.name} 为【${sp.nameCn}】脉路编织 (Step ${tw.step} vs ${dn}) → 失败 (当前 ${curWoven}/${sp.threads})`,
           res.trace,
           'fail',
           '',
@@ -724,53 +746,80 @@ export default function App() {
     });
   };
 
-  const handleCastSpell = (instanceId: string, wantKarma: boolean) => {
+  const handleCastSpell = (instanceId: string, wantKarma: boolean, manualTmd?: string) => {
+    const rawSp = state.pl.spells.find((s: any) => s.instanceId === instanceId);
+    if (!rawSp) return;
+    const sp = enrichSpellWithDb(rawSp);
+    const reqThreads = Number(sp.threads) || 0;
+    const curThreads = Number(sp.wovenThreads) || 0;
+    if (reqThreads > 0 && curThreads < reqThreads) {
+      setState((prev) => ({
+        ...prev,
+        logs: [
+          makeLog(
+            `${prev.pl.name} 无法施放【${sp.nameCn}】：尚需脉路编织 (${curThreads}/${reqThreads})`,
+            '',
+            'warn',
+            '',
+            prev.gmBlind
+          ),
+          ...prev.logs,
+        ].slice(0, 60),
+      }));
+      return;
+    }
+
+    const castExtraThreads = Math.max(0, curThreads - reqThreads);
+    const useKarma = wantKarma && state.pl.karmaCurrent > 0;
+    const sc = ED4Engine.getSpellcastingStep(state.pl, getPlDerivedView(state.pl));
+    const { dn, targetLabel } = resolveCastingDn({
+      spell: sp,
+      manualTmd,
+      targetValue: state.targetValue,
+      monsters: state.monsters,
+      getMonsterMd: (m) => getMonsterEffectiveDef(m, 'md'),
+    });
+    const res = ED4Engine.rollStepTest(sc.step, { karma: useKarma, karmaDie: state.pl.karmaDie, dn, isAction: true });
+    const shouldOpenEffectModal = castExtraThreads > 0 && (dn === null || res.isSuccess);
+
     setState((prev) => {
-      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
-      if (!sp) return prev;
-      const reqThreads = Number(sp.threads) || 0;
-      const curThreads = Number(sp.wovenThreads) || 0;
-      if (reqThreads > 0 && curThreads < reqThreads) {
-        const warnLog = makeLog(`${prev.pl.name} 无法施放【${sp.nameCn}】：尚需编织脉路 (${curThreads}/${reqThreads})`, '', 'warn', '', prev.gmBlind);
-        return { ...prev, logs: [warnLog, ...prev.logs].slice(0, 60) };
-      }
-
       const pl = { ...prev.pl };
-      const useKarma = wantKarma && pl.karmaCurrent > 0;
-      if (useKarma) pl.karmaCurrent -= 1;
+      if (useKarma && pl.karmaCurrent > 0) pl.karmaCurrent -= 1;
 
-      const sc = ED4Engine.getSpellcastingStep(pl, getPlDerivedView(pl));
-      let dn: number | null = sp.castingType === 'fixed' ? Number(sp.castingDn) || 6 : null;
-      let targetLabel = '目标';
-
-      if (sp.castingType !== 'fixed') {
-        if (prev.targetValue === 'aoe:all') {
-          const alive = prev.monsters.filter((m) => m.currentDamage < m.death);
-          if (alive.length > 0) {
-            dn = Math.max(...alive.map((m) => getMonsterEffectiveDef(m, 'md')));
-            targetLabel = `全场敌方 (${alive.length}名，最高秘防 ${dn})`;
-          }
-        } else if (prev.targetValue.startsWith('m:')) {
-          const targetMonster = prev.monsters.find((m) => m.instanceId === prev.targetValue.slice(2));
-          if (targetMonster) {
-            dn = getMonsterEffectiveDef(targetMonster, 'md');
-            targetLabel = targetMonster.name;
-          }
-        } else if (prev.targetValue.startsWith('dn:')) {
-          dn = Number(prev.targetValue.slice(3));
-          targetLabel = `固定难度 ${dn}`;
-        }
-      }
-
-      const res = ED4Engine.rollStepTest(sc.step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
       const nextSpells = pl.spells.map((s: any) => (s.instanceId === instanceId ? { ...s, wovenThreads: 0 } : s));
+      const nextPendingMap = { ...prev.pendingSpellCasts };
 
       if (dn === null) {
-        const log = makeLog(`${pl.name} 施放【${sp.nameCn}】 (Step ${sc.step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
-        return { ...prev, pl: { ...pl, spells: nextSpells }, logs: [log, ...prev.logs].slice(0, 60) };
+        const needsModal = castExtraThreads > 0 || ED4Engine.hasSpellEffectRoll(sp);
+        if (needsModal) {
+          nextPendingMap[instanceId] = {
+            instanceId,
+            extraThreadsCount: castExtraThreads,
+            castingExtraSuccesses: 0,
+            tmdUsed: null,
+            targetLabel,
+          };
+        } else {
+          delete nextPendingMap[instanceId];
+        }
+        const extraHint = castExtraThreads > 0 ? `（含额外脉路 ${castExtraThreads} 条，请在弹窗选择效果）` : '';
+        const log = makeLog(
+          `${pl.name} 施放【${sp.nameCn}】 (Step ${sc.step}，未填 TMD 仅掷骰) → ${res.total}${extraHint}`,
+          res.trace,
+          '',
+          '',
+          prev.gmBlind
+        );
+        return {
+          ...prev,
+          pl: { ...pl, spells: nextSpells },
+          pendingSpellCasts: nextPendingMap,
+          logs: [log, ...prev.logs].slice(0, 60),
+        };
       }
 
       if (!res.isSuccess) {
+        delete nextPendingMap[instanceId];
         const log = makeLog(
           `${pl.name} 对 ${targetLabel} 施放【${sp.nameCn}】 → 失败 (${res.total} vs ${dn})`,
           res.trace,
@@ -778,12 +827,35 @@ export default function App() {
           `${pl.name} 施放【${sp.nameCn}】 → 未命中 (${res.total})`,
           prev.gmBlind
         );
-        return { ...prev, pl: { ...pl, spells: nextSpells }, logs: [log, ...prev.logs].slice(0, 60) };
+        return {
+          ...prev,
+          pl: { ...pl, spells: nextSpells },
+          pendingSpellCasts: nextPendingMap,
+          logs: [log, ...prev.logs].slice(0, 60),
+        };
       }
 
-      const suffixHint = ED4Engine.hasSpellEffectRoll(sp) ? '，请点击「结算效果」掷效果骰' : `，法术效果已直接生效（${sp.effectFormula}）`;
+      const needsEffectResolution =
+        castExtraThreads > 0 || ED4Engine.hasSpellEffectRoll(sp) || (res.extraSuccesses > 0 && sp.extraEffectStepPerThread === 2);
+
+      if (needsEffectResolution) {
+        nextPendingMap[instanceId] = {
+          instanceId,
+          extraThreadsCount: castExtraThreads,
+          castingExtraSuccesses: res.extraSuccesses,
+          tmdUsed: dn,
+          targetLabel,
+        };
+      } else {
+        delete nextPendingMap[instanceId];
+      }
+
+      const extraThreadHint = castExtraThreads > 0 ? ` · 额外脉路 ${castExtraThreads} 条` : '';
+      const suffixHint = needsEffectResolution
+        ? '，请点击「结算效果」结算明细'
+        : `，法术效果已直接生效（${sp.effectFormula}）`;
       const log = makeLog(
-        `${pl.name} 对 ${targetLabel} 成功施放【${sp.nameCn}】 (${res.total} vs ${dn}，额外成功 +${res.extraSuccesses})${suffixHint}`,
+        `${pl.name} 对 ${targetLabel} 成功施放【${sp.nameCn}】 (${res.total} vs ${dn}，额外成功 +${res.extraSuccesses}${extraThreadHint})${suffixHint}`,
         res.trace,
         'hit',
         `${pl.name} 成功施放【${sp.nameCn}】（额外成功 +${res.extraSuccesses}）${suffixHint}`,
@@ -792,35 +864,77 @@ export default function App() {
       return {
         ...prev,
         pl: { ...pl, spells: nextSpells },
-        lastExtraDamageBonus: res.extraSuccesses * 2,
+        pendingSpellCasts: nextPendingMap,
         logs: [log, ...prev.logs].slice(0, 60),
       };
     });
+
+    // 若施法时编入了额外脉路且施法成功（或仅掷骰），自动弹出效果结算弹窗供玩家选择额外脉路选项
+    if (shouldOpenEffectModal) {
+      setSpellEffectModal({ instanceId, initialKarma: wantKarma });
+    }
   };
 
-  const handleRollSpellEffect = (instanceId: string, wantKarma: boolean) => {
+  const handleOpenSpellEffectModal = (instanceId: string, wantKarma: boolean) => {
+    setSpellEffectModal({ instanceId, initialKarma: wantKarma });
+  };
+
+  const handleConfirmSpellEffect = (instanceId: string, selectedExtraOptions: string[], wantKarma: boolean) => {
     setState((prev) => {
-      const sp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
-      if (!sp) return prev;
+      const rawSp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
+      if (!rawSp) return prev;
+      const sp = enrichSpellWithDb(rawSp);
+      const pending = prev.pendingSpellCasts[instanceId];
+      const reqThreads = Number(sp.threads) || 0;
+      const curThreads = Number(sp.wovenThreads) || 0;
+      const extraThreadsCount = pending ? pending.extraThreadsCount : Math.max(0, curThreads - reqThreads);
+      const castingExtraSuccesses = pending ? pending.castingExtraSuccesses : 0;
+
       const pl = { ...prev.pl };
-      const useKarma = wantKarma && pl.karmaCurrent > 0;
-      if (useKarma) pl.karmaCurrent -= 1;
-
       const d = getPlDerivedView(pl);
-      const willforce = pl.talents.find((t: any) => t.name.includes('意志力') || t.name.toLowerCase().includes('willforce'));
-      const baseWilStep = willforce ? d.steps.WIL + willforce.rank : d.steps.WIL;
-      if (willforce) pl.currentDamage += 1;
+      const plan = computeSpellEffectPlan({
+        spell: sp,
+        pl,
+        derived: d,
+        extraThreadsCount,
+        selectedExtraOptions,
+        castingExtraSuccesses,
+      });
 
-      let effStep = baseWilStep;
-      const f = String(sp.effectFormula || '').toUpperCase();
-      const mWil = f.match(/WIL\s*\+\s*(\d+)/);
-      const mCir = f.match(/CIRCLE\s*\+\s*(\d+)/);
-      if (mWil) effStep = baseWilStep + Number(mWil[1]);
-      else if (mCir) effStep = pl.circle + Number(mCir[1]);
+      const useKarma = plan.hasBaseRoll && wantKarma && pl.karmaCurrent > 0;
+      if (useKarma) pl.karmaCurrent -= 1;
+      if (plan.willforceStrain > 0) pl.currentDamage += plan.willforceStrain;
 
-      const res = ED4Engine.rollStepTest(effStep, { karma: useKarma, karmaDie: pl.karmaDie, isAction: false });
-      const bonus = prev.lastExtraDamageBonus || 0;
-      const total = res.total + bonus;
+      const nextSpells = pending
+        ? pl.spells
+        : pl.spells.map((s: any) => (s.instanceId === instanceId ? { ...s, wovenThreads: 0 } : s));
+      const nextPendingMap = { ...prev.pendingSpellCasts };
+      delete nextPendingMap[instanceId];
+
+      const detailParts = [plan.breakdownText];
+      if (plan.tagsText) detailParts.push(`额外脉路标签：${plan.tagsText}`);
+
+      if (!plan.hasBaseRoll || plan.finalStep === null) {
+        const bonusNote = plan.totalBonusStep > 0 ? `（附带 +${plan.totalBonusStep} 效果阶数/STEP）` : '';
+        const log = makeLog(
+          `${pl.name} 结算【${sp.nameCn}】效果：${sp.effectFormula}${bonusNote}`,
+          detailParts.join(' | '),
+          'hit',
+          '',
+          prev.gmBlind
+        );
+        return {
+          ...prev,
+          pl: { ...pl, spells: nextSpells },
+          pendingSpellCasts: nextPendingMap,
+          logs: [log, ...prev.logs].slice(0, 60),
+        };
+      }
+
+      const res = ED4Engine.rollStepTest(plan.finalStep, { karma: useKarma, karmaDie: pl.karmaDie, isAction: false });
+      const total = res.total;
+      detailParts.push(res.trace);
+      const detailSummary = detailParts.join(' | ');
 
       if (sp.effectType === 'damage') {
         if (prev.targetValue === 'aoe:all') {
@@ -828,8 +942,8 @@ export default function App() {
           if (alive.length > 0) {
             const newLogs = [
               makeLog(
-                `${pl.name} 掷出群体法术【${sp.nameCn}】伤害 (Step ${effStep}) → ${total} 点${bonus ? `（含额外成功 +${bonus}）` : ''}`,
-                res.trace,
+                `${pl.name} 掷出群体法术【${sp.nameCn}】效果/伤害 (Step ${plan.finalStep}) → ${total} 点`,
+                detailSummary,
                 'hit',
                 '',
                 prev.gmBlind
@@ -838,13 +952,13 @@ export default function App() {
             const nextMonsters = prev.monsters.map((m) => {
               if (m.currentDamage >= m.death) return m;
               const outcome = applyDamageToMonsterPure(m, total, sp.armorType || 'ma', false, false, `${pl.name}【${sp.nameCn}】`);
-              newLogs.unshift(makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind));
+              newLogs.unshift(makeLog(outcome.log.text, `${outcome.log.detail} | ${plan.breakdownText}`, outcome.log.type, outcome.log.blindText, prev.gmBlind));
               return outcome.monster;
             });
             return {
               ...prev,
-              pl,
-              lastExtraDamageBonus: 0,
+              pl: { ...pl, spells: nextSpells },
+              pendingSpellCasts: nextPendingMap,
               monsters: nextMonsters,
               logs: [...newLogs, ...prev.logs].slice(0, 60),
             };
@@ -854,11 +968,17 @@ export default function App() {
           const m = prev.monsters.find((x) => x.instanceId === targetId);
           if (m) {
             const outcome = applyDamageToMonsterPure(m, total, sp.armorType || 'ma', false, false, `${pl.name}【${sp.nameCn}】`);
-            const log = makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind);
+            const log = makeLog(
+              outcome.log.text,
+              `${outcome.log.detail} | ${detailSummary}`,
+              outcome.log.type,
+              outcome.log.blindText,
+              prev.gmBlind
+            );
             return {
               ...prev,
-              pl,
-              lastExtraDamageBonus: 0,
+              pl: { ...pl, spells: nextSpells },
+              pendingSpellCasts: nextPendingMap,
               monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
               logs: [log, ...prev.logs].slice(0, 60),
             };
@@ -867,14 +987,20 @@ export default function App() {
       }
 
       const log = makeLog(
-        `${pl.name} 结算【${sp.nameCn}】效果 (Step ${effStep}) → ${total}${bonus ? `（含额外成功 +${bonus}）` : ''}`,
-        res.trace,
+        `${pl.name} 结算【${sp.nameCn}】效果 (Step ${plan.finalStep}) → ${total}`,
+        detailSummary,
         'hit',
         '',
         prev.gmBlind
       );
-      return { ...prev, pl, lastExtraDamageBonus: 0, logs: [log, ...prev.logs].slice(0, 60) };
+      return {
+        ...prev,
+        pl: { ...pl, spells: nextSpells },
+        pendingSpellCasts: nextPendingMap,
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
     });
+    setSpellEffectModal(null);
   };
 
   // 导入角色卡 (.xlsx / .txt)
@@ -1490,8 +1616,8 @@ export default function App() {
           <button
             type="button"
             onClick={() => setIsDark((prev) => !prev)}
-            aria-label={isDark ? '切换为做旧档案纸白天模式' : '切换为深岩灰夜间模式'}
-            title={isDark ? '切换白天模式（做旧档案纸）' : '切换夜间模式（深岩灰）'}
+            aria-label={isDark ? '切换为档案纸白天模式' : '切换为深岩灰夜间模式'}
+            title={isDark ? '切换白天模式（档案纸）' : '切换夜间模式（深岩灰）'}
             className="inline-flex h-7 items-center gap-1.5 rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap"
           >
             {isDark ? <Sun className="h-3.5 w-3.5 text-primary" /> : <Moon className="h-3.5 w-3.5 text-primary" />}
@@ -1513,6 +1639,7 @@ export default function App() {
               talentFilter={state.talentFilter}
               skillFilter={state.skillFilter}
               lastExtraDamageBonus={state.lastExtraDamageBonus}
+              pendingSpellCasts={state.pendingSpellCasts}
               onChangeTarget={(val) => setState((p) => ({ ...p, targetValue: val }))}
               onToggleShowAllSpells={(checked) => setState((p) => ({ ...p, showAllSpells: checked }))}
               onChangeTalentFilter={(val) => setState((p) => ({ ...p, talentFilter: val }))}
@@ -1533,7 +1660,7 @@ export default function App() {
               onRollWeaponDamage={handleRollWeaponDamage}
               onWeaveSpell={handleWeaveSpell}
               onCastSpell={handleCastSpell}
-              onRollSpellEffect={handleRollSpellEffect}
+              onRollSpellEffect={handleOpenSpellEffectModal}
               onImportFile={handleImportFile}
               onOpenExport={() => setExportModalOpen(true)}
               onLog={(t, d, ty) => pushLog(t, d, ty)}
@@ -1670,6 +1797,28 @@ export default function App() {
         onJoinRoom={handleJoinRoom}
         onLeaveRoom={handleLeaveRoom}
         onCopyInviteLink={(code) => copyPlainText(buildRoomInviteUrl(code))}
+      />
+      <SpellEffectModal
+        open={Boolean(spellEffectModal)}
+        spell={
+          spellEffectModal
+            ? state.pl.spells.find((s: any) => s.instanceId === spellEffectModal.instanceId) || null
+            : null
+        }
+        pl={state.pl}
+        pendingCast={spellEffectModal ? state.pendingSpellCasts[spellEffectModal.instanceId] || null : null}
+        initialKarma={spellEffectModal?.initialKarma ?? false}
+        targetLabel={
+          spellEffectModal && state.pendingSpellCasts[spellEffectModal.instanceId]
+            ? state.pendingSpellCasts[spellEffectModal.instanceId].targetLabel
+            : state.targetValue === 'aoe:all'
+              ? '全场存活怪物'
+              : state.targetValue.startsWith('m:')
+                ? state.monsters.find((m) => m.instanceId === state.targetValue.slice(2))?.name || ''
+                : ''
+        }
+        onClose={() => setSpellEffectModal(null)}
+        onConfirm={handleConfirmSpellEffect}
       />
     </div>
     <PrintSheetView pl={state.pl} printMode={pdfMode} />

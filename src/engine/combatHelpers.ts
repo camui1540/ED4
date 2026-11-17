@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import ED4Engine from './ed4_engine.js';
+import { hydrateSpellsWithDb, type PendingSpellCast } from './spellRules';
 
 // 为 ed4_engine.js 中的 parseExcelWorkbook 提供全局 XLSX
 (globalThis as any).XLSX = XLSX;
@@ -81,6 +82,7 @@ export function createInitialState() {
     monsters: [] as any[],
     initiativeList: [] as any[],
     pendingReaction: null as any,
+    pendingSpellCasts: {} as Record<string, PendingSpellCast>,
     logs: [] as any[],
   };
 }
@@ -312,6 +314,7 @@ export function applyImportedCharacter(basePl: any, data: any) {
   if (data.karmaAvail !== undefined && !isNaN(data.karmaAvail)) {
     nextPl.karmaCurrent = Number(data.karmaAvail);
   }
+  nextPl.spells = hydrateSpellsWithDb(nextPl.spells || []);
   return nextPl;
 }
 

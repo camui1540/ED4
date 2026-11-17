@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getPlDerivedView } from '../engine/combatHelpers';
 import type { RoomCharacterRow, RoomSession } from '../engine/supabaseSync';
+import { BgmPlayer } from './BgmPlayer';
 
 interface RightSidebarProps {
   round: number;
@@ -101,8 +102,19 @@ export function RightSidebar(props: RightSidebarProps) {
     return tags;
   };
 
+  const fallbackRoomSession: RoomSession = roomSession || {
+    connected: false,
+    roomCode: '',
+    role: null,
+    nickname: '',
+    clientId: '',
+  };
+
   return (
     <div className="flex h-full flex-col gap-3">
+      {/* GM 广播 BGM 播放器 */}
+      <BgmPlayer roomSession={fallbackRoomSession} />
+
       {/* 先攻追踪 */}
       <section className="tactile-card p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
