@@ -566,20 +566,43 @@ function matchRaceId(raw) {
         const s = String(cell.v).trim();
         return s === '#N/A' || s === 'NaN' ? '' : s;
       };
-      const merges = Array.isArray(ws['!merges']) ? ws['!merges'] : [];
-      const findMerge = (r, c) =>
-        merges.find(m => m.s.r <= r - 1 && r - 1 <= m.e.r && m.s.c <= c - 1 && c - 1 <= m.e.c) || null;
-      const readMergedText = (r, c) => {
-        const m = findMerge(r, c);
-        const tr = m ? m.s.r + 1 : r;
-        const tc = m ? m.s.c + 1 : c;
-        const addr = XLSX.utils.encode_cell({ r: tr - 1, c: tc - 1 });
-        const cell = ws[addr];
+      const extractCellText = (cell) => {
         if (!cell) return '';
-        const raw = cell.v !== undefined && cell.v !== null ? String(cell.v) : (cell.w ? String(cell.w) : '');
-        const clean = raw.replace(/\r\n/g, '\n').trim();
+        let raw = '';
+        if (cell.v !== undefined && cell.v !== null && String(cell.v) !== '') {
+          raw = String(cell.v);
+        } else if (cell.w) {
+          raw = String(cell.w);
+        } else if (cell.h) {
+          raw = String(cell.h)
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&#x0*d;/gi, '\n')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+        } else if (typeof cell.r === 'string') {
+          raw = cell.r.replace(/<rPh[\s\S]*?<\/rPh>/g, '').replace(/<[^>]+>/g, '');
+        }
+        const clean = raw.replace(/_x000D_\r?\n?/g, '\n').replace(/\r\n?/g, '\n').trim();
         return clean === '#N/A' || clean === 'NaN' ? '' : clean;
       };
+      const merges = Array.isArray(ws['!merges']) ? ws['!merges'] : [];
+      const findMerge = (r, c, list = merges) =>
+        list.find(m => m.s.r <= r - 1 && r - 1 <= m.e.r && m.s.c <= c - 1 && c - 1 <= m.e.c) || null;
+      const readSheetMergedText = (sheet, r, c) => {
+        const sMerges = Array.isArray(sheet['!merges']) ? sheet['!merges'] : [];
+        const m = findMerge(r, c, sMerges);
+        if (m) {
+          const topAddr = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+          const topText = extractCellText(sheet[topAddr]);
+          if (topText) return topText;
+        }
+        const directAddr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
+        return extractCellText(sheet[directAddr]);
+      };
+      const readMergedText = (r, c) => readSheetMergedText(ws, r, c);
       const cellNum = (r, c) => {
         const s = cellStr(r, c);
         if (!s) return undefined;
@@ -874,7 +897,7 @@ function matchRaceId(raw) {
           other: readNext('其他') || ''
         };
       }
-      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未找到则兜底读取 L44）
+      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未命中或为空时自动回退读取 L44）
       let bgAnchor = null;
       const bgSearchR = Math.max(maxR, 60);
       const bgSearchC = Math.max(maxC, 20);
@@ -892,8 +915,18 @@ function matchRaceId(raw) {
         const rightCol = m ? m.e.c + 2 : bgAnchor.c + 1;
         const belowRow = m ? m.e.r + 2 : bgAnchor.r + 1;
         data.background = readMergedText(bgAnchor.r, rightCol) || readMergedText(belowRow, bgAnchor.c);
-      } else {
+      }
+      if (!data.background) {
         data.background = readMergedText(44, 12);
+      }
+      if (!data.background) {
+        for (const sName of wb.SheetNames) {
+          const hit = readSheetMergedText(wb.Sheets[sName], 44, 12);
+          if (hit) {
+            data.background = hit;
+            break;
+          }
+        }
       }
 
       data.spells.forEach((sp, idx) => { sp.inMatrix = idx < 3; });

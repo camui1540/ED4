@@ -423,5 +423,36 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
     pl: richPl,
   });
   assert.equal(syncRow.background, bgStory);
+
+  // 6. Excel L44 with zero "背景" text anywhere (including _x000D_, stale !ref, cell.w-only, stray empty label, multi-sheet)
+  const plainL44Wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(plainL44Wb, {
+    A2: { t: 's', v: '角色名' },
+    B2: { t: 's', v: '无标题行者' },
+    L44: { t: 's', v: '纯L44第一行_x000D_\n纯L44第二行' },
+    '!ref': 'A1:D10',
+  }, 'Sheet1');
+  assert.equal(ED4Engine.parseExcelWorkbook(plainL44Wb).background, '纯L44第一行\n纯L44第二行');
+
+  const wOnlyWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wOnlyWb, {
+    L44: { t: 's', v: '', w: '来自w字段的背景' },
+    '!ref': 'A1:L44',
+  }, 'Sheet1');
+  assert.equal(ED4Engine.parseExcelWorkbook(wOnlyWb).background, '来自w字段的背景');
+
+  const emptyAnchorFallbackWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(emptyAnchorFallbackWb, {
+    A10: { t: 's', v: '背景' },
+    L44: { t: 's', v: '空标签时兜底L44内容' },
+    '!ref': 'A1:L44',
+  }, 'Sheet1');
+  assert.equal(ED4Engine.parseExcelWorkbook(emptyAnchorFallbackWb).background, '空标签时兜底L44内容');
+
+  const multiSheetWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(multiSheetWb, { A2: { t: 's', v: '角色名' }, B2: { t: 's', v: '跨表角色' }, '!ref': 'A1:B2' }, '主表');
+  XLSX.utils.book_append_sheet(multiSheetWb, { L44: { t: 's', v: '第二页L44背景' }, '!ref': 'A1:L44' }, '附加');
+  assert.equal(ED4Engine.parseExcelWorkbook(multiSheetWb).background, '第二页L44背景');
 });
+
 
