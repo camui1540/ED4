@@ -261,13 +261,23 @@
 }
 
 @media print {
-  html,
-  body {
-    background: #ffffff !important;
-    color: #111827 !important;
-    height: auto !important;
-    overflow: visible !important;
+  * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+  }
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  html:not([data-print-mode="theme"]),
+  html:not([data-print-mode="theme"]) body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  html[data-print-mode="theme"],
+  html[data-print-mode="theme"] body {
+    background-color: var(--background) !important;
+    color: var(--foreground) !important;
   }
 }

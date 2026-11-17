@@ -56,6 +56,7 @@ export function createInitialState() {
     threadItems: [] as any[],
     legend: { total: 0, current: 0, status: '', renown: '', reputation: '' } as any,
     wealth: { copper: 0, silver: 0, gold: 0, other: '' } as any,
+    background: '',
   };
   const d = getPlDerivedView(pl);
   pl.karmaCurrent = d.karmaMax;

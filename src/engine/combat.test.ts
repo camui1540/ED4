@@ -350,3 +350,78 @@ test('Supabase Realtime sync helpers handle graceful offline fallback, arbitrary
   const logs2 = mergeIncomingLogs(logs1, [{ id: 'log_abc', text: '掷骰 → 14' }, { id: 'log_xyz', text: '掷骰 → 9' }]);
   assert.equal(logs2.length, 2);
 });
+
+test('Character background supports TXT tags, Excel label/L44 merged fallback, and lossless round-trip export', () => {
+  const st = createInitialState();
+  assert.equal(st.pl.background, '');
+
+  const bgStory = '出生于风之峭壁。\n曾随飞空艇航行三年。\n\n如今寻找失落的塔拉林遗迹。';
+  const richPl = { ...st.pl, background: bgStory };
+
+  // 1. TXT round-trip & tag variants
+  const exportedTxt = serializeCharacterToTxt(richPl);
+  assert.ok(exportedTxt.endsWith(`\n\n【背景】\n${bgStory}`));
+  const fromTxt = applyImportedCharacter(st.pl, ED4Engine.parseTxtSheet(exportedTxt));
+  assert.equal(fromTxt.background, bgStory);
+
+  const variantTxt = [
+    '角色名：行者',
+    '装备',
+    '名称\t等级\t效果',
+    '长袍\t1\t物理护甲+1',
+    '[背景]',
+    '第一行背景',
+    '第二行背景',
+    '【备注】',
+    '不应计入背景的行',
+  ].join('\n');
+  const parsedVariant = ED4Engine.parseTxtSheet(variantTxt);
+  assert.equal(parsedVariant.background, '第一行背景\n第二行背景');
+  assert.equal(parsedVariant.gear.length, 1);
+
+  const inlineColonTxt = '角色名：行者\n背景：单行起点\n后续第二行';
+  assert.equal(ED4Engine.parseTxtSheet(inlineColonTxt).background, '单行起点\n后续第二行');
+
+  // 2. Excel export -> L44 lossless round-trip
+  const wbExport = buildCharacterWorkbook(richPl);
+  assert.equal(wbExport.Sheets['角色卡']?.L44?.v, bgStory);
+  const wbBytes = XLSX.write(wbExport, { bookType: 'xlsx', type: 'array' });
+  const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(wbBytes, { type: 'array' })));
+  assert.equal(fromXlsx.background, bgStory);
+
+  // 3. Excel L44 merged-cell fallback (merge starts at K44:M48, covering L44 without header label)
+  const mergedWs: XLSX.WorkSheet = {
+    A2: { t: 's', v: '角色名' },
+    B2: { t: 's', v: '卡林' },
+    K44: { t: 's', v: '合并单元格多行\n背景故事' },
+    '!merges': [{ s: { r: 43, c: 10 }, e: { r: 47, c: 12 } }],
+    '!ref': 'A1:M48',
+  };
+  const mergedWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(mergedWb, mergedWs, 'Sheet1');
+  assert.equal(ED4Engine.parseExcelWorkbook(mergedWb).background, '合并单元格多行\n背景故事');
+
+  // 4. Excel explicit "人物背景" label (below cell)
+  const labeledWs: XLSX.WorkSheet = {
+    A2: { t: 's', v: '角色名' },
+    B2: { t: 's', v: '艾拉' },
+    A50: { t: 's', v: '人物背景' },
+    A51: { t: 's', v: '标签下方文本' },
+    L44: { t: 's', v: '不应优先使用的L44' },
+    '!ref': 'A1:L52',
+  };
+  const labeledWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(labeledWb, labeledWs, 'Sheet1');
+  assert.equal(ED4Engine.parseExcelWorkbook(labeledWb).background, '标签下方文本');
+
+  // 5. Supabase payload carries background
+  const syncRow = buildCharacterSyncPayload({
+    roomCode: '114514',
+    clientId: 'c_1',
+    nickname: '玩家',
+    role: 'pl',
+    pl: richPl,
+  });
+  assert.equal(syncRow.background, bgStory);
+});
+

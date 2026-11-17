@@ -566,6 +566,20 @@ function matchRaceId(raw) {
         const s = String(cell.v).trim();
         return s === '#N/A' || s === 'NaN' ? '' : s;
       };
+      const merges = Array.isArray(ws['!merges']) ? ws['!merges'] : [];
+      const findMerge = (r, c) =>
+        merges.find(m => m.s.r <= r - 1 && r - 1 <= m.e.r && m.s.c <= c - 1 && c - 1 <= m.e.c) || null;
+      const readMergedText = (r, c) => {
+        const m = findMerge(r, c);
+        const tr = m ? m.s.r + 1 : r;
+        const tc = m ? m.s.c + 1 : c;
+        const addr = XLSX.utils.encode_cell({ r: tr - 1, c: tc - 1 });
+        const cell = ws[addr];
+        if (!cell) return '';
+        const raw = cell.v !== undefined && cell.v !== null ? String(cell.v) : (cell.w ? String(cell.w) : '');
+        const clean = raw.replace(/\r\n/g, '\n').trim();
+        return clean === '#N/A' || clean === 'NaN' ? '' : clean;
+      };
       const cellNum = (r, c) => {
         const s = cellStr(r, c);
         if (!s) return undefined;
@@ -595,6 +609,7 @@ function matchRaceId(raw) {
         raceId: matchRaceId(findRightVal('种族') || cellStr(3, 2)),
         disciplineId: matchDisciplineId(findRightVal('门类') || cellStr(4, 2)),
         circle: findRightNum('环数') || cellNum(4, 4),
+        background: '',
         attrs: {},
         talents: [],
         weapons: [],
@@ -859,6 +874,28 @@ function matchRaceId(raw) {
           other: readNext('其他') || ''
         };
       }
+      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未找到则兜底读取 L44）
+      let bgAnchor = null;
+      const bgSearchR = Math.max(maxR, 60);
+      const bgSearchC = Math.max(maxC, 20);
+      for (let r = 1; r <= bgSearchR && !bgAnchor; r++) {
+        for (let c = 1; c <= bgSearchC; c++) {
+          const lbl = cellStr(r, c).replace(/[：:]$/, '').trim();
+          if (lbl === '背景' || lbl === '人物背景') {
+            bgAnchor = { r, c };
+            break;
+          }
+        }
+      }
+      if (bgAnchor) {
+        const m = findMerge(bgAnchor.r, bgAnchor.c);
+        const rightCol = m ? m.e.c + 2 : bgAnchor.c + 1;
+        const belowRow = m ? m.e.r + 2 : bgAnchor.r + 1;
+        data.background = readMergedText(bgAnchor.r, rightCol) || readMergedText(belowRow, bgAnchor.c);
+      } else {
+        data.background = readMergedText(44, 12);
+      }
+
       data.spells.forEach((sp, idx) => { sp.inMatrix = idx < 3; });
 
       return data;
@@ -880,6 +917,7 @@ function matchRaceId(raw) {
         raceId: matchRaceId(grabField('种族')),
         disciplineId: matchDisciplineId(grabField('门类')),
         circle: Number((grabField('环数').match(/\d+/) || [1])[0]),
+        background: '',
         attrs: {},
         talents: [],
         weapons: [],
@@ -921,15 +959,36 @@ function matchRaceId(raw) {
       };
 
       let section = '';
+      let readingBg = false;
+      const bgLines = [];
       const ALL_SECTIONS = ['属性', '先攻', '业力', '健康等级', '天赋', '武器', '法术', '装备', '传说点数', '财富', '技能', '脉路物品和编织脉路', '角色印象'];
       for (const rawLine of lines) {
         const l = rawLine.trim();
+        const bgMatch = l.match(/^(?:【背景】|\[背景\]|背景[：:])(.*)$/);
+        if (bgMatch) {
+          readingBg = true;
+          section = '背景';
+          if (bgMatch[1].trim()) bgLines.push(bgMatch[1].trim());
+          continue;
+        }
+        if (readingBg) {
+          if (/^【[^】]+】$/.test(l) || /^\[[^\]]+\]$/.test(l) || ALL_SECTIONS.includes(l)) {
+            readingBg = false;
+          } else {
+            bgLines.push(rawLine.replace(/\r$/, ''));
+            continue;
+          }
+        }
         if (!l || l.startsWith('+++')) continue;
         if (ALL_SECTIONS.includes(l)) {
           section = l;
           continue;
         }
-        if (['传说点数', '财富', '属性', '先攻', '业力', '健康等级', '角色印象'].includes(section)) continue;
+        if (/^【[^】]+】$/.test(l) || /^\[[^\]]+\]$/.test(l)) {
+          section = '';
+          continue;
+        }
+        if (['传说点数', '财富', '属性', '先攻', '业力', '健康等级', '角色印象', '背景'].includes(section)) continue;
         if (l.startsWith('名称')) continue;
         const cols = l.split(/\s{2,}|\t+/);
         if (section === '天赋' && cols.length >= 3) {
@@ -979,6 +1038,7 @@ function matchRaceId(raw) {
         }
       }
 
+      data.background = bgLines.join('\n').trim();
       data.spells.forEach((sp, idx) => { sp.inMatrix = idx < 3; });
       return data;
     }
@@ -1025,6 +1085,7 @@ function matchRaceId(raw) {
       pl.recoveryCurrent = d2.recoveryMax;
       pl.currentDamage = data.currentDamage || 0;
       pl.wounds = data.wounds || 0;
+      pl.background = data.background !== undefined ? String(data.background) : '';
       return pl;
     }
 

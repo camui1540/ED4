@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, FileSpreadsheet, FileText, Link2, LogOut, RefreshCw, Printer, Users, Wifi, WifiOff } from 'lucide-react';
 import ED4Engine from '../engine/ed4_engine.js';
 import {
@@ -159,6 +159,8 @@ interface ExportModalProps {
   open: boolean;
   characterName: string;
   circle: number;
+  pdfMode: 'bw' | 'theme';
+  onChangePdfMode: (mode: 'bw' | 'theme') => void;
   onClose: () => void;
   onExportTxt: () => void;
   onCopyTxt: () => Promise<boolean> | boolean;
@@ -170,6 +172,8 @@ export function ExportModal({
   open,
   characterName,
   circle,
+  pdfMode,
+  onChangePdfMode,
   onClose,
   onExportTxt,
   onCopyTxt,
@@ -264,19 +268,48 @@ export function ExportModal({
             </div>
           </button>
 
-          <button
-            type="button"
-            onClick={onExportPdf}
-            className="flex items-center justify-between rounded border border-primary bg-primary/15 px-3 py-2.5 text-left text-xs transition-colors hover:bg-primary/25 cursor-pointer"
-          >
-            <div className="flex items-center gap-2.5">
-              <Printer className="h-4 w-4 shrink-0 text-primary" />
-              <div>
-                <div className="font-semibold text-foreground">导出 / 打印 PDF</div>
-                <div className="text-[11px] text-muted-foreground">生成高对比度 A4 纸白底打印档案，自动命名并同步实时战况</div>
+          <div className="rounded border border-primary bg-primary/15 p-2.5 text-xs">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="font-semibold text-foreground">PDF 配色</span>
+              <div className="inline-flex overflow-hidden rounded border border-border bg-background">
+                <button
+                  type="button"
+                  onClick={() => onChangePdfMode('bw')}
+                  className={`h-6 px-2.5 text-[11px] cursor-pointer transition-colors ${
+                    pdfMode === 'bw'
+                      ? 'bg-primary font-semibold text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  黑白打印版
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChangePdfMode('theme')}
+                  className={`h-6 border-l border-border px-2.5 text-[11px] cursor-pointer transition-colors ${
+                    pdfMode === 'theme'
+                      ? 'bg-primary font-semibold text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  主题彩色版
+                </button>
               </div>
             </div>
-          </button>
+            <button
+              type="button"
+              onClick={onExportPdf}
+              className="flex w-full items-center justify-between rounded border border-primary bg-primary px-3 py-2 text-left text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <Printer className="h-4 w-4 shrink-0" />
+                <span>导出 / 打印 PDF</span>
+              </span>
+              <span className="text-[11px] opacity-90">
+                {pdfMode === 'bw' ? '黑白打印版' : '主题彩色版'}
+              </span>
+            </button>
+          </div>
         </div>
 
         {copiedMsg && (
@@ -328,6 +361,7 @@ export function RoomModal({
   const [errorMsg, setErrorMsg] = useState('');
   const [createdBanner, setCreatedBanner] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const backdropMouseDownRef = useRef(false);
 
   useEffect(() => {
     if (initialRoomCode) setJoinCode(initialRoomCode);
@@ -395,8 +429,12 @@ export function RoomModal({
 
   return (
     <div
+      onMouseDown={(e) => {
+        backdropMouseDownRef.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (backdropMouseDownRef.current && e.target === e.currentTarget) onClose();
+        backdropMouseDownRef.current = false;
       }}
       className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-xs print:hidden"
     >

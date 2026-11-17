@@ -187,7 +187,7 @@ export function serializeCharacterToTxt(pl: any): string {
   lines.push(`金币：${pl.wealth?.gold ?? 0}`);
   lines.push(`其他：${pl.wealth?.other ?? ''}`);
 
-  return lines.join('\n');
+  return `${lines.join('\n')}\n\n【背景】\n${String(pl.background || '')}`;
 }
 
 /**
@@ -403,6 +403,9 @@ export function buildCharacterWorkbook(pl: any): XLSX.WorkBook {
     setCell(r, 19, ED4Engine.ATTR_NAMES[sk.attr] || '感知');
     setCell(r, 20, Number(sk.strain) || 0);
   });
+
+  // 13. 人物背景 (写入 L44 单元格以对齐模板与无损回导)
+  setCell(44, 12, pl.background || '');
 
   ws['!ref'] = XLSX.utils.encode_range({
     s: { r: 0, c: 0 },

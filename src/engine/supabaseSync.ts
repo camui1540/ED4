@@ -38,6 +38,7 @@ export interface RoomCharacterRow {
   options: Record<string, boolean>;
   spells_summary: Array<{ nameCn: string; threads: number; wovenThreads: number }>;
   gear_summary: Array<{ name: string; effect: string }>;
+  background?: string;
   updated_at: string;
 }
 
@@ -166,6 +167,7 @@ export function buildCharacterSyncPayload(params: {
     options: { ...(pl.options || {}) },
     spells_summary: spellsSummary,
     gear_summary: gearSummary,
+    background: String(pl.background || ''),
     updated_at: new Date().toISOString(),
   };
 }
@@ -291,7 +293,11 @@ export async function pushRoomStateToSupabase(roomCode: string, roomState: any) 
 
 export async function pushCharacterToSupabase(payload: RoomCharacterRow) {
   if (!supabase || !payload.room_code) return;
-  await supabase.from('room_characters').upsert(payload, { onConflict: 'id' });
+  const { error } = await supabase.from('room_characters').upsert(payload, { onConflict: 'id' });
+  if (error && error.message.includes('background')) {
+    const { background: _omit, ...compatPayload } = payload;
+    await supabase.from('room_characters').upsert(compatPayload, { onConflict: 'id' });
+  }
 }
 
 export async function removeCharacterFromSupabase(roomCode: string, clientId: string) {
@@ -401,8 +407,11 @@ create table if not exists public.room_characters (
   options jsonb not null default '{}'::jsonb,
   spells_summary jsonb not null default '[]'::jsonb,
   gear_summary jsonb not null default '[]'::jsonb,
+  background text not null default '',
   updated_at timestamptz not null default now()
 );
+
+alter table public.room_characters add column if not exists background text not null default '';
 
 alter publication supabase_realtime add table public.rooms, public.room_logs, public.room_characters;
 

@@ -19,7 +19,7 @@ import { GmMonsterView } from './components/GmMonsterView';
 import { StepTableView } from './components/StepTableView';
 import { RightSidebar } from './components/RightSidebar';
 import { ExportModal, ManualModal, RoomModal, SpellJsonModal } from './components/Modals';
-import { PrintSheetView } from './components/PrintSheetView';
+import { PrintSheetView, type PdfPrintMode } from './components/PrintSheetView';
 import {
   buildCharacterWorkbook,
   downloadTextFile,
@@ -50,10 +50,38 @@ import {
 } from './engine/supabaseSync';
 
 export default function App() {
-  const [state, setState] = useState(() => createInitialState());
+  const [state, setState] = useState(() => {
+    const init = createInitialState();
+    try {
+      const raw = localStorage.getItem('ed4_pl_sheet');
+      if (raw) {
+        const savedPl = JSON.parse(raw);
+        if (savedPl && typeof savedPl === 'object') {
+          return {
+            ...init,
+            pl: {
+              ...init.pl,
+              ...savedPl,
+              armor: { ...init.pl.armor, ...(savedPl.armor || {}) },
+              shield: { ...init.pl.shield, ...(savedPl.shield || {}) },
+              options: { ...init.pl.options, ...(savedPl.options || {}) },
+              statuses: { ...init.pl.statuses, ...(savedPl.statuses || {}) },
+              legend: { ...init.pl.legend, ...(savedPl.legend || {}) },
+              wealth: { ...init.pl.wealth, ...(savedPl.wealth || {}) },
+              background: savedPl.background ?? '',
+            },
+          };
+        }
+      }
+    } catch {
+      // 忽略本地存储读取异常
+    }
+    return init;
+  });
   const [spellJsonOpen, setSpellJsonOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [pdfMode, setPdfMode] = useState<PdfPrintMode>('bw');
   const [initialUrlRoom] = useState(() => extractRoomCodeFromUrl());
   const [roomModalOpen, setRoomModalOpen] = useState(() => Boolean(extractRoomCodeFromUrl()));
   const [roomSession, setRoomSession] = useState<RoomSession>(() => ({
@@ -86,6 +114,18 @@ export default function App() {
       // 忽略本地存储受限场景
     }
   }, [isDark]);
+
+  useEffect(() => {
+    document.documentElement.dataset.printMode = pdfMode;
+  }, [pdfMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('ed4_pl_sheet', JSON.stringify(state.pl));
+    } catch {
+      // 忽略本地存储受限场景
+    }
+  }, [state.pl]);
 
   // 订阅 Supabase Realtime Postgres Changes（rooms / room_logs / room_characters）
   useEffect(() => {
@@ -1194,6 +1234,7 @@ export default function App() {
     };
 
     setExportModalOpen(false);
+    document.documentElement.dataset.printMode = pdfMode;
     document.title = printTitle;
     window.addEventListener('afterprint', restoreTitle, { once: true });
 
@@ -1201,7 +1242,7 @@ export default function App() {
       window.print();
       window.setTimeout(restoreTitle, 1000);
     }, 60);
-    pushLog(`已调用浏览器打印 / 另存为 PDF：${printTitle}.pdf`, '', 'hit');
+    pushLog(`已调用浏览器打印 / 另存为 PDF（${pdfMode === 'theme' ? '主题彩色版' : '黑白打印版'}）：${printTitle}.pdf`, '', 'hit');
   };
 
   // 联机大厅：身份切换、建房、进房、退房与复制邀请链接
@@ -1608,6 +1649,8 @@ export default function App() {
         open={exportModalOpen}
         characterName={state.pl.name}
         circle={state.pl.circle}
+        pdfMode={pdfMode}
+        onChangePdfMode={setPdfMode}
         onClose={() => setExportModalOpen(false)}
         onExportTxt={handleExportTxt}
         onCopyTxt={handleCopyTxt}
@@ -1629,7 +1672,7 @@ export default function App() {
         onCopyInviteLink={(code) => copyPlainText(buildRoomInviteUrl(code))}
       />
     </div>
-    <PrintSheetView pl={state.pl} />
+    <PrintSheetView pl={state.pl} printMode={pdfMode} />
     </>
   );
 }

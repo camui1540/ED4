@@ -1495,6 +1495,19 @@ export function PlSheetView(props: PlSheetViewProps) {
           </div>
         </div>
       </section>
+
+      {/* 人物背景 */}
+      <section className={sectionCls}>
+        <div className="mb-2 font-serif text-sm font-semibold text-card-foreground">人物背景</div>
+        <textarea
+          aria-label="人物背景"
+          rows={5}
+          value={pl.background || ''}
+          onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
+          placeholder="填写角色出身、经历、外貌特征与羁绊..."
+          className="field-sizing-content min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+        />
+      </section>
     </div>
   );
 }
