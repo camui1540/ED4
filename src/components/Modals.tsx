@@ -5,7 +5,6 @@ import {
   buildRoomInviteUrl,
   generateRoomCode,
   isSupabaseConfigured,
-  SUPABASE_SETUP_SQL,
   type RoomCharacterRow,
   type RoomRole,
   type RoomSession,
@@ -140,14 +139,11 @@ export function ManualModal({ open, onClose }: ManualModalProps) {
             </ul>
           </div>
           <div>
-            <h3 className="mb-1 font-semibold text-foreground">5. Supabase 多人联机说明</h3>
+            <h3 className="mb-1 font-semibold text-foreground">5. 多人联机说明</h3>
             <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
-              <li>配置环境变量 <code>VITE_SUPABASE_URL</code> 与 <code>VITE_SUPABASE_ANON_KEY</code> 后，点击顶栏「联机」即可创建或加入房间（支持 6 位房间码或中文等任意字符，及 <code>?room=房间码</code> 邀请链接直达）。</li>
+              <li>点击顶栏「联机」可创建或加入房间（支持 6 位房间码或中文等任意字符），创建后可一键复制 <code>?room=房间码</code> 邀请链接分享给队友直达；未接入云端服务时将自动保持纯单机模式。</li>
               <li>选择「GM」可直接进入 GM 视角同步回合数、先攻序列、怪物与清场；选择「PL」将锁定玩家视角并隐藏 GM 怪物面板，当前伤害、负伤、法术脉路与装备穿戴变更会自动防抖同步给队友。</li>
             </ul>
-            <pre className="mt-2 max-h-44 overflow-auto rounded border border-border bg-muted/60 p-2 font-mono text-[10px] leading-relaxed text-foreground">
-              {SUPABASE_SETUP_SQL}
-            </pre>
           </div>
         </div>
       </div>
