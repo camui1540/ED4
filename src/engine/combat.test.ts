@@ -105,11 +105,12 @@ test('Action vs Effect isolation and equipped item bonus toggle avoid double-cou
 
 test('Spell DB matching and effect roll detection work for aliases and formulas', () => {
   const sp1 = ED4Engine.findSpellInDb('星界之矛');
-  assert.equal(sp1?.id, 'net_astral_spear');
+  assert.equal(sp1?.id, 'astral-spear');
   assert.equal(ED4Engine.hasSpellEffectRoll(sp1), true);
+  assert.equal(ED4Engine.LEGACY_SPELL_ID_MAP.net_astral_spear, 'astral-spear');
 
   const sp2 = ED4Engine.findSpellInDb('Catseyes');
-  assert.equal(sp2?.id, 'wiz_catseyes');
+  assert.equal(sp2?.id, 'catseyes');
   assert.equal(ED4Engine.hasSpellEffectRoll(sp2), false);
 });
 

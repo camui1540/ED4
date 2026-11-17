@@ -4,6 +4,8 @@ import { getEffectiveActionMod, getMonsterEffectiveDef, getPlDerivedView } from 
 import {
   enrichSpellWithDb,
   getExtraThreadRuleInfo,
+  getWeaponBuffEffects,
+  type ActiveBuff,
   type PendingSpellCast,
 } from '../engine/spellRules';
 
@@ -352,7 +354,10 @@ export function PlSheetView(props: PlSheetViewProps) {
 
         {/* 种族与门类特征数据栏 */}
         <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-2 text-[11px] text-muted-foreground tabular-nums">
-          <span>移速 {d.race.move} 码</span>
+          <span>
+            移速 {d.moveDisplay ?? d.race.move} 码
+            {d.buffBonuses?.move ? <span className="ml-1 font-mono text-primary">(+{d.buffBonuses.move})</span> : null}
+          </span>
           <span>负重 {d.carry} 磅</span>
           <span className="text-card-foreground">{d.race.traits}</span>
           {bonusTags.map((b) => (
@@ -396,24 +401,77 @@ export function PlSheetView(props: PlSheetViewProps) {
             <div className="text-xs font-semibold text-foreground/85">先攻</div>
             <div className="my-0.5 font-mono text-base font-bold text-foreground tabular-nums">
               Step {Math.max(1, d.initStep + actionMod)}
+              {d.buffBonuses?.init ? (
+                <span className="ml-1 text-[10px] font-medium text-primary">(+{d.buffBonuses.init})</span>
+              ) : null}
             </div>
             <button type="button" onClick={onRollInitiative} className={`${btnPrimaryCls} tactile-btn h-6 px-2.5 text-[11px]`}>
               投先攻
             </button>
           </div>
           {[
-            ['物理防御', d.pd],
-            ['秘法防御', d.md],
-            ['社交防御', d.sd],
-            ['物理护甲', d.pa],
-            ['秘法护甲', d.ma],
-          ].map(([label, val]) => (
+            ['物理防御', d.pd, d.buffBonuses?.pd || 0],
+            ['秘法防御', d.md, d.buffBonuses?.md || 0],
+            ['社交防御', d.sd, d.buffBonuses?.sd || 0],
+            ['物理护甲', d.pa, d.buffBonuses?.pa || 0],
+            ['秘法护甲', d.ma, d.buffBonuses?.ma || 0],
+          ].map(([label, val, buffDelta]) => (
             <div key={String(label)} className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
               <div className="text-xs font-semibold text-foreground/85">{label}</div>
               <div className="mt-0.5 font-mono text-2xl font-bold leading-tight text-foreground tabular-nums">{val}</div>
+              {Number(buffDelta) > 0 && (
+                <div className="font-mono text-[10px] font-medium text-primary tabular-nums">
+                  含增益 +{buffDelta}
+                </div>
+              )}
             </div>
           ))}
         </div>
+
+        {/* 当前激活增益（Active Buffs） */}
+        {(pl.activeBuffs || []).length > 0 && (
+          <div className="mt-2.5 border-t border-border pt-2">
+            <div className="mb-1.5 flex items-center justify-between text-xs">
+              <span className="font-serif font-semibold text-card-foreground">
+                当前激活增益 ({pl.activeBuffs.length})
+              </span>
+              <span className="text-[11px] text-muted-foreground">已自动计入衍生面板与对应武器/盾牌</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(pl.activeBuffs as ActiveBuff[]).map((b) => (
+                <div
+                  key={b.id}
+                  className="inline-flex max-w-full flex-wrap items-center gap-1.5 rounded border border-primary/50 bg-primary/10 px-2 py-1 text-[11px] text-foreground"
+                >
+                  <b className="font-serif text-primary">{b.nameCn}</b>
+                  {b.targetItemName && (
+                    <span className="rounded border border-border bg-background/80 px-1 py-0.5 text-[10px] text-foreground">
+                      → {b.targetItemName}
+                    </span>
+                  )}
+                  <span className="text-foreground/90">{b.effectSummary}</span>
+                  {b.durationText && b.durationText !== '-' && (
+                    <span className="font-mono text-[10px] text-muted-foreground">[{b.durationText}]</span>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`移除增益 ${b.nameCn}`}
+                    title="移除该增益"
+                    onClick={() =>
+                      onUpdatePl((p) => ({
+                        ...p,
+                        activeBuffs: (p.activeBuffs || []).filter((x: ActiveBuff) => x.id !== b.id),
+                      }))
+                    }
+                    className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded border border-border bg-background/80 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* 常用检定 */}
@@ -985,18 +1043,38 @@ export function PlSheetView(props: PlSheetViewProps) {
         </div>
         <div className="mb-2 space-y-1.5">
           {pl.weapons.map((w: any) => {
-            const dmgStep = Math.max(1, d.steps.STR + w.dmgStep + (pl.options.aggressive ? 3 : 0));
+            const fx = getWeaponBuffEffects(pl.activeBuffs || [], w.id, w.name);
+            const dmgStep = Math.max(1, d.steps.STR + w.dmgStep + (pl.options.aggressive ? 3 : 0) + fx.dmgStepBonus);
             return (
               <div
                 key={w.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded border border-border bg-background/70 px-2.5 py-1.5 text-xs"
               >
-                <div className="tabular-nums">
-                  <span className="font-semibold text-foreground">{w.name}</span>{' '}
-                  <span className="text-muted-foreground">基础 <span className="font-mono">+{w.dmgStep}</span></span> ·{' '}
+                <div className="flex flex-wrap items-center gap-1.5 tabular-nums">
+                  <span className="font-semibold text-foreground">{w.name}</span>
+                  <span className="text-muted-foreground">
+                    基础 <span className="font-mono">+{w.dmgStep}</span>
+                  </span>
+                  <span>·</span>
                   <span className="font-semibold text-foreground">
                     伤害 <span className="font-mono font-bold">Step {dmgStep}</span>
                   </span>
+                  {fx.dmgStepBonus > 0 && (
+                    <span className="rounded border border-primary/40 bg-primary/10 px-1 py-0.5 font-mono text-[10px] text-primary">
+                      增益 +{fx.dmgStepBonus}
+                    </span>
+                  )}
+                  {fx.extraDice.map((die, idx) => (
+                    <span
+                      key={idx}
+                      className="rounded border border-primary/40 bg-primary/10 px-1 py-0.5 font-mono text-[10px] text-primary"
+                    >
+                      +{die.label} {die.element}
+                    </span>
+                  ))}
+                  {fx.notes.length > 0 && (
+                    <span className="text-[10px] text-muted-foreground">（{fx.notes.join('，')}）</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button type="button" onClick={() => onRollWeaponDamage(w.id)} className={btnPrimaryCls}>
@@ -1103,6 +1181,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     const pendingCast = pendingSpellCasts[sp.instanceId];
                     const showEffBtn =
                       ED4Engine.hasSpellEffectRoll(sp) ||
+                      sp.effectType === 'buff' ||
                       curExtraThreads > 0 ||
                       (pendingCast?.extraThreadsCount ?? 0) > 0 ||
                       (pendingCast?.castingExtraSuccesses ?? 0) > 0;

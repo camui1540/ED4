@@ -13,10 +13,12 @@
  *    - 8 大种族 (`RACES`)、25 点购点表 (`ATTR_COST`)、负重表 (`CARRY_TABLE`)、15 门类 (`DISCIPLINES`) 1–15 环进阶
  *    - 动作检定 (`Action Test`) 与效果检定 (`Effect Test`) 严格隔离（负伤与战斗姿态只扣动作，不扣伤害）
  *    - 装备与脉路物品穿脱动态重算 (`parseItemBonuses`, `calcEquippedBonuses`, `normalizeImportedCharacter`)
- *    - 四大施法门类 1–8 环 81 条结构化法术库 (`SPELLS_DB`)、中英文/别名匹配 (`findSpellInDb`)
+ *    - 四大施法门类 1–8 环完整结构化法术库 (`SPELLS_DB`)、中英文/别名匹配 (`findSpellInDb`)
  *    - 攻防受创、护甲减免、负伤阈值与击倒难度纯函数 (`resolveDamage`, `resolveAvoidBlow`, `resolveRiposte`)
  *    - 动态表头锚点 Excel (.xlsx) 与 TXT 角色卡双格式解析器 (`parseExcelWorkbook`, `parseTxtSheet`)
  */
+
+import SPELLS_DB from './ed4_spells_data.js';
 
 const RACES = {
       human: { name: '人类', aliases: ['人类', 'Human'], base: { DEX: 10, STR: 10, TOU: 10, PER: 10, WIL: 10, CHA: 10 }, move: 12, karmaMod: 5, traits: '多才多艺' },
@@ -107,87 +109,7 @@ const RACES = {
       }
     };
 
-    const SPELLS_DB = [
-      {"id":"ele_air_armor","nameCn":"气元素甲","nameEn":"Air Armor","discipline":"elementalist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"+3 物理护甲","effectType":"buff","armorType":"none","desc":"目标物理护甲 +3（需穿着衣物或护甲）。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 加值）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ele_earth_darts","nameCn":"地元素镖","nameEn":"Earth Darts","discipline":"elementalist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"20码","duration":"2轮","aoe":"","effectFormula":"WIL+3","effectType":"damage","armorType":"pa","desc":"造成 WIL+3 物理伤害，并使目标物理护甲 -2。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","增强效果（-2 物理护甲）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ele_flameweapon","nameCn":"火焰武器","nameEn":"Flameweapon","discipline":"elementalist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"武器伤害 +D6","effectType":"buff","armorType":"none","desc":"武器伤害检定额外增加 1D6 火焰伤害。","extraThreads":["增强效果（+2 效果阶数）","额外目标（+等级数）"],"extraEffectStepPerThread":2},
-      {"id":"ele_heat_food","nameCn":"加热食物","nameEn":"Heat Food","discipline":"elementalist","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"fixed","castingDn":6,"range":"接触","duration":"等级+5 分钟","aoe":"","effectFormula":"下次回复 +4","effectType":"utility","armorType":"none","desc":"加热一顿餐食，食用后下次回复检定 +4。","extraThreads":["增强效果（+2 效果阶数）"],"extraEffectStepPerThread":2},
-      {"id":"ele_resist_element","nameCn":"元素抵抗","nameEn":"Resist Element","discipline":"elementalist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"+3 对应元素双护甲","effectType":"buff","armorType":"none","desc":"对抗指定元素伤害时物理与秘法护甲 +3。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+1 加值）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ele_shelter","nameCn":"庇护","nameEn":"Shelter","discipline":"elementalist","circle":1,"threads":4,"weavingBase":5,"weavingHigh":10,"castingType":"fixed","castingDn":6,"range":"20码","duration":"10小时","aoe":"","effectFormula":"制造过夜庇护所","effectType":"utility","armorType":"none","desc":"编织树木形成适合一人过夜的庇护所。","extraThreads":["增强效果（+1 人）","增强效果（+2 侦测难度）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"ele_air_mattress","nameCn":"气元素垫","nameEn":"Air Mattress","discipline":"elementalist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"fixed","castingDn":6,"range":"接触","duration":"10小时","aoe":"","effectFormula":"回复检定 +2","effectType":"utility","armorType":"none","desc":"睡满6小时后醒来1小时内首次回复检定 +2。","extraThreads":["增强效果（+2 加值）","增强效果（-1 小时所需睡眠，最低 4 小时）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ele_icy_surface","nameCn":"冰结表面","nameEn":"Icy Surface","discipline":"elementalist","circle":2,"threads":0,"weavingBase":6,"weavingHigh":11,"castingType":"fixed","castingDn":6,"range":"接触","duration":"等级+5 轮","aoe":"60平方码","effectFormula":"WIL","effectType":"utility","armorType":"none","desc":"效果检定决定通过冰面的敏捷/击倒难度。","extraThreads":["增强效果（+2 效果阶数）","扩大区域（+10 平方码）"],"extraEffectStepPerThread":2},
-      {"id":"ele_shield_willow","nameCn":"柳枝护盾","nameEn":"Shield Willow","discipline":"elementalist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"fixed","castingDn":6,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"盾牌物防/秘防 +2","effectType":"buff","armorType":"none","desc":"强化盾牌，使其物理防御与秘法防御 +2。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+1 加值）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ill_assuring_touch","nameCn":"坚定之触","nameEn":"Assuring Touch","discipline":"illusionist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"秘防/社防 +3","effectType":"buff","armorType":"none","desc":"秘法与社交防御 +3，对抗恐惧的意志检定 +3。","extraThreads":["提高持续时间（分钟）","增强效果（+2 加值）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ill_cloak","nameCn":"匿踪术","nameEn":"Cloak","discipline":"illusionist","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"潜行类动作 +3","effectType":"buff","armorType":"none","desc":"隐匿与潜行类动作检定 +3。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 加值）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"ill_ephemeral_bolt","nameCn":"瞬息之箭","nameEn":"Ephemeral Bolt","discipline":"illusionist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"20码","duration":"2轮","aoe":"","effectFormula":"WIL+4","effectType":"damage","armorType":"ma","desc":"造成 WIL+4 秘法伤害，并使目标意志检定 -2（可识破幻象）。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ill_monstrous_mantle","nameCn":"怪物斗篷","nameEn":"Monstrous Mantle","discipline":"illusionist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"近战攻伤+2, 物防+2","effectType":"buff","armorType":"none","desc":"近战攻击/伤害 +2，物理防御 +2。","extraThreads":["增强效果（所有加值 +1）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ill_unseen_voices","nameCn":"无形之声","nameEn":"Unseen Voices","discipline":"illusionist","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级+5 轮","aoe":"","effectFormula":"制造幻听声音","effectType":"utility","armorType":"none","desc":"制造等同施法等级数量的幻听声音。","extraThreads":["提高持续时间（分钟）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"ill_blindness","nameCn":"致盲术","nameEn":"Blindness","discipline":"illusionist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 分钟","aoe":"","effectFormula":"完全黑暗致盲","effectType":"utility","armorType":"none","desc":"使目标视觉被墨黑遮蔽，承受完全黑暗惩罚。","extraThreads":["提高持续时间（+2 分钟）"],"extraEffectStepPerThread":0},
-      {"id":"ill_displace_image","nameCn":"替换图像","nameEn":"Displace Image","discipline":"illusionist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"投射4码外虚像","effectType":"buff","armorType":"none","desc":"将目标视觉位置偏移4码，攻击视为识破检定。","extraThreads":["额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"ill_phantom_flame","nameCn":"幻影烈焰","nameEn":"Phantom Flame","discipline":"illusionist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"10码","duration":"2轮","aoe":"","effectFormula":"WIL+6","effectType":"damage","armorType":"pa","desc":"造成 WIL+6 物理伤害（幻象可被识破）。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ill_see_unseen","nameCn":"看透无形","nameEn":"See the Unseen","discipline":"illusionist","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 分钟","aoe":"","effectFormula":"视觉察觉 +5","effectType":"buff","armorType":"none","desc":"侦测隐藏物体或角色的视觉感知检定 +5。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+1 加值）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"net_astral_spear","nameCn":"星质长矛","nameEn":"Astral Spear","discipline":"nethermancer","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"40码","duration":"1轮","aoe":"","effectFormula":"WIL+4","effectType":"damage","armorType":"ma","desc":"从星界投射长矛，造成 WIL+4 秘法伤害。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"net_ethereal_darkness","nameCn":"以太之暗","nameEn":"Ethereal Darkness","discipline":"nethermancer","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"4码半径","effectFormula":"魔法黑暗区域","effectType":"utility","armorType":"none","desc":"熄灭普通光源造成完全黑暗，习得下界编织者不受影响。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 效果阶数）","扩大区域（+2 码）"],"extraEffectStepPerThread":2},
-      {"id":"net_soul_armor","nameCn":"灵魂护甲","nameEn":"Soul Armor","discipline":"nethermancer","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 分钟","aoe":"","effectFormula":"秘法护甲 +3","effectType":"buff","armorType":"none","desc":"召唤蓝色灵能链甲融入目标体内，秘法护甲 +3。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 秘法护甲）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"net_soulless_eyes","nameCn":"无魂眼","nameEn":"Soulless Eyes","discipline":"nethermancer","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 分钟","aoe":"","effectFormula":"威吓检定 +3","effectType":"buff","armorType":"none","desc":"赋予目标冷酷眼神，威吓检定 +3。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 加值）"],"extraEffectStepPerThread":0},
-      {"id":"net_spirit_dart","nameCn":"精神飞镖","nameEn":"Spirit Dart","discipline":"nethermancer","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"20码","duration":"2轮","aoe":"","effectFormula":"WIL+2","effectType":"damage","armorType":"ma","desc":"造成 WIL+2 秘法伤害，并使目标秘法护甲 -2 至下轮结束。","extraThreads":["增强效果（+2 效果阶数）","增强效果（-2 秘法护甲）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"net_aspect_fog_ghost","nameCn":"迷雾幽魂之貌","nameEn":"Aspect of the Fog Ghost","discipline":"nethermancer","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"近战攻伤+3, 物防+3","effectType":"buff","armorType":"none","desc":"近战攻击与伤害 +3、物理防御 +3（需抵抗攻击最近目标的冲动）。","extraThreads":["增强效果（+1 加值）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"net_chilling_circle","nameCn":"寒霜法阵","nameEn":"Chilling Circle","discipline":"nethermancer","circle":2,"threads":0,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"2码半径","effectFormula":"Circle+4","effectType":"damage","armorType":"ma","desc":"群体法术：取范围内最高秘法防御，造成 环数+4 秘法伤害且移速减半。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 效果阶数）","扩大区域（+2 码）","移除目标（-等级数）"],"extraEffectStepPerThread":2},
-      {"id":"net_nights_edge","nameCn":"夜之锋芒","nameEn":"Night's Edge","discipline":"nethermancer","circle":2,"threads":0,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"武器伤害 +D4","effectType":"buff","armorType":"none","desc":"武器伤害增加 D4 寒冷骰，受伤目标秘法防御 -2。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_logic_display","nameCn":"逻辑分析","nameEn":"Bedazzling Display of Logical Analysis","discipline":"wizard","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"自身","duration":"等级 分钟","aoe":"","effectFormula":"口头魅力检定 +4","effectType":"buff","armorType":"none","desc":"交谈、辩论等口头魅力检定 +4。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 加值）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_catseyes","nameCn":"猫眼","nameEn":"Catseyes","discipline":"wizard","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"获得低光视觉","effectType":"buff","armorType":"none","desc":"赋予目标低光视觉。","extraThreads":["提高持续时间（+2 分钟）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_flame_flash","nameCn":"焰闪","nameEn":"Flame Flash","discipline":"wizard","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"10码","duration":"2轮","aoe":"","effectFormula":"WIL+5","effectType":"damage","armorType":"pa","desc":"造成 WIL+5 物理火焰伤害（持续2轮）。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_mage_armor","nameCn":"法师护甲","nameEn":"Mage Armor","discipline":"wizard","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"物理护甲 +3","effectType":"buff","armorType":"none","desc":"目标物理护甲 +3，发出微弱紫光。","extraThreads":["提高持续时间（分钟）","增强效果（+2 物理护甲）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_mind_dagger","nameCn":"心灵匕首","nameEn":"Mind Dagger","discipline":"wizard","circle":1,"threads":0,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"20码","duration":"2轮","aoe":"","effectFormula":"WIL+2","effectType":"damage","armorType":"ma","desc":"造成 WIL+2 秘法伤害，目标物理防御 -2 至下轮结束。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","增强效果（-2 物理防御）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_quicken_pace","nameCn":"疾行术","nameEn":"Quicken Pace","discipline":"wizard","circle":1,"threads":1,"weavingBase":5,"weavingHigh":10,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 小时","aoe":"","effectFormula":"移速 +2码","effectType":"buff","armorType":"none","desc":"目标移动速率 +2 码。","extraThreads":["提高持续时间（+2 小时）","增强效果（+2 移动速率）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_astral_shield","nameCn":"星界护盾","nameEn":"Astral Shield","discipline":"wizard","circle":2,"threads":0,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"秘法防御 +2","effectType":"buff","armorType":"none","desc":"目标秘法防御 +2。","extraThreads":["提高持续时间（分钟）","增强效果（+2 秘法护甲）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_crushing_will","nameCn":"意志碾压","nameEn":"Crushing Will","discipline":"wizard","circle":2,"threads":1,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"50码","duration":"2轮","aoe":"","effectFormula":"WIL+3","effectType":"damage","armorType":"ma","desc":"造成 WIL+3 秘法伤害，并使目标秘法防御 -2。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","增强效果（-2 秘法防御）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_seeking_sight","nameCn":"寻视术","nameEn":"Seeking Sight","discipline":"wizard","circle":2,"threads":0,"weavingBase":6,"weavingHigh":11,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 轮","aoe":"","effectFormula":"远程攻击 +3","effectType":"buff","armorType":"none","desc":"目标远程攻击检定 +3。","extraThreads":["增强效果（+2 加值）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ele_ice_mace","nameCn":"冰锏锁链","nameEn":"Ice Mace and Chain","discipline":"elementalist","circle":3,"threads":0,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"20码","duration":"2轮","aoe":"","effectFormula":"WIL+2","effectType":"damage","armorType":"pa","desc":"造成 WIL+2 物理伤害，若未碎裂则目标陷入受扰。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ele_lightning_bolt","nameCn":"闪电箭","nameEn":"Lightning Bolt","discipline":"elementalist","circle":3,"threads":1,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"20码","duration":"1轮","aoe":"","effectFormula":"WIL+6","effectType":"damage","armorType":"pa","desc":"召唤闪电击中目标，造成 WIL+6 物理伤害。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ele_winds_deflection","nameCn":"偏斜之风","nameEn":"Winds of Deflection","discipline":"elementalist","circle":3,"threads":0,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"自身","duration":"等级 轮","aoe":"","effectFormula":"回避打击 +3","effectType":"buff","armorType":"none","desc":"回避打击检定 +3，且可用于应对盲区与惊愕攻击。","extraThreads":["增强效果（+2 加值）","提高持续时间（+2 轮）"],"extraEffectStepPerThread":0},
-      {"id":"ele_blizzard_sphere","nameCn":"暴雪领域","nameEn":"Blizzard Sphere","discipline":"elementalist","circle":4,"threads":2,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"30码","duration":"等级 轮","aoe":"4码半径","effectFormula":"WIL+2","effectType":"damage","armorType":"pa","desc":"群体法术：取范围内最高秘法防御，每轮造成 WIL+2 物理伤害且移速减半。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","扩大范围（+10 码）","扩大区域（+2 码）"],"extraEffectStepPerThread":2},
-      {"id":"ele_elemental_spear","nameCn":"元素之矛","nameEn":"Elemental Spear","discipline":"elementalist","circle":4,"threads":1,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"20码","duration":"见说明","aoe":"","effectFormula":"WIL+4","effectType":"damage","armorType":"pa","desc":"投掷元素长矛造成 WIL+4 物理伤害并附带元素特效。","extraThreads":["提高持续时间（+2 轮，若适用）","增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ele_lightning_step","nameCn":"闪电步","nameEn":"Lightning Step","discipline":"elementalist","circle":4,"threads":0,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"先攻/移速/物防 +2","effectType":"buff","armorType":"none","desc":"先攻、移动速率与物理防御各 +2。","extraThreads":["增强效果（所有效果 +1）"],"extraEffectStepPerThread":0},
-      {"id":"ele_fireball","nameCn":"火球术","nameEn":"Fireball","discipline":"elementalist","circle":5,"threads":2,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"40码","duration":"1轮","aoe":"4码半径","effectFormula":"WIL+6","effectType":"damage","armorType":"pa","desc":"群体法术：取范围内最高秘法防御，造成 WIL+6 火焰物理伤害。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","扩大区域（+2 码）","移除目标（-等级数）"],"extraEffectStepPerThread":2},
-      {"id":"ele_heat_armor","nameCn":"灼热护甲","nameEn":"Heat Armor","discipline":"elementalist","circle":5,"threads":2,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"","effectFormula":"WIL","effectType":"damage","armorType":"none","desc":"每轮造成 WIL 伤害，受影响护甲不提供防护。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","扩大区域（+2 码）"],"extraEffectStepPerThread":2},
-      {"id":"ele_fireweave","nameCn":"火焰编织","nameEn":"Fireweave","discipline":"elementalist","circle":6,"threads":1,"weavingBase":10,"weavingHigh":15,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"WIL+2","effectType":"damage","armorType":"pa","desc":"火焰斗篷灼烧近战攻击者，造成 WIL+2 物理伤害。","extraThreads":["增强效果（+2 效果阶数）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"ele_thunderclap","nameCn":"雷霆掌","nameEn":"Thunderclap","discipline":"elementalist","circle":7,"threads":2,"weavingBase":11,"weavingHigh":16,"castingType":"TMD","castingDn":null,"range":"自身","duration":"2轮","aoe":"6码半径","effectFormula":"行动 -6 且耳聋","effectType":"utility","armorType":"none","desc":"范围内目标动作检定 -6 并陷入耳聋。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","扩大区域（+2 码）","移除目标（-等级数）"],"extraEffectStepPerThread":2},
-      {"id":"ele_whirlwind","nameCn":"旋风","nameEn":"Whirlwind","discipline":"elementalist","circle":7,"threads":2,"weavingBase":11,"weavingHigh":16,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"4码半径","effectFormula":"WIL+2","effectType":"damage","armorType":"pa","desc":"召唤旋风造成 WIL+2 物理伤害并使目标受扰。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","扩大区域（+2 码）","移除目标（-等级数）"],"extraEffectStepPerThread":2},
-      {"id":"ele_crushing_hand","nameCn":"大地的粉碎之手","nameEn":"Crushing Hand of Earth","discipline":"elementalist","circle":8,"threads":2,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"","effectFormula":"WIL+2","effectType":"damage","armorType":"pa","desc":"大地巨手抓握目标，每轮造成 WIL+2 物理伤害。","extraThreads":["增强效果（+2 效果阶数）","提高持续时间（+2 轮）","扩大范围（+10 码）"],"extraEffectStepPerThread":2},
-      {"id":"ill_nobody_here","nameCn":"匿形术","nameEn":"Nobody Here","discipline":"illusionist","circle":3,"threads":1,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"自身","duration":"等级+5 分钟","aoe":"4码半径","effectFormula":"群体隐形","effectType":"buff","armorType":"none","desc":"取范围内最高秘法防御，使区域外观察者忽略区域内目标。","extraThreads":["提高持续时间（+2 分钟）","扩大范围（+2 码）"],"extraEffectStepPerThread":0},
-      {"id":"ill_phantom_warrior","nameCn":"幻影勇士","nameEn":"Phantom Warrior","discipline":"illusionist","circle":3,"threads":1,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"物防 +3, 敌方防御 -3","effectType":"buff","armorType":"none","desc":"制造三个分身，目标物防 +3，敌方防御检定 -3。","extraThreads":["增强效果（+1 幻象）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ill_notice_not","nameCn":"无从察觉","nameEn":"Notice Not","discipline":"illusionist","circle":4,"threads":1,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"使人视而不见","effectType":"buff","armorType":"none","desc":"使旁人下意识避开并忽略目标存在。","extraThreads":["提高持续时间（+2 分钟）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"ill_phantom_lightning","nameCn":"幻影闪电","nameEn":"Phantom Lightning","discipline":"illusionist","circle":4,"threads":1,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"20码","duration":"1轮","aoe":"","effectFormula":"WIL+7","effectType":"damage","armorType":"pa","desc":"造成 WIL+7 物理伤害（幻象可被识破）。","extraThreads":["提高持续时间（+2 分钟）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"ill_eye_of_truth","nameCn":"真实之眼","nameEn":"Eye of Truth","discipline":"illusionist","circle":5,"threads":1,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级+5 分钟","aoe":"","effectFormula":"识破检定 +5","effectType":"buff","armorType":"none","desc":"对抗幻象的识破检定 +5。","extraThreads":["提高持续时间（+2 分钟）","扩大范围（+10 码）","扩大区域（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"ill_phantom_fireball","nameCn":"幻影火球","nameEn":"Phantom Fireball","discipline":"illusionist","circle":5,"threads":1,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"40码","duration":"2轮","aoe":"4码半径","effectFormula":"WIL+5","effectType":"damage","armorType":"pa","desc":"群体幻象火球，造成 WIL+5 物理伤害并致部分目盲 (-2)。","extraThreads":["提高持续时间（+2 分钟）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"ill_astral_shadow","nameCn":"星界暗影","nameEn":"Astral Shadow","discipline":"illusionist","circle":6,"threads":2,"weavingBase":10,"weavingHigh":15,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"隐匿星界灵光","effectType":"buff","armorType":"none","desc":"使目标在星界空间中更难被察觉。","extraThreads":["提高持续时间（+2 分钟）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"ill_stampede","nameCn":"踩踏术","nameEn":"Stampede","discipline":"illusionist","circle":7,"threads":2,"weavingBase":11,"weavingHigh":16,"castingType":"TMD","castingDn":null,"range":"40码","duration":"等级 轮","aoe":"","effectFormula":"群体受扰","effectType":"utility","armorType":"none","desc":"幻象兽群惊吓目标群，使其陷入受扰。","extraThreads":["提高持续时间（+2 轮）","增强效果（+1 成功）"],"extraEffectStepPerThread":0},
-      {"id":"ill_shadow_spell","nameCn":"影化法术","nameEn":"Shadow Spell","discipline":"illusionist","circle":8,"threads":2,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"","effectFormula":"WIL+4","effectType":"utility","armorType":"none","desc":"从目标施法者的法术效果检定中扣除本法术效果值。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"net_arrow_of_night","nameCn":"夜之箭矢","nameEn":"Arrow of Night","discipline":"nethermancer","circle":3,"threads":0,"weavingBase":7,"weavingHigh":12,"castingType":"fixed","castingDn":6,"range":"接触","duration":"2轮","aoe":"","effectFormula":"远程伤害 +6, 秘甲 -2","effectType":"buff","armorType":"none","desc":"附魔箭矢造成 +6 伤害，命中后目标秘法护甲 -2（发射者承受1负荷）。","extraThreads":["增强效果（+2 伤害）","增强效果（-2 秘法护甲）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"net_pain","nameCn":"灌注苦痛","nameEn":"Pain","discipline":"nethermancer","circle":3,"threads":0,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"3处临时负伤, 移速减半","effectType":"utility","armorType":"none","desc":"使目标承受 3 处临时负伤且移速减半（对不死/惧魔无效）。","extraThreads":["增强效果（+1 负伤）","扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"net_fog_of_fear","nameCn":"恐惧之雾","nameEn":"Fog of Fear","discipline":"nethermancer","circle":3,"threads":1,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"4码半径","effectFormula":"群体恐惧威慑","effectType":"utility","armorType":"none","desc":"群体法术：取范围内最高秘法防御，引发恐惧。","extraThreads":["增强效果（+2 天赋加值）","扩大范围（+10 码）","扩大区域（+2 码）"],"extraEffectStepPerThread":0},
-      {"id":"net_evil_eye","nameCn":"邪眼","nameEn":"Evil Eye","discipline":"nethermancer","circle":4,"threads":0,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"自身","duration":"等级 轮","aoe":"","effectFormula":"威吓/恐吓成功度 +1","effectType":"buff","armorType":"none","desc":"恐吓天赋成功时额外获得 +1 成功度。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 加值）"],"extraEffectStepPerThread":0},
-      {"id":"net_aspect_tyrant","nameCn":"险恶暴君之貌","nameEn":"Aspect of the Menacing Tyrant","discipline":"nethermancer","circle":4,"threads":1,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"威吓与恐惧检定 +6","effectType":"buff","armorType":"none","desc":"目标威吓与恐惧检定 +6。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 交涉（威吓）检定）"],"extraEffectStepPerThread":0},
-      {"id":"net_aspect_physician","nameCn":"残酷医者之貌","nameEn":"Aspect of the Cruel Physician","discipline":"nethermancer","circle":5,"threads":1,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"代价回复检定 +6","effectType":"utility","armorType":"none","desc":"令自愿目标承受1负伤以换取1次+6的免费回复检定。","extraThreads":[],"extraEffectStepPerThread":0},
-      {"id":"net_wither_limb","nameCn":"肢体萎缩","nameEn":"Wither Limb","discipline":"nethermancer","circle":5,"threads":3,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"20码","duration":"1轮","aoe":"","effectFormula":"WIL+6","effectType":"damage","armorType":"ma","desc":"造成 WIL+6 秘法伤害，若造成负伤则令目标肢体萎缩瘫痪。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）"],"extraEffectStepPerThread":2},
-      {"id":"net_astral_maw","nameCn":"星界咽喉","nameEn":"Astral Maw","discipline":"nethermancer","circle":6,"threads":2,"weavingBase":10,"weavingHigh":15,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"Circle+10","effectType":"damage","armorType":"pa","desc":"召唤星界巨口攻击与吞噬目标，造成 环数+10 物理伤害。","extraThreads":["增强效果（+2 效果阶数）","增强效果（+1 成功）","扩大范围（+10 码）"],"extraEffectStepPerThread":2},
-      {"id":"net_debilitating_gloom","nameCn":"衰弱阴翳","nameEn":"Debilitating Gloom","discipline":"nethermancer","circle":6,"threads":2,"weavingBase":10,"weavingHigh":15,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"6码半径","effectFormula":"每轮1负伤+移速减半","effectType":"utility","armorType":"none","desc":"范围内目标移速减半且每轮承受1处负伤。","extraThreads":["提高持续时间（+2 轮）","扩大范围（+10 码）","扩大区域（+2 码）"],"extraEffectStepPerThread":0},
-      {"id":"net_restrain_entity","nameCn":"约束实体","nameEn":"Restrain Entity","discipline":"nethermancer","circle":7,"threads":2,"weavingBase":11,"weavingHigh":16,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 分钟","aoe":"","effectFormula":"WIL+Circle","effectType":"utility","armorType":"none","desc":"禁锢不死生物、惧魔或具现精魂使其无法移动。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 效果阶数）","扩大范围（+10 码）"],"extraEffectStepPerThread":2},
-      {"id":"net_netherblade","nameCn":"下界刃","nameEn":"Netherblade","discipline":"nethermancer","circle":8,"threads":0,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"武器可击中星界目标","effectType":"buff","armorType":"none","desc":"近战武器仅可击中星界目标。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 伤害）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"net_shadow_tether","nameCn":"暗影栓链","nameEn":"Shadow Tether","discipline":"nethermancer","circle":8,"threads":2,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"定身且受扰","effectType":"utility","armorType":"none","desc":"将目标群体锚定在原地并使其受扰。","extraThreads":["扩大范围（+10 码）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_astral_targeting","nameCn":"星界锁定","nameEn":"Astral Targeting","discipline":"wizard","circle":3,"threads":0,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"自身","duration":"等级 轮","aoe":"","effectFormula":"施法与效果 +2","effectType":"buff","armorType":"none","desc":"对已星界感知的目标施法与效果检定 +2。","extraThreads":["提高持续时间（分钟）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_aura_strike","nameCn":"灵光打击","nameEn":"Aura Strike","discipline":"wizard","circle":3,"threads":1,"weavingBase":7,"weavingHigh":12,"castingType":"TMD","castingDn":null,"range":"20码","duration":"1轮","aoe":"","effectFormula":"WIL+3","effectType":"damage","armorType":"ma","desc":"造成 WIL+3 秘法伤害且必定造成 1 处负伤。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_binding_threads","nameCn":"丝线束缚","nameEn":"Binding Threads","discipline":"wizard","circle":4,"threads":2,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"10码","duration":"等级 轮","aoe":"","effectFormula":"WIL+3","effectType":"utility","armorType":"none","desc":"缠绕目标，需以力量对抗效果步数挣脱。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_wizards_cloak","nameCn":"巫师斗篷","nameEn":"Wizard's Cloak","discipline":"wizard","circle":4,"threads":1,"weavingBase":8,"weavingHigh":13,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 分钟","aoe":"","effectFormula":"防星界侦测秘防 +6","effectType":"buff","armorType":"none","desc":"对抗星界侦测与信息探查时秘法防御 +6。","extraThreads":["提高持续时间（+2 分钟）","增强效果（+2 加值）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_mystic_shock","nameCn":"秘法冲击","nameEn":"Mystic Shock","discipline":"wizard","circle":5,"threads":2,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"10码","duration":"1轮","aoe":"","effectFormula":"WIL+4","effectType":"damage","armorType":"ma","desc":"无视视线，经由接触表面造成 WIL+4 秘法伤害。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_sever_talent","nameCn":"天赋断连","nameEn":"Sever Talent","discipline":"wizard","circle":5,"threads":0,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"10码","duration":"2轮","aoe":"","effectFormula":"封锁最近使用的天赋","effectType":"utility","armorType":"none","desc":"使目标暂时无法使用最近使用过的天赋。","extraThreads":["提高持续时间（+2 轮）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_slow","nameCn":"减速术","nameEn":"Slow","discipline":"wizard","circle":5,"threads":2,"weavingBase":9,"weavingHigh":14,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"移速减半, 敏捷检定 -5","effectType":"utility","armorType":"none","desc":"目标移速减半，所有敏捷检定（含先攻）-5。","extraThreads":["提高持续时间（+2 轮）","增强效果（-2 罚值）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_energy_shield","nameCn":"能量护盾","nameEn":"Energy Shield","discipline":"wizard","circle":6,"threads":1,"weavingBase":10,"weavingHigh":15,"castingType":"TMD","castingDn":null,"range":"接触","duration":"等级 轮","aoe":"","effectFormula":"秘法/物理防御强化","effectType":"buff","armorType":"none","desc":"形成能量盾护卫目标。","extraThreads":["提高持续时间（分钟）","增强效果（+2 加值）","扩大范围（+10 码）","额外目标（+等级数）"],"extraEffectStepPerThread":0},
-      {"id":"wiz_confusing_weave","nameCn":"干扰编织","nameEn":"Confusing Weave","discipline":"wizard","circle":7,"threads":1,"weavingBase":11,"weavingHigh":16,"castingType":"TMD","castingDn":null,"range":"20码","duration":"1轮","aoe":"4码半径","effectFormula":"WIL","effectType":"utility","armorType":"none","desc":"打断范围内施法者的脉路编织。","extraThreads":["增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_astral_catastrophe","nameCn":"星界浩劫","nameEn":"Astral Catastrophe","discipline":"wizard","circle":8,"threads":2,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"30码","duration":"1轮","aoe":"6码半径","effectFormula":"WIL+5","effectType":"damage","armorType":"ma","desc":"群体法术：造成 WIL+5 秘法伤害且受害者动作 -2。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","增强效果（-2 罚值）","扩大范围（+10 码）","扩大区域（+2 码）"],"extraEffectStepPerThread":2},
-      {"id":"wiz_compression_bubble","nameCn":"压缩泡","nameEn":"Compression Bubble","discipline":"wizard","circle":8,"threads":2,"weavingBase":12,"weavingHigh":17,"castingType":"TMD","castingDn":null,"range":"20码","duration":"等级 轮","aoe":"","effectFormula":"WIL+3","effectType":"damage","armorType":"pa","desc":"将目标困于力场泡中并造成 WIL+3 物理伤害。","extraThreads":["提高持续时间（+2 轮）","增强效果（+2 效果阶数）","扩大范围（+10 码）","额外目标（+1）"],"extraEffectStepPerThread":2}
-    ];
+    // SPELLS_DB imported from ./ed4_spells_data.js
 
     const ATTR_NAMES = { DEX: '敏捷', STR: '力量', TOU: '强韧', PER: '感知', WIL: '意志', CHA: '魅力' };
     const ATTR_COST = { '-2': -2, '-1': -1, 0: 0, 1: 1, 2: 2, 3: 3, 4: 5, 5: 7, 6: 9, 7: 12, 8: 15 };
@@ -295,26 +217,109 @@ const RACES = {
 
     
 
+    const LEGACY_SPELL_ID_MAP = {
+      ele_air_armor: 'air-armor',
+      ele_earth_darts: 'earth-darts',
+      ele_flameweapon: 'flameweapon',
+      ele_heat_food: 'heat-food',
+      ele_resist_element: 'resist-element',
+      ele_shelter: 'shelter',
+      ele_air_mattress: 'air-mattress',
+      ele_icy_surface: 'icy-surface',
+      ele_shield_willow: 'shield-willow',
+      ill_assuring_touch: 'assuring-touch',
+      ill_cloak: 'cloak',
+      ill_ephemeral_bolt: 'ephemeral-bolt',
+      ill_monstrous_mantle: 'monstrous-mantle',
+      ill_unseen_voices: 'unseen-voices',
+      ill_blindness: 'blindness',
+      ill_displace_image: 'displace-image',
+      ill_phantom_flame: 'phantom-flame',
+      ill_see_unseen: 'see-the-unseen',
+      net_astral_spear: 'astral-spear',
+      net_ethereal_darkness: 'ethereal-darkness',
+      net_soul_armor: 'soul-armor',
+      net_soulless_eyes: 'soulless-eyes',
+      net_spirit_dart: 'spirit-dart',
+      net_aspect_fog_ghost: 'aspect-of-the-fog-ghost',
+      net_chilling_circle: 'chilling-circle',
+      net_nights_edge: 'night-s-edge',
+      wiz_logic_display: 'bedazzling-display-of-logical-analysis',
+      wiz_catseyes: 'catseyes',
+      wiz_flame_flash: 'flame-flash',
+      wiz_mage_armor: 'mage-armor',
+      wiz_mind_dagger: 'mind-dagger',
+      wiz_quicken_pace: 'quicken-pace',
+      wiz_astral_shield: 'astral-shield',
+      wiz_crushing_will: 'crushing-will',
+      wiz_seeking_sight: 'seeking-sight',
+      ele_ice_mace: 'ice-mace-and-chain',
+      ele_lightning_bolt: 'lightning-bolt',
+      ele_winds_deflection: 'winds-of-deflection',
+      ele_blizzard_sphere: 'blizzard-sphere',
+      ele_elemental_spear: 'elemental-spear',
+      ele_lightning_step: 'lightning-step',
+      ele_fireball: 'fireball',
+      ele_heat_armor: 'heat-armor',
+      ele_fireweave: 'fireweave',
+      ele_thunderclap: 'thunderclap',
+      ele_whirlwind: 'whirlwind',
+      ele_crushing_hand: 'crushing-hand-of-earth',
+      ill_nobody_here: 'nobody-here',
+      ill_phantom_warrior: 'phantom-warrior',
+      ill_notice_not: 'notice-not',
+      ill_phantom_lightning: 'phantom-lightning',
+      ill_eye_of_truth: 'eye-of-truth',
+      ill_phantom_fireball: 'phantom-fireball',
+      ill_astral_shadow: 'astral-shadow',
+      ill_stampede: 'stampede',
+      ill_shadow_spell: 'shadow-spell',
+      net_arrow_of_night: 'arrow-of-night',
+      net_pain: 'pain',
+      net_fog_of_fear: 'fog-of-fear',
+      net_evil_eye: 'evil-eye',
+      net_aspect_tyrant: 'aspect-of-the-menacing-tyrant',
+      net_aspect_physician: 'aspect-of-the-cruel-physician',
+      net_wither_limb: 'wither-limb',
+      net_astral_maw: 'astral-maw',
+      net_debilitating_gloom: 'debilitating-gloom',
+      net_restrain_entity: 'restrain-entity',
+      net_netherblade: 'netherblade',
+      net_shadow_tether: 'shadow-tether',
+      wiz_astral_targeting: 'astral-targeting',
+      wiz_aura_strike: 'aura-strike',
+      wiz_binding_threads: 'binding-threads',
+      wiz_wizards_cloak: 'wizard-s-cloak',
+      wiz_mystic_shock: 'mystic-shock',
+      wiz_sever_talent: 'sever-talent',
+      wiz_slow: 'slow',
+      wiz_energy_shield: 'energy-shield',
+      wiz_confusing_weave: 'confusing-weave',
+      wiz_astral_catastrophe: 'astral-catastrophe',
+      wiz_compression_bubble: 'compression-bubble',
+    };
+
     const SPELL_ALIASES = {
-      '星界长矛': 'net_astral_spear',
-      '星界之矛': 'net_astral_spear',
-      '星质矛': 'net_astral_spear',
-      '灵魂甲': 'net_soul_armor',
-      '精神镖': 'net_spirit_dart',
-      '精神飞刺': 'net_spirit_dart',
-      '恐惧迷雾': 'net_fog_of_fear',
-      '夜箭': 'net_arrow_of_night',
-      '夜之箭': 'net_arrow_of_night',
-      '夜之矢': 'net_arrow_of_night',
-      '迷雾幽魂': 'net_aspect_fog_ghost',
-      '残酷医者': 'net_aspect_physician',
-      '险恶暴君': 'net_aspect_tyrant',
-      '枯萎术': 'net_wither_limb',
-      '凋零': 'net_wither_limb',
-      '火球': 'ele_fireball',
-      '闪电': 'ele_lightning_bolt',
-      '法师甲': 'wiz_mage_armor',
-      '心灵匕': 'wiz_mind_dagger'
+      '星界长矛': 'astral-spear',
+      '星界之矛': 'astral-spear',
+      '星质矛': 'astral-spear',
+      '灵魂甲': 'soul-armor',
+      '精神镖': 'spirit-dart',
+      '精神飞刺': 'spirit-dart',
+      '恐惧迷雾': 'fog-of-fear',
+      '夜箭': 'arrow-of-night',
+      '夜之箭': 'arrow-of-night',
+      '夜之矢': 'arrow-of-night',
+      '迷雾幽魂': 'aspect-of-the-fog-ghost',
+      '残酷医者': 'aspect-of-the-cruel-physician',
+      '险恶暴君': 'aspect-of-the-menacing-tyrant',
+      '枯萎术': 'wither-limb',
+      '凋零': 'wither-limb',
+      '寒霜法阵': 'chilling-circle',
+      '火球': 'fireball',
+      '闪电': 'lightning-bolt',
+      '法师甲': 'mage-armor',
+      '心灵匕': 'mind-dagger'
     };
 
     const WEAVING_KEYWORDS = [
@@ -453,15 +458,37 @@ const RACES = {
     function findSpellInDb(name) {
       const raw = (name || '').trim();
       if (!raw) return null;
-      const clean = raw.toLowerCase().replace(/[（）()【】\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-      const direct = SPELLS_DB.find(s => {
-        const cn = s.nameCn.toLowerCase();
-        const en = s.nameEn.toLowerCase();
-        return cn === clean || en === clean ||
-          (clean.length >= 2 && (cn.includes(clean) || clean.includes(cn))) ||
-          (en && clean.length >= 3 && (en.includes(clean) || clean.includes(en)));
+      const mappedLegacyId = LEGACY_SPELL_ID_MAP[raw];
+      if (mappedLegacyId) {
+        const legacyHit = SPELLS_DB.find(s => s.id === mappedLegacyId);
+        if (legacyHit) return legacyHit;
+      }
+      const byId = SPELLS_DB.find(s => s.id === raw);
+      if (byId) return byId;
+
+      const norm = (str) => String(str || '').toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[（）()【】\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
+      const clean = norm(raw);
+
+      const exact = SPELLS_DB.find(s => {
+        const cn = norm(s.nameCn || s.name);
+        const en = norm(s.nameEn);
+        const aliasList = Array.isArray(s.aliases) ? s.aliases.map(norm) : [];
+        return cn === clean || en === clean || aliasList.includes(clean);
       });
-      if (direct) return direct;
+      if (exact) return exact;
+
+      const fuzzy = SPELLS_DB.find(s => {
+        const cn = norm(s.nameCn || s.name);
+        const en = norm(s.nameEn);
+        const aliasList = Array.isArray(s.aliases) ? s.aliases.map(norm) : [];
+        return (
+          (clean.length >= 2 && (cn.includes(clean) || clean.includes(cn))) ||
+          (en && clean.length >= 3 && (en.includes(clean) || clean.includes(en))) ||
+          aliasList.some(a => a.length >= 2 && (a === clean || (clean.length >= 3 && (a.includes(clean) || clean.includes(a)))))
+        );
+      });
+      if (fuzzy) return fuzzy;
+
       for (const [alias, id] of Object.entries(SPELL_ALIASES)) {
         if (clean.includes(alias)) return SPELLS_DB.find(s => s.id === id) || null;
       }
@@ -470,8 +497,12 @@ const RACES = {
 
     function hasSpellEffectRoll(sp) {
       if (!sp) return false;
-      const f = String(sp.effectFormula || '').toUpperCase();
-      return sp.effectType === 'damage' || f.includes('WIL') || f.includes('CIRCLE');
+      if (sp.effectStepBonus !== null && sp.effectStepBonus !== undefined) return true;
+      if (sp.usesCircleAsBase) return true;
+      if (sp.effectType === 'damage') return true;
+      const f = String(sp.effectFormula || '');
+      if (sp.effectType === 'buff') return false;
+      return /\bWIL\b|意志|\bCIRCLE\b|环数/i.test(f);
     }
 
     function getThreadWeavingStep(pl, derived = null, spell = null) {
@@ -1133,7 +1164,7 @@ function matchRaceId(raw) {
     }
 
     const ED4Engine = {
-      ATTR_NAMES, ATTR_COST, CARRY_TABLE, STEP_BASE, STEP_CYCLE, RACES, DISCIPLINES, SPELLS_DB, SPELL_ALIASES, WEAVING_KEYWORDS,
+      ATTR_NAMES, ATTR_COST, CARRY_TABLE, STEP_BASE, STEP_CYCLE, RACES, DISCIPLINES, SPELLS_DB, SPELL_ALIASES, LEGACY_SPELL_ID_MAP, WEAVING_KEYWORDS,
       attrToStep, getStepDice, rollExplodingDie, rollStepTest,
       getDisciplineBonuses, parseItemBonuses, calcEquippedBonuses, calcPlDerived, getPlActionMod,
       findSpellInDb, hasSpellEffectRoll, getThreadWeavingStep, getSpellcastingStep,

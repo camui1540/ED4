@@ -8,6 +8,7 @@ declare const ED4Engine: {
   DISCIPLINES: Record<string, any>;
   SPELLS_DB: Array<any>;
   SPELL_ALIASES: Record<string, string>;
+  LEGACY_SPELL_ID_MAP: Record<string, string>;
   WEAVING_KEYWORDS: string[];
   attrToStep(val: number): number;
   getStepDice(step: number): { dice: number[]; mod: number; label: string };

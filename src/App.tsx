@@ -19,14 +19,19 @@ import { GmMonsterView } from './components/GmMonsterView';
 import { StepTableView } from './components/StepTableView';
 import { RightSidebar } from './components/RightSidebar';
 import { ExportModal, ManualModal, RoomModal, SpellJsonModal } from './components/Modals';
-import { SpellEffectModal } from './components/SpellEffectModal';
+import { SpellEffectModal, type SpellBuffTargetChoice } from './components/SpellEffectModal';
 import {
+  buildActiveBuffEntry,
+  computeSpellDurationPlan,
   computeSpellEffectPlan,
   enrichSpellWithDb,
   getExtraThreadRuleInfo,
+  getWeaponBuffEffects,
   hydrateSpellsWithDb,
+  isRangedWeaponName,
   resolveCastingDn,
   resolveWeavingRollOutcome,
+  type ActiveBuff,
 } from './engine/spellRules';
 import { PrintSheetView, type PdfPrintMode } from './components/PrintSheetView';
 import {
@@ -78,6 +83,7 @@ export default function App() {
               legend: { ...init.pl.legend, ...(savedPl.legend || {}) },
               wealth: { ...init.pl.wealth, ...(savedPl.wealth || {}) },
               spells: hydrateSpellsWithDb(savedPl.spells || []),
+              activeBuffs: Array.isArray(savedPl.activeBuffs) ? savedPl.activeBuffs : [],
               background: savedPl.background ?? '',
             },
           };
@@ -570,6 +576,10 @@ export default function App() {
 
       let step = d.steps[t.attr] + t.rank + getEffectiveActionMod(pl);
       if (t.isAttack && pl.options.aggressive) step += 3;
+      if (t.isAttack && d.buffBonuses) {
+        const isRangedAtk = isRangedWeaponName(t.name) || /投掷|射击|远程|箭/.test(String(t.name || ''));
+        step += (d.buffBonuses.allAtk || 0) + (isRangedAtk ? d.buffBonuses.rangedAtk || 0 : d.buffBonuses.meleeAtk || 0);
+      }
       step = Math.max(1, step);
 
       let targetMonster: any = null;
@@ -652,10 +662,25 @@ export default function App() {
       const w = prev.pl.weapons.find((x: any) => x.id === weaponId);
       if (!w) return prev;
       const d = getPlDerivedView(prev.pl);
-      const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (prev.pl.options.aggressive ? 3 : 0));
+      const fx = getWeaponBuffEffects(prev.pl.activeBuffs || [], w.id, w.name);
+      const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (prev.pl.options.aggressive ? 3 : 0) + fx.dmgStepBonus);
       const res = ED4Engine.rollStepTest(dmgStep, { isAction: false, karmaDie: prev.pl.karmaDie });
       const bonus = prev.lastExtraDamageBonus || 0;
-      const totalDmg = res.total + bonus;
+
+      const extraRollParts: string[] = [];
+      let extraDiceSum = 0;
+      for (const die of fx.extraDice) {
+        const dieRes = ED4Engine.rollStepTest(die.step, { isAction: false });
+        extraDiceSum += dieRes.total;
+        extraRollParts.push(`${die.spellName}(${die.element}): ${dieRes.trace}`);
+      }
+
+      const totalDmg = res.total + bonus + extraDiceSum;
+      const buffInfoParts: string[] = [];
+      if (fx.dmgStepBonus > 0) buffInfoParts.push(`法术增益 +${fx.dmgStepBonus} STEP`);
+      if (extraDiceSum > 0) buffInfoParts.push(`附魔额外伤害 +${extraDiceSum}`);
+      if (fx.notes.length > 0) buffInfoParts.push(fx.notes.join('、'));
+      const fullTrace = [res.trace, ...extraRollParts, ...fx.notes].filter(Boolean).join(' | ');
 
       if (prev.targetValue.startsWith('m:')) {
         const targetId = prev.targetValue.slice(2);
@@ -669,7 +694,14 @@ export default function App() {
             prev.pl.options.stun,
             `${prev.pl.name}【${w.name}】`
           );
-          const log = makeLog(outcome.log.text, outcome.log.detail, outcome.log.type, outcome.log.blindText, prev.gmBlind);
+          const extraSuffix = buffInfoParts.length > 0 ? ` [${buffInfoParts.join(' · ')}]` : '';
+          const log = makeLog(
+            `${outcome.log.text}${extraSuffix}`,
+            [outcome.log.detail, fullTrace].filter(Boolean).join(' | '),
+            outcome.log.type,
+            outcome.log.blindText,
+            prev.gmBlind
+          );
           return {
             ...prev,
             lastExtraDamageBonus: 0,
@@ -679,9 +711,14 @@ export default function App() {
         }
       }
 
+      const bonusStrParts: string[] = [];
+      if (bonus) bonusStrParts.push(`含额外成功 +${bonus}`);
+      bonusStrParts.push(...buffInfoParts);
+      const bonusNote = bonusStrParts.length > 0 ? `（${bonusStrParts.join('，')}）` : '';
+
       const log = makeLog(
-        `${prev.pl.name} 掷出【${w.name}】伤害 (Step ${dmgStep}) → ${totalDmg} 点${bonus ? `（含额外成功 +${bonus}）` : ''}`,
-        res.trace,
+        `${prev.pl.name} 掷出【${w.name}】伤害 (Step ${dmgStep}) → ${totalDmg} 点${bonusNote}`,
+        fullTrace,
         'hit',
         '',
         prev.gmBlind
@@ -771,7 +808,8 @@ export default function App() {
 
     const castExtraThreads = Math.max(0, curThreads - reqThreads);
     const useKarma = wantKarma && state.pl.karmaCurrent > 0;
-    const sc = ED4Engine.getSpellcastingStep(state.pl, getPlDerivedView(state.pl));
+    const derived = getPlDerivedView(state.pl);
+    const sc = ED4Engine.getSpellcastingStep(state.pl, derived);
     const { dn, targetLabel } = resolveCastingDn({
       spell: sp,
       manualTmd,
@@ -780,7 +818,7 @@ export default function App() {
       getMonsterMd: (m) => getMonsterEffectiveDef(m, 'md'),
     });
     const res = ED4Engine.rollStepTest(sc.step, { karma: useKarma, karmaDie: state.pl.karmaDie, dn, isAction: true });
-    const shouldOpenEffectModal = castExtraThreads > 0 && (dn === null || res.isSuccess);
+    const shouldOpenEffectModal = (castExtraThreads > 0 || sp.effectType === 'buff') && (dn === null || res.isSuccess);
 
     setState((prev) => {
       const pl = { ...prev.pl };
@@ -790,7 +828,7 @@ export default function App() {
       const nextPendingMap = { ...prev.pendingSpellCasts };
 
       if (dn === null) {
-        const needsModal = castExtraThreads > 0 || ED4Engine.hasSpellEffectRoll(sp);
+        const needsModal = castExtraThreads > 0 || ED4Engine.hasSpellEffectRoll(sp) || sp.effectType === 'buff';
         if (needsModal) {
           nextPendingMap[instanceId] = {
             instanceId,
@@ -836,7 +874,10 @@ export default function App() {
       }
 
       const needsEffectResolution =
-        castExtraThreads > 0 || ED4Engine.hasSpellEffectRoll(sp) || (res.extraSuccesses > 0 && sp.extraEffectStepPerThread === 2);
+        castExtraThreads > 0 ||
+        ED4Engine.hasSpellEffectRoll(sp) ||
+        sp.effectType === 'buff' ||
+        (res.extraSuccesses > 0 && sp.extraEffectStepPerThread === 2);
 
       if (needsEffectResolution) {
         nextPendingMap[instanceId] = {
@@ -850,13 +891,23 @@ export default function App() {
         delete nextPendingMap[instanceId];
       }
 
+      const immediateDurPlan = !needsEffectResolution
+        ? computeSpellDurationPlan({
+            spell: sp,
+            spellcastingRank: sc.rank,
+            selectedExtraOptions: [],
+            castingExtraSuccesses: res.extraSuccesses,
+            supportsCastingExtraStep: false,
+          })
+        : null;
+
       const extraThreadHint = castExtraThreads > 0 ? ` · 额外脉路 ${castExtraThreads} 条` : '';
       const suffixHint = needsEffectResolution
-        ? '，请点击「结算效果」结算明细'
-        : `，法术效果已直接生效（${sp.effectFormula}）`;
+        ? '，请在弹窗或「结算效果」确认生效细节'
+        : `，效果立即生效（${sp.effectFormula}${immediateDurPlan?.hasExtension ? `；${immediateDurPlan.summaryText}` : ''}）`;
       const log = makeLog(
         `${pl.name} 对 ${targetLabel} 成功施放【${sp.nameCn}】 (${res.total} vs ${dn}，额外成功 +${res.extraSuccesses}${extraThreadHint})${suffixHint}`,
-        res.trace,
+        immediateDurPlan?.hasExtension ? `${res.trace} | ${immediateDurPlan.summaryText}` : res.trace,
         'hit',
         `${pl.name} 成功施放【${sp.nameCn}】（额外成功 +${res.extraSuccesses}）${suffixHint}`,
         prev.gmBlind
@@ -869,7 +920,7 @@ export default function App() {
       };
     });
 
-    // 若施法时编入了额外脉路且施法成功（或仅掷骰），自动弹出效果结算弹窗供玩家选择额外脉路选项
+    // 若施法时编入了额外脉路或为增益法术，自动弹出效果结算弹窗供选择强化/持续时间与挂载目标
     if (shouldOpenEffectModal) {
       setSpellEffectModal({ instanceId, initialKarma: wantKarma });
     }
@@ -879,7 +930,12 @@ export default function App() {
     setSpellEffectModal({ instanceId, initialKarma: wantKarma });
   };
 
-  const handleConfirmSpellEffect = (instanceId: string, selectedExtraOptions: string[], wantKarma: boolean) => {
+  const handleConfirmSpellEffect = (
+    instanceId: string,
+    selectedExtraOptions: string[],
+    wantKarma: boolean,
+    buffTarget?: SpellBuffTargetChoice
+  ) => {
     setState((prev) => {
       const rawSp = prev.pl.spells.find((s: any) => s.instanceId === instanceId);
       if (!rawSp) return prev;
@@ -911,21 +967,67 @@ export default function App() {
       const nextPendingMap = { ...prev.pendingSpellCasts };
       delete nextPendingMap[instanceId];
 
-      const detailParts = [plan.breakdownText];
-      if (plan.tagsText) detailParts.push(`额外脉路标签：${plan.tagsText}`);
+      // 轻量 Buff 挂载处理（仅作用于当前角色或指定装备）
+      let nextActiveBuffs: ActiveBuff[] = Array.isArray(pl.activeBuffs) ? pl.activeBuffs : [];
+      let buffMountMsg = '';
+      if (sp.effectType === 'buff') {
+        if (buffTarget?.attachMode !== 'external') {
+          const entry = buildActiveBuffEntry({
+            spell: sp,
+            plan,
+            targetItemId: buffTarget?.targetItemId,
+            targetItemName: buffTarget?.targetItemName,
+          });
+          nextActiveBuffs = [
+            ...nextActiveBuffs.filter(
+              (b) => !(b.spellId === entry.spellId && (b.targetItemId || '') === (entry.targetItemId || ''))
+            ),
+            entry,
+          ];
+          buffMountMsg = entry.targetItemName ? `已挂载至【${entry.targetItemName}】` : `已挂载至【${pl.name}】`;
+        } else {
+          buffMountMsg = '作用于队友/外部目标';
+        }
+      }
+
+      const cleanDetailParts: string[] = [];
+      if (plan.hasBaseRoll && plan.baseStep !== null) {
+        cleanDetailParts.push(plan.breakdownText);
+      } else {
+        cleanDetailParts.push(plan.playerSummaryText);
+      }
+      if (plan.durationPlan.rawDuration !== '-') {
+        cleanDetailParts.push(plan.durationPlan.summaryText);
+      }
+      if (plan.hasBaseRoll && plan.effectEnhancements.length > 0) {
+        cleanDetailParts.push(
+          `附加脉路效果：${plan.effectEnhancements
+            .map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label))
+            .join('、')}`
+        );
+      }
+      if (buffMountMsg) {
+        cleanDetailParts.push(buffMountMsg);
+      }
 
       if (!plan.hasBaseRoll || plan.finalStep === null) {
-        const bonusNote = plan.totalBonusStep > 0 ? `（附带 +${plan.totalBonusStep} 效果阶数/STEP）` : '';
+        const headlineSummary = plan.playerSummaryText.replace(/^本次生效强化：/, '');
+        const durationSuffix = plan.durationPlan.hasExtension
+          ? `（${plan.durationPlan.summaryText}）`
+          : plan.durationPlan.rawDuration !== '-'
+            ? `（持续 ${plan.durationPlan.finalDisplay}）`
+            : '';
+        const mountSuffix = buffMountMsg ? ` · ${buffMountMsg}` : '';
         const log = makeLog(
-          `${pl.name} 结算【${sp.nameCn}】效果：${sp.effectFormula}${bonusNote}`,
-          detailParts.join(' | '),
+          `${pl.name} 结算【${sp.nameCn}】：${headlineSummary}${durationSuffix}${mountSuffix}`,
+          cleanDetailParts.join(' | '),
           'hit',
           '',
           prev.gmBlind
         );
         return {
           ...prev,
-          pl: { ...pl, spells: nextSpells },
+          pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
           pendingSpellCasts: nextPendingMap,
           logs: [log, ...prev.logs].slice(0, 60),
         };
@@ -933,8 +1035,8 @@ export default function App() {
 
       const res = ED4Engine.rollStepTest(plan.finalStep, { karma: useKarma, karmaDie: pl.karmaDie, isAction: false });
       const total = res.total;
-      detailParts.push(res.trace);
-      const detailSummary = detailParts.join(' | ');
+      cleanDetailParts.push(res.trace);
+      const detailSummary = cleanDetailParts.join(' | ');
 
       if (sp.effectType === 'damage') {
         if (prev.targetValue === 'aoe:all') {
@@ -952,12 +1054,12 @@ export default function App() {
             const nextMonsters = prev.monsters.map((m) => {
               if (m.currentDamage >= m.death) return m;
               const outcome = applyDamageToMonsterPure(m, total, sp.armorType || 'ma', false, false, `${pl.name}【${sp.nameCn}】`);
-              newLogs.unshift(makeLog(outcome.log.text, `${outcome.log.detail} | ${plan.breakdownText}`, outcome.log.type, outcome.log.blindText, prev.gmBlind));
+              newLogs.unshift(makeLog(outcome.log.text, `${outcome.log.detail} | ${detailSummary}`, outcome.log.type, outcome.log.blindText, prev.gmBlind));
               return outcome.monster;
             });
             return {
               ...prev,
-              pl: { ...pl, spells: nextSpells },
+              pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
               pendingSpellCasts: nextPendingMap,
               monsters: nextMonsters,
               logs: [...newLogs, ...prev.logs].slice(0, 60),
@@ -977,7 +1079,7 @@ export default function App() {
             );
             return {
               ...prev,
-              pl: { ...pl, spells: nextSpells },
+              pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
               pendingSpellCasts: nextPendingMap,
               monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
               logs: [log, ...prev.logs].slice(0, 60),
@@ -987,7 +1089,7 @@ export default function App() {
       }
 
       const log = makeLog(
-        `${pl.name} 结算【${sp.nameCn}】效果 (Step ${plan.finalStep}) → ${total}`,
+        `${pl.name} 结算【${sp.nameCn}】效果 (Step ${plan.finalStep}) → ${total}${buffMountMsg ? ` · ${buffMountMsg}` : ''}`,
         detailSummary,
         'hit',
         '',
@@ -995,7 +1097,7 @@ export default function App() {
       );
       return {
         ...prev,
-        pl: { ...pl, spells: nextSpells },
+        pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
         pendingSpellCasts: nextPendingMap,
         logs: [log, ...prev.logs].slice(0, 60),
       };

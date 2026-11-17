@@ -1,6 +1,12 @@
 import * as XLSX from 'xlsx';
 import ED4Engine from './ed4_engine.js';
-import { hydrateSpellsWithDb, type PendingSpellCast } from './spellRules';
+import {
+  computeActiveBuffModifiers,
+  hydrateSpellsWithDb,
+  type ActiveBuff,
+  type ActiveBuffModifiers,
+  type PendingSpellCast,
+} from './spellRules';
 
 // 为 ed4_engine.js 中的 parseExcelWorkbook 提供全局 XLSX
 (globalThis as any).XLSX = XLSX;
@@ -53,6 +59,7 @@ export function createInitialState() {
       { id: 'w2', name: '匕首', dmgStep: 2 },
     ],
     spells: [] as any[],
+    activeBuffs: [] as ActiveBuff[],
     gear: [] as any[],
     threadItems: [] as any[],
     legend: { total: 0, current: 0, status: '', renown: '', reputation: '' } as any,
@@ -87,16 +94,51 @@ export function createInitialState() {
   };
 }
 
-// 衍生角色数值（直接调用 ED4Engine.calcPlDerived 并补充界面展示字段）
+// 衍生角色数值（直接调用 ED4Engine.calcPlDerived 并动态叠加当前激活 Buff 增益，不修改基础值）
 export function getPlDerivedView(pl: any) {
   const d = ED4Engine.calcPlDerived(pl);
+  const activeBuffs: ActiveBuff[] = Array.isArray(pl?.activeBuffs) ? pl.activeBuffs : [];
+  const buffBonuses: ActiveBuffModifiers = computeActiveBuffModifiers(activeBuffs, pl);
+  const pd = Math.max(1, d.pd + buffBonuses.pd);
+  const md = Math.max(1, d.md + buffBonuses.md);
+  const sd = Math.max(1, d.sd + buffBonuses.sd);
+  const pa = Math.max(0, d.pa + buffBonuses.pa);
+  const ma = Math.max(0, d.ma + buffBonuses.ma);
+  const initStep = Math.max(1, d.initStep + buffBonuses.init);
+  const woundThreshold = Math.max(1, d.woundThreshold + buffBonuses.woundThreshold);
+  const moveDisplay = (() => {
+    if (!buffBonuses.move) return String(d.race.move);
+    if (typeof d.race.move === 'number') return String(d.race.move + buffBonuses.move);
+    const parts = String(d.race.move).split('/');
+    if (parts.length === 2 && !isNaN(Number(parts[0])) && !isNaN(Number(parts[1]))) {
+      return `${Number(parts[0]) + buffBonuses.move}/${Number(parts[1]) + buffBonuses.move}`;
+    }
+    return `${d.race.move} (+${buffBonuses.move})`;
+  })();
   const remainingPoints = 25 - d.spentPoints;
   const effUncon = Math.max(1, d.uncon - (Number(pl.bloodDamage) || 0));
   const effDeath = Math.max(1, d.death - (Number(pl.bloodDamage) || 0));
   const strIdx = Math.min(30, Math.max(1, d.attrs.STR + (pl.raceId === 'dwarf' ? 2 : 0))) - 1;
   const carry = ED4Engine.CARRY_TABLE[strIdx];
   const durabilityTotal = d.prog.disc.durability * pl.circle + (Number(pl.durabilityBonus) || 0);
-  return { ...d, remainingPoints, effUncon, effDeath, carry, durabilityTotal };
+  return {
+    ...d,
+    pd,
+    md,
+    sd,
+    pa,
+    ma,
+    initStep,
+    woundThreshold,
+    moveDisplay,
+    buffBonuses,
+    activeBuffs,
+    remainingPoints,
+    effUncon,
+    effDeath,
+    carry,
+    durabilityTotal,
+  };
 }
 
 // 动作修正（直接调用 ED4Engine.getPlActionMod）
