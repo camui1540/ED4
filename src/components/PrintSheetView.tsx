@@ -28,7 +28,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const PRINT_PALETTE = {
   bw: {
-    page: 'bg-white px-1 text-neutral-900',
+    page: 'bg-white text-neutral-900',
     headerBorder: 'border-neutral-900',
     sectionBorder: 'border-neutral-800',
     subLine: 'border-neutral-400',
@@ -44,7 +44,7 @@ const PRINT_PALETTE = {
     badge: 'border-neutral-400 text-neutral-900',
   },
   theme: {
-    page: 'bg-background p-3 text-foreground',
+    page: 'bg-background text-foreground',
     headerBorder: 'border-primary',
     sectionBorder: 'border-primary',
     subLine: 'border-border',
