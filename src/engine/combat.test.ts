@@ -382,20 +382,20 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
   const inlineColonTxt = '角色名：行者\n背景：单行起点\n后续第二行';
   assert.equal(ED4Engine.parseTxtSheet(inlineColonTxt).background, '单行起点\n后续第二行');
 
-  // 2. Excel export -> L44 lossless round-trip
+  // 2. Excel export -> I44 lossless round-trip
   const wbExport = buildCharacterWorkbook(richPl);
-  assert.equal(wbExport.Sheets['角色卡']?.L44?.v, bgStory);
+  assert.equal(wbExport.Sheets['角色卡']?.I44?.v, bgStory);
   const wbBytes = XLSX.write(wbExport, { bookType: 'xlsx', type: 'array' });
   const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(wbBytes, { type: 'array' })));
   assert.equal(fromXlsx.background, bgStory);
 
-  // 3. Excel L44 merged-cell fallback (merge starts at K44:M48, covering L44 without header label)
+  // 3. Excel I44 merged-cell fallback (merge starts at H44:J48, covering I44 without header label)
   const mergedWs: XLSX.WorkSheet = {
     A2: { t: 's', v: '角色名' },
     B2: { t: 's', v: '卡林' },
-    K44: { t: 's', v: '合并单元格多行\n背景故事' },
-    '!merges': [{ s: { r: 43, c: 10 }, e: { r: 47, c: 12 } }],
-    '!ref': 'A1:M48',
+    H44: { t: 's', v: '合并单元格多行\n背景故事' },
+    '!merges': [{ s: { r: 43, c: 7 }, e: { r: 47, c: 9 } }],
+    '!ref': 'A1:J48',
   };
   const mergedWb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(mergedWb, mergedWs, 'Sheet1');
@@ -407,8 +407,8 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
     B2: { t: 's', v: '艾拉' },
     A50: { t: 's', v: '人物背景' },
     A51: { t: 's', v: '标签下方文本' },
-    L44: { t: 's', v: '不应优先使用的L44' },
-    '!ref': 'A1:L52',
+    I44: { t: 's', v: '不应优先使用的I44' },
+    '!ref': 'A1:I52',
   };
   const labeledWb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(labeledWb, labeledWs, 'Sheet1');
@@ -424,35 +424,35 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
   });
   assert.equal(syncRow.background, bgStory);
 
-  // 6. Excel L44 with zero "背景" text anywhere (including _x000D_, stale !ref, cell.w-only, stray empty label, multi-sheet)
-  const plainL44Wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(plainL44Wb, {
+  // 6. Excel I44 with zero "背景" text anywhere (including _x000D_, stale !ref, cell.w-only, stray empty label, multi-sheet)
+  const plainI44Wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(plainI44Wb, {
     A2: { t: 's', v: '角色名' },
     B2: { t: 's', v: '无标题行者' },
-    L44: { t: 's', v: '纯L44第一行_x000D_\n纯L44第二行' },
+    I44: { t: 's', v: '纯I44第一行_x000D_\n纯I44第二行' },
     '!ref': 'A1:D10',
   }, 'Sheet1');
-  assert.equal(ED4Engine.parseExcelWorkbook(plainL44Wb).background, '纯L44第一行\n纯L44第二行');
+  assert.equal(ED4Engine.parseExcelWorkbook(plainI44Wb).background, '纯I44第一行\n纯I44第二行');
 
   const wOnlyWb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wOnlyWb, {
-    L44: { t: 's', v: '', w: '来自w字段的背景' },
-    '!ref': 'A1:L44',
+    I44: { t: 's', v: '', w: '来自w字段的背景' },
+    '!ref': 'A1:I44',
   }, 'Sheet1');
   assert.equal(ED4Engine.parseExcelWorkbook(wOnlyWb).background, '来自w字段的背景');
 
   const emptyAnchorFallbackWb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(emptyAnchorFallbackWb, {
     A10: { t: 's', v: '背景' },
-    L44: { t: 's', v: '空标签时兜底L44内容' },
-    '!ref': 'A1:L44',
+    I44: { t: 's', v: '空标签时兜底I44内容' },
+    '!ref': 'A1:I44',
   }, 'Sheet1');
-  assert.equal(ED4Engine.parseExcelWorkbook(emptyAnchorFallbackWb).background, '空标签时兜底L44内容');
+  assert.equal(ED4Engine.parseExcelWorkbook(emptyAnchorFallbackWb).background, '空标签时兜底I44内容');
 
   const multiSheetWb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(multiSheetWb, { A2: { t: 's', v: '角色名' }, B2: { t: 's', v: '跨表角色' }, '!ref': 'A1:B2' }, '主表');
-  XLSX.utils.book_append_sheet(multiSheetWb, { L44: { t: 's', v: '第二页L44背景' }, '!ref': 'A1:L44' }, '附加');
-  assert.equal(ED4Engine.parseExcelWorkbook(multiSheetWb).background, '第二页L44背景');
+  XLSX.utils.book_append_sheet(multiSheetWb, { I44: { t: 's', v: '第二页I44背景' }, '!ref': 'A1:I44' }, '附加');
+  assert.equal(ED4Engine.parseExcelWorkbook(multiSheetWb).background, '第二页I44背景');
 });
 
 

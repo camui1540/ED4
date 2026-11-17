@@ -897,7 +897,7 @@ function matchRaceId(raw) {
           other: readNext('其他') || ''
         };
       }
-      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未命中或为空时自动回退读取 L44）
+      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未命中或为空时自动回退读取 I44）
       let bgAnchor = null;
       const bgSearchR = Math.max(maxR, 60);
       const bgSearchC = Math.max(maxC, 20);
@@ -917,11 +917,11 @@ function matchRaceId(raw) {
         data.background = readMergedText(bgAnchor.r, rightCol) || readMergedText(belowRow, bgAnchor.c);
       }
       if (!data.background) {
-        data.background = readMergedText(44, 12);
+        data.background = readMergedText(44, 9);
       }
       if (!data.background) {
         for (const sName of wb.SheetNames) {
-          const hit = readSheetMergedText(wb.Sheets[sName], 44, 12);
+          const hit = readSheetMergedText(wb.Sheets[sName], 44, 9);
           if (hit) {
             data.background = hit;
             break;

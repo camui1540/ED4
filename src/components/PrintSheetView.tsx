@@ -104,7 +104,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               {pl.name || '未命名角色'}
             </h1>
             <span className={`font-noto-serif text-sm font-semibold ${c.body}`}>
-              {d.race.name} · {prog.disc.name} · 第 <span className="font-mono font-bold">{pl.circle}</span> 环
+              {d.race.name} · {prog.disc.name} · <span className="font-mono font-bold">{pl.circle}</span>环
             </span>
           </div>
           <div className={`font-mono text-xs font-semibold ${c.muted}`}>
