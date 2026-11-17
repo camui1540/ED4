@@ -111,12 +111,12 @@ export function RightSidebar(props: RightSidebarProps) {
   };
 
   return (
-    <div className="flex h-full flex-col gap-3">
+    <div className="flex flex-col gap-3">
       {/* GM 广播 BGM 播放器 */}
       <BgmPlayer roomSession={fallbackRoomSession} />
 
       {/* 先攻追踪 */}
-      <section className="tactile-card p-3">
+      <section className="tactile-card shrink-0 p-3">
         <div className="mb-2 flex items-center justify-between text-xs">
           <span className="font-serif text-sm font-semibold text-card-foreground">先攻追踪</span>
           <span className="text-muted-foreground tabular-nums">第 {round} 轮</span>
@@ -216,7 +216,7 @@ export function RightSidebar(props: RightSidebarProps) {
 
       {/* 联机队友实时状态 */}
       {roomSession?.connected && roomCharacters.length > 0 && (
-        <section className="tactile-card p-3">
+        <section className="tactile-card shrink-0 p-3">
           <div className="mb-2 flex items-center justify-between text-xs">
             <span className="font-serif text-sm font-semibold text-card-foreground">联机成员状态</span>
             <span className="font-mono text-[10px] text-muted-foreground">{roomCharacters.length} 人</span>
@@ -278,7 +278,7 @@ export function RightSidebar(props: RightSidebarProps) {
 
       {/* 待确认反应 */}
       {pendingReaction && (
-        <section className="tactile-card border-primary p-3 text-xs">
+        <section className="tactile-card shrink-0 border-primary p-3 text-xs">
           <div className="mb-1 font-serif text-sm font-semibold text-foreground">
             待确认反应：{pendingReaction.attackerName} → {pendingReaction.targetName}
           </div>
@@ -304,15 +304,15 @@ export function RightSidebar(props: RightSidebarProps) {
       )}
 
       {/* 自由检定与战报 */}
-      <section className="tactile-card flex min-h-0 flex-1 flex-col p-3">
-        <div className="mb-2 flex items-center justify-between text-xs">
+      <section className="tactile-card flex h-[440px] shrink-0 flex-col overflow-hidden p-3 lg:h-[calc(100vh-15.5rem)] lg:min-h-[360px]">
+        <div className="mb-2 flex shrink-0 items-center justify-between text-xs">
           <span className="font-serif text-sm font-semibold text-card-foreground">自由检定与战报</span>
           <button type="button" onClick={onClearLogs} className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer">
             清空
           </button>
         </div>
 
-        <div className="mb-2.5 flex flex-wrap items-center gap-1.5 border-b border-border pb-2.5">
+        <div className="mb-2.5 flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border pb-2.5">
           <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <span>Step</span>
             <input
@@ -345,7 +345,7 @@ export function RightSidebar(props: RightSidebarProps) {
           </button>
         </div>
 
-        <div className="min-h-48 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
           {logs.length === 0 ? (
             <div className="py-4 text-center text-xs text-muted-foreground">暂无战报记录</div>
           ) : (

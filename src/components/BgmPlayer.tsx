@@ -578,7 +578,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
       className={
         isFloating
           ? 'tactile-card fixed z-50 flex w-[380px] max-w-[calc(100vw-24px)] flex-col gap-2 p-3 shadow-lg print:hidden'
-          : 'tactile-card flex flex-col gap-2 p-3'
+          : 'tactile-card flex shrink-0 flex-col gap-2 p-3'
       }
     >
       {/* 标题栏（悬浮时支持自由拖拽） */}
