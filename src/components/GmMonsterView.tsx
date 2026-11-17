@@ -220,10 +220,10 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                   <div className="mb-1.5 flex items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-1.5 text-xs">
                       <b className="text-foreground">{m.name}</b>
-                      {isDead && <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">死亡</span>}
-                      {m.knockedDown && <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">倒地</span>}
-                      {m.blindsided && <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">盲区</span>}
-                      {m.harried && <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">受扰</span>}
+                      {isDead && <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">死亡</span>}
+                      {m.knockedDown && <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">倒地</span>}
+                      {m.blindsided && <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">盲区</span>}
+                      {m.harried && <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">受扰</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button

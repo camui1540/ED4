@@ -442,7 +442,7 @@ export function PlSheetView(props: PlSheetViewProps) {
             onClick={() => onRollQuickCheck('jumpup')}
             className={`${btnCls} tactile-btn`}
           >
-            跃起 (2劳累)
+            跃起 (2负荷)
           </button>
         </div>
       </section>
@@ -587,11 +587,11 @@ export function PlSheetView(props: PlSheetViewProps) {
 
           <div className="mb-2 flex flex-wrap gap-1.5">
             {[
-              ['aggressive', '猛烈攻击 (+3攻伤/-3防/1劳累)'],
+              ['aggressive', '猛烈攻击 (+3攻伤/-3防/1负荷)'],
               ['defensive', '防御姿态 (+3防/-3检定)'],
               ['knockdown', '击倒攻击'],
               ['stun', '震慑攻击'],
-              ['splitMove', '分散移动 (1劳累)'],
+              ['splitMove', '分散移动 (1负荷)'],
               ...(d.race.canTailAttack ? [['tailAttack', '尾击 (-2检定)']] : []),
             ].map(([key, label]) => (
               <button
@@ -702,8 +702,8 @@ export function PlSheetView(props: PlSheetViewProps) {
                             <span className="font-medium text-foreground">{t.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
                             {t.strain ? (
-                              <span className="ml-1 rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">
-                                劳累{t.strain}
+                              <span className="ml-1 rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">
+                                负荷{t.strain}
                               </span>
                             ) : null}
                           </td>
@@ -807,7 +807,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 value={newTalent.strain}
                 onChange={(e) => setNewTalent((s) => ({ ...s, strain: Number(e.target.value) || 0 }))}
                 className={`${inputCls} w-12 tabular-nums`}
-                title="劳累值"
+                title="负荷"
               />
               <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                 <input
@@ -858,7 +858,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                         <tr key={sk.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
                             {sk.category ? (
-                              <span className="mr-1 font-pixel text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
+                              <span className="mr-1 font-serif text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
                             ) : null}
                             <span className="font-medium text-foreground">{sk.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
@@ -1107,7 +1107,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="cursor-grab text-muted-foreground">⠿</span>
                             <b className="font-serif text-foreground">{sp.nameCn}</b>
-                            <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground tabular-nums">
+                            <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground tabular-nums">
                               {sp.circle}环
                             </span>
                             <span className="text-[11px] text-foreground tabular-nums">
@@ -1143,7 +1143,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                             </button>
                           </div>
                         </div>
-                        <div className="mb-2 font-prose text-[11px] text-muted-foreground">
+                        <div className="mb-2 font-pixel text-[11px] text-muted-foreground">
                           {sp.range} · {sp.duration}
                           {sp.aoe ? ` · ${sp.aoe}` : ''} — {sp.desc}
                         </div>
@@ -1225,7 +1225,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="cursor-grab text-muted-foreground">⠿</span>
                           <b className="font-serif text-foreground">{sp.nameCn}</b>
-                          <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground tabular-nums">
+                          <span className="rounded border border-border px-1 font-serif text-[10px] text-muted-foreground tabular-nums">
                             {sp.circle}环
                           </span>
                           <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -1251,7 +1251,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                           </button>
                         </div>
                       </div>
-                      <div className="font-prose text-[11px] text-muted-foreground">
+                      <div className="font-pixel text-[11px] text-muted-foreground">
                         {sp.range} · {sp.duration} — {sp.desc}
                       </div>
                     </div>
@@ -1513,7 +1513,7 @@ export function PlSheetView(props: PlSheetViewProps) {
           value={pl.background || ''}
           onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
           placeholder="填写角色出身、经历、外貌特征与羁绊..."
-          className="field-sizing-content font-prose min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+          className="field-sizing-content font-pixel min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
         />
       </section>
     </div>

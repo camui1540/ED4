@@ -106,7 +106,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             <span className={`font-display text-sm font-semibold ${c.body}`}>
               {d.race.name} · {prog.disc.name}
             </span>
-            <span className={`font-pixel rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
+            <span className={`font-serif rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
               {pl.circle}环
             </span>
           </div>
@@ -237,7 +237,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 <th className="py-1 font-semibold">属性</th>
                 <th className="py-1 font-semibold">等级</th>
                 <th className="py-1 font-semibold">Step</th>
-                <th className="py-1 text-right font-semibold">骰池/劳累</th>
+                <th className="py-1 text-right font-semibold">骰池/负荷</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${c.rowDivide}`}>
@@ -251,7 +251,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                     <td className="py-1 pr-1 font-mono">{t.rank}</td>
                     <td className={`py-1 pr-1 font-mono font-bold ${c.title}`}>Step {effStep}</td>
                     <td className={`py-1 text-right font-mono ${c.muted}`}>
-                      {dice}{t.strain ? ` · 劳累${t.strain}` : ''}
+                      {dice}{t.strain ? ` · 负荷${t.strain}` : ''}
                     </td>
                   </tr>
                 );
@@ -339,13 +339,13 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                     <div className="flex items-center justify-between gap-1">
                       <b className={`font-serif ${c.title}`}>{sp.nameCn}</b>
                       <span className={`font-mono font-bold ${c.heading}`}>
-                        <span className="font-pixel">{sp.circle}环</span> · 已编织脉路 {sp.wovenThreads || 0}/{sp.threads || 0}
+                        <span className="font-serif">{sp.circle}环</span> · 已编织脉路 {sp.wovenThreads || 0}/{sp.threads || 0}
                       </span>
                     </div>
                     <div className={`mt-0.5 font-mono text-[10px] ${c.muted}`}>
                       编织 {sp.weavingBase}/{sp.weavingHigh} · 施法 {sp.castingType === 'fixed' ? sp.castingDn : sp.aoe ? '群体TMD' : 'TMD'} · 效果 {sp.effectFormula}
                     </div>
-                    <div className={`mt-0.5 font-prose text-[10px] ${c.subtle}`}>
+                    <div className={`mt-0.5 font-pixel text-[10px] ${c.subtle}`}>
                       {sp.range} · {sp.duration}{sp.aoe ? ` · ${sp.aoe}` : ''} — {sp.desc}
                     </div>
                   </div>
@@ -363,10 +363,10 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                     <div className="flex items-center justify-between">
                       <b className={`font-serif ${c.title}`}>{sp.nameCn}</b>
                       <span className="font-mono">
-                        <span className="font-pixel">{sp.circle}环</span> · {sp.threads || 0}脉路 · 编织{sp.weavingBase}
+                        <span className="font-serif">{sp.circle}环</span> · {sp.threads || 0}脉路 · 编织{sp.weavingBase}
                       </span>
                     </div>
-                    <div className={`font-prose ${c.subtle}`}>{sp.effectFormula} · {sp.range} · {sp.duration}</div>
+                    <div className={`font-pixel ${c.subtle}`}>{sp.effectFormula} · {sp.range} · {sp.duration}</div>
                   </div>
                 ))}
               </div>
@@ -388,7 +388,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               {pl.gear.map((g: any, i: number) => (
                 <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
                   <span>
-                    <span className={`font-pixel text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
+                    <span className={`font-serif text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
                     <b className={c.title}>{g.name}</b>
                     {g.rank && g.rank !== '-' ? ` (${g.rank})` : ''}
                   </span>
@@ -408,7 +408,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               {pl.threadItems.map((ti: any, i: number) => (
                 <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
                   <span>
-                    <span className={`font-pixel text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
+                    <span className={`font-serif text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
                     <b className={c.title}>{ti.name}</b>
                     {ti.type && ti.type !== '-' ? ` (${ti.type})` : ''}
                   </span>
@@ -434,7 +434,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         <h2 className={`font-serif break-inside-avoid mb-1.5 border-b pb-1 text-xs font-bold ${c.subLine} ${c.heading}`}>
           人物背景
         </h2>
-        <div className={`font-prose whitespace-pre-wrap break-words text-[11px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
+        <div className={`font-pixel whitespace-pre-wrap break-words text-[11px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
           {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
         </div>
       </section>

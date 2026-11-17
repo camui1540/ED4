@@ -51,8 +51,7 @@
   --font-serif: "Source Han Serif CN for Display", Georgia, serif;
   --font-sans: "Sarasa Gothic SC", "Sarasa UI SC", system-ui, -apple-system, sans-serif;
   --font-ui: "Sarasa UI SC", "Sarasa Gothic SC", system-ui, -apple-system, sans-serif;
-  --font-prose: "LXGW Bright Medium", "Source Han Serif CN for Display", Georgia, serif;
-  --font-pixel: "Cubic 11", "JetBrains Mono", ui-monospace, monospace;
+  --font-pixel: "Cubic 11", "Source Han Serif CN for Display", "JetBrains Mono", ui-monospace, monospace;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* 微圆角（2px）+ 零模糊微粗野硬投影 */
@@ -115,8 +114,7 @@
   --font-serif: "Source Han Serif CN for Display", Georgia, serif;
   --font-sans: "Sarasa Gothic SC", "Sarasa UI SC", system-ui, -apple-system, sans-serif;
   --font-ui: "Sarasa UI SC", "Sarasa Gothic SC", system-ui, -apple-system, sans-serif;
-  --font-prose: "LXGW Bright Medium", "Source Han Serif CN for Display", Georgia, serif;
-  --font-pixel: "Cubic 11", "JetBrains Mono", ui-monospace, monospace;
+  --font-pixel: "Cubic 11", "Source Han Serif CN for Display", "JetBrains Mono", ui-monospace, monospace;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --radius: 0.125rem;
@@ -209,10 +207,6 @@
 
 @utility font-display {
   font-family: var(--font-display);
-}
-
-@utility font-prose {
-  font-family: var(--font-prose);
 }
 
 @utility font-pixel {

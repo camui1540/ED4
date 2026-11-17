@@ -478,7 +478,7 @@ export default function App() {
         const res = ED4Engine.rollStepTest(step, { dn: 6, isAction: true, karmaDie: pl.karmaDie });
         if (res.isSuccess) pl.statuses.knockedDown = false;
         const log = makeLog(
-          `${pl.name} 跃起（2 劳累，难度 6）→ ${res.isSuccess ? '成功起身' : '起身失败'} (${res.total})`,
+          `${pl.name} 跃起（2 负荷，难度 6）→ ${res.isSuccess ? '成功起身' : '起身失败'} (${res.total})`,
           res.trace,
           res.isSuccess ? 'hit' : 'fail',
           '',
@@ -571,7 +571,7 @@ export default function App() {
       }
 
       const res = ED4Engine.rollStepTest(step, { karma: useKarma, karmaDie: pl.karmaDie, dn, isAction: true });
-      const strainText = strainCost > 0 ? ` [劳累 +${strainCost}]` : '';
+      const strainText = strainCost > 0 ? ` [负荷 +${strainCost}]` : '';
       const tag = listType === 'skill' ? '技能' : '天赋';
 
       if (dn === null) {
@@ -993,12 +993,12 @@ export default function App() {
         nextPl.currentDamage += res.strainCost;
         if (res.avoided) {
           addedLogs.unshift(
-            makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1劳累）闪避成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
+            makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1负荷）闪避成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
           );
           return { ...prev, pl: nextPl, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
         }
         addedLogs.unshift(
-          makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1劳累）闪避失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
+          makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1负荷）闪避失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
         );
       }
 
@@ -1010,7 +1010,7 @@ export default function App() {
         nextPl.currentDamage += res.strainCost;
         if (res.riposted) {
           addedLogs.unshift(
-            makeLog(`${nextPl.name} 发动【反击】（2劳累）格挡成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
+            makeLog(`${nextPl.name} 发动【反击】（2负荷）格挡成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
           );
           if (res.rollResult.extraSuccesses >= 1 && pr.attackerType === 'gm') {
             const w = nextPl.weapons[0] || { name: '武器', dmgStep: 0 };
@@ -1027,7 +1027,7 @@ export default function App() {
           return { ...prev, pl: nextPl, monsters: nextMonsters, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
         }
         addedLogs.unshift(
-          makeLog(`${nextPl.name} 发动【反击】（2劳累）失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
+          makeLog(`${nextPl.name} 发动【反击】（2负荷）失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
         );
       }
 

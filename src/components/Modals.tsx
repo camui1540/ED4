@@ -447,7 +447,7 @@ export function RoomModal({
               <WifiOff className="h-4 w-4 text-muted-foreground" />
             )}
             <b className="font-serif text-sm text-card-foreground">联机大厅</b>
-            <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-pixel text-[10px] text-secondary-foreground">
+            <span className="rounded border border-border bg-secondary px-1.5 py-0.5 font-serif text-[10px] text-secondary-foreground">
               {isSupabaseConfigured ? (session.connected ? `房间 ${session.roomCode}` : '未进房') : '纯单机模式'}
             </span>
           </div>
@@ -611,7 +611,7 @@ export function RoomModal({
                   key={m.id}
                   className="inline-flex items-center gap-1 rounded border border-border bg-secondary px-2 py-0.5 text-[11px] text-secondary-foreground"
                 >
-                  <b className="font-pixel text-[10px] text-primary">{m.role.toUpperCase()}</b>
+                  <b className="font-serif text-[10px] text-primary">{m.role.toUpperCase()}</b>
                   <span>{m.nickname}</span>
                   {m.role === 'pl' && <span className="text-muted-foreground">({m.char_name})</span>}
                 </span>
