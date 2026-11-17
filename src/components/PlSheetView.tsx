@@ -359,7 +359,7 @@ export function PlSheetView(props: PlSheetViewProps) {
         <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           {Object.entries(ED4Engine.ATTR_NAMES).map(([k, label]) => (
             <div key={k} className="flex flex-col items-center rounded border border-border bg-background/70 p-2">
-              <div className="font-noto-serif text-xs font-semibold text-foreground/85">{label}</div>
+              <div className="text-xs font-semibold text-foreground/85">{label}</div>
               <div className="my-0.5 font-mono text-2xl font-bold leading-tight text-foreground tabular-nums">{d.attrs[k]}</div>
               <button
                 type="button"
@@ -386,7 +386,7 @@ export function PlSheetView(props: PlSheetViewProps) {
         {/* 衍生战斗数值 */}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
           <div className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
-            <div className="font-noto-serif text-xs font-semibold text-foreground/85">先攻</div>
+            <div className="text-xs font-semibold text-foreground/85">先攻</div>
             <div className="my-0.5 font-mono text-base font-bold text-foreground tabular-nums">
               Step {Math.max(1, d.initStep + actionMod)}
             </div>
@@ -402,7 +402,7 @@ export function PlSheetView(props: PlSheetViewProps) {
             ['秘法护甲', d.ma],
           ].map(([label, val]) => (
             <div key={String(label)} className="flex flex-col items-center justify-center rounded border border-border bg-background/70 p-2">
-              <div className="font-noto-serif text-xs font-semibold text-foreground/85">{label}</div>
+              <div className="text-xs font-semibold text-foreground/85">{label}</div>
               <div className="mt-0.5 font-mono text-2xl font-bold leading-tight text-foreground tabular-nums">{val}</div>
             </div>
           ))}
@@ -452,7 +452,7 @@ export function PlSheetView(props: PlSheetViewProps) {
         <section className={sectionCls}>
           <div className="mb-2.5 flex flex-wrap items-center justify-between gap-1 text-xs">
             <span className="font-serif text-sm font-semibold text-card-foreground">健康轨与资源</span>
-            <span className="font-noto-serif text-xs font-medium text-foreground/80 tabular-nums">
+            <span className="text-xs font-medium text-foreground/80 tabular-nums">
               意识丧失 <span className="font-mono font-semibold text-foreground">{d.effUncon}</span> / 死亡{' '}
               <span className="font-mono font-semibold text-foreground">{d.effDeath}</span>（负伤阈值{' '}
               <span className="font-mono font-semibold text-foreground">{d.woundThreshold}</span>）
@@ -460,7 +460,7 @@ export function PlSheetView(props: PlSheetViewProps) {
           </div>
           <div className="mb-3 grid grid-cols-3 gap-2">
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">当前伤害</div>
+              <div className="mb-1 text-xs font-semibold text-foreground/85">当前伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -480,7 +480,7 @@ export function PlSheetView(props: PlSheetViewProps) {
               </div>
             </div>
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">血魔法伤害</div>
+              <div className="mb-1 text-xs font-semibold text-foreground/85">血魔法伤害</div>
               <div className="flex items-center gap-1">
                 <button
                   type="button"
@@ -500,7 +500,7 @@ export function PlSheetView(props: PlSheetViewProps) {
               </div>
             </div>
             <div className="rounded border border-border bg-background/70 p-2">
-              <div className="mb-1 font-noto-serif text-xs font-semibold text-foreground/85">
+              <div className="mb-1 text-xs font-semibold text-foreground/85">
                 负伤 (<span className="font-mono">-{pl.wounds}</span>)
               </div>
               <div className="flex items-center gap-1">
@@ -523,14 +523,14 @@ export function PlSheetView(props: PlSheetViewProps) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs tabular-nums">
-            <span className="font-noto-serif font-semibold text-foreground/85">
+            <span className="font-semibold text-foreground/85">
               业力(<span className="font-mono">D{pl.karmaDie}</span>)：
               <b className="font-mono font-bold text-foreground">{pl.karmaCurrent}/{d.karmaMax}</b>
             </span>
             <button type="button" onClick={onKarmaRitual} className={btnSmCls}>
               业力仪式
             </button>
-            <span className="font-noto-serif font-semibold text-foreground/85">
+            <span className="font-semibold text-foreground/85">
               回复：<b className="font-mono font-bold text-foreground">{pl.recoveryCurrent}/{d.recoveryMax}</b>
             </span>
             <button
@@ -547,7 +547,7 @@ export function PlSheetView(props: PlSheetViewProps) {
         <section className={sectionCls}>
           <div className="mb-2.5 font-serif text-sm font-semibold text-card-foreground">护甲、盾牌与战斗选项</div>
           <div className="mb-2.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
+            <label className="flex flex-col gap-1 text-xs font-medium text-foreground/85">
               <span>物理护甲</span>
               <input
                 type="number"
@@ -556,7 +556,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
+            <label className="flex flex-col gap-1 text-xs font-medium text-foreground/85">
               <span>护甲先攻减值</span>
               <input
                 type="number"
@@ -565,7 +565,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
+            <label className="flex flex-col gap-1 text-xs font-medium text-foreground/85">
               <span>盾牌物防</span>
               <input
                 type="number"
@@ -574,7 +574,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} tabular-nums`}
               />
             </label>
-            <label className="flex flex-col gap-1 font-noto-serif text-xs font-medium text-foreground/85">
+            <label className="flex flex-col gap-1 text-xs font-medium text-foreground/85">
               <span>先攻修正</span>
               <input
                 type="number"
@@ -701,7 +701,11 @@ export function PlSheetView(props: PlSheetViewProps) {
                           <td className="py-1.5 pr-1">
                             <span className="font-medium text-foreground">{t.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
-                            {t.strain ? <span className="ml-1 text-[10px] text-muted-foreground">劳累{t.strain}</span> : null}
+                            {t.strain ? (
+                              <span className="ml-1 rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">
+                                劳累{t.strain}
+                              </span>
+                            ) : null}
                           </td>
                           <td className="py-1.5 pr-1 tabular-nums">
                             <div className="flex items-center gap-1">
@@ -854,7 +858,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                         <tr key={sk.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
                             {sk.category ? (
-                              <span className="mr-1 text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
+                              <span className="mr-1 font-pixel text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
                             ) : null}
                             <span className="font-medium text-foreground">{sk.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
@@ -1102,8 +1106,10 @@ export function PlSheetView(props: PlSheetViewProps) {
                         <div className="mb-1 flex items-start justify-between gap-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="cursor-grab text-muted-foreground">⠿</span>
-                            <b className="text-foreground">{sp.nameCn}</b>
-                            <span className="text-[11px] text-muted-foreground tabular-nums">{sp.circle}环</span>
+                            <b className="font-serif text-foreground">{sp.nameCn}</b>
+                            <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground tabular-nums">
+                              {sp.circle}环
+                            </span>
                             <span className="text-[11px] text-foreground tabular-nums">
                               脉路 {curThreads}/{reqThreads}
                             </span>
@@ -1137,7 +1143,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                             </button>
                           </div>
                         </div>
-                        <div className="mb-2 text-[11px] text-muted-foreground">
+                        <div className="mb-2 font-prose text-[11px] text-muted-foreground">
                           {sp.range} · {sp.duration}
                           {sp.aoe ? ` · ${sp.aoe}` : ''} — {sp.desc}
                         </div>
@@ -1218,8 +1224,10 @@ export function PlSheetView(props: PlSheetViewProps) {
                       <div className="mb-1 flex items-center justify-between gap-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="cursor-grab text-muted-foreground">⠿</span>
-                          <b className="text-foreground">{sp.nameCn}</b>
-                          <span className="text-[11px] text-muted-foreground tabular-nums">{sp.circle}环</span>
+                          <b className="font-serif text-foreground">{sp.nameCn}</b>
+                          <span className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground tabular-nums">
+                            {sp.circle}环
+                          </span>
                           <span className="text-[11px] text-muted-foreground tabular-nums">
                             {sp.threads}脉路 · 编织{sp.weavingBase}
                           </span>
@@ -1243,7 +1251,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                           </button>
                         </div>
                       </div>
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="font-prose text-[11px] text-muted-foreground">
                         {sp.range} · {sp.duration} — {sp.desc}
                       </div>
                     </div>
@@ -1505,7 +1513,7 @@ export function PlSheetView(props: PlSheetViewProps) {
           value={pl.background || ''}
           onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
           placeholder="填写角色出身、经历、外貌特征与羁绊..."
-          className="field-sizing-content min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+          className="field-sizing-content font-prose min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
         />
       </section>
     </div>

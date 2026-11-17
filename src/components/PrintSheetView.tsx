@@ -100,11 +100,14 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
       <header className={`break-inside-avoid mb-3 border-b-2 pb-2 ${c.headerBorder}`}>
         <div className="flex items-baseline justify-between gap-4">
           <div className="flex items-baseline gap-3">
-            <h1 className={`font-noto-serif text-2xl font-bold tracking-tight ${c.title}`}>
+            <h1 className={`font-display text-2xl font-bold tracking-tight ${c.title}`}>
               {pl.name || '未命名角色'}
             </h1>
-            <span className={`font-noto-serif text-sm font-semibold ${c.body}`}>
-              {d.race.name} · {prog.disc.name} · <span className="font-mono font-bold">{pl.circle}</span>环
+            <span className={`font-display text-sm font-semibold ${c.body}`}>
+              {d.race.name} · {prog.disc.name}
+            </span>
+            <span className={`font-pixel rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
+              {pl.circle}环
             </span>
           </div>
           <div className={`font-mono text-xs font-semibold ${c.muted}`}>
@@ -125,7 +128,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
 
       {/* 六维属性 + 衍生防御 */}
       <section className="break-inside-avoid mb-3">
-        <h2 className={`font-noto-serif mb-1.5 border-b pb-0.5 text-xs font-bold uppercase tracking-wider ${c.subLine} ${c.heading}`}>
+        <h2 className={`font-serif mb-1.5 border-b pb-0.5 text-xs font-bold uppercase tracking-wider ${c.subLine} ${c.heading}`}>
           核心属性与衍生战斗数值
         </h2>
         <div className="mb-2 grid grid-cols-6 gap-1.5">
@@ -134,7 +137,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             const dice = ED4Engine.getStepDice(stp).label;
             return (
               <div key={k} className={`break-inside-avoid rounded border p-1.5 text-center ${c.card}`}>
-                <div className={`font-noto-serif text-[11px] font-semibold ${c.body}`}>{label}</div>
+                <div className={`text-[11px] font-semibold ${c.body}`}>{label}</div>
                 <div className={`font-mono text-xl font-bold leading-tight ${c.title}`}>{d.attrs[k]}</div>
                 <div className={`font-mono text-[11px] font-bold ${c.heading}`}>Step {stp}</div>
                 <div className={`font-mono text-[10px] ${c.subtle}`}>{dice}</div>
@@ -145,7 +148,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
 
         <div className="grid grid-cols-6 gap-1.5">
           <div className={`break-inside-avoid rounded border p-1.5 text-center ${c.card}`}>
-            <div className={`font-noto-serif text-[11px] font-semibold ${c.body}`}>先攻</div>
+            <div className={`text-[11px] font-semibold ${c.body}`}>先攻</div>
             <div className={`font-mono text-base font-bold ${c.title}`}>Step {initEffStep}</div>
             <div className={`font-mono text-[10px] ${c.subtle}`}>{initDice}</div>
           </div>
@@ -157,7 +160,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             ['秘法护甲', d.ma],
           ].map(([label, val]) => (
             <div key={String(label)} className={`break-inside-avoid flex flex-col justify-center rounded border p-1.5 text-center ${c.card}`}>
-              <div className={`font-noto-serif text-[11px] font-semibold ${c.body}`}>{label}</div>
+              <div className={`text-[11px] font-semibold ${c.body}`}>{label}</div>
               <div className={`font-mono text-xl font-bold leading-tight ${c.title}`}>{val}</div>
             </div>
           ))}
@@ -168,22 +171,22 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
       <section className="break-inside-avoid mb-3 grid grid-cols-2 gap-3">
         <div className={`rounded border p-2 ${c.card}`}>
           <div className={`mb-1.5 flex items-center justify-between border-b pb-1 ${c.rowBorder}`}>
-            <span className={`font-noto-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
+            <span className={`font-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
             <span className={`font-mono text-[11px] ${c.muted}`}>
               动作修正 {actionMod >= 0 ? `+${actionMod}` : actionMod} Step
             </span>
           </div>
           <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
             <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={`font-noto-serif ${c.muted}`}>当前伤害</div>
+              <div className={c.muted}>当前伤害</div>
               <div className={`font-mono text-base font-bold ${c.title}`}>{pl.currentDamage}</div>
             </div>
             <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={`font-noto-serif ${c.muted}`}>血魔法伤害</div>
+              <div className={c.muted}>血魔法伤害</div>
               <div className={`font-mono text-base font-bold ${c.title}`}>{pl.bloodDamage}</div>
             </div>
             <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={`font-noto-serif ${c.muted}`}>负伤</div>
+              <div className={c.muted}>负伤</div>
               <div className={`font-mono text-base font-bold ${c.title}`}>{pl.wounds}</div>
             </div>
           </div>
@@ -199,7 +202,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         </div>
 
         <div className={`rounded border p-2 ${c.card}`}>
-          <div className={`mb-1.5 border-b pb-1 font-noto-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
+          <div className={`mb-1.5 border-b pb-1 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
             防具盾牌与当前激活状态
           </div>
           <div className={`space-y-1 text-[11px] ${c.body}`}>
@@ -224,7 +227,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
       {/* 天赋与技能（表行防分页腰斩） */}
       <section className="mb-3 grid grid-cols-2 gap-3">
         <div>
-          <h2 className={`font-noto-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
             门类天赋 ({(pl.talents || []).length})
           </h2>
           <table className="w-full border-collapse text-[11px]">
@@ -258,7 +261,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         </div>
 
         <div>
-          <h2 className={`font-noto-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
             角色技能 ({(pl.skills || []).length}) & 武器 ({(pl.weapons || []).length})
           </h2>
           <table className="mb-2 w-full border-collapse text-[11px]">
@@ -296,7 +299,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </table>
 
           <div className={`break-inside-avoid border-t pt-1.5 ${c.subLine}`}>
-            <div className={`font-noto-serif mb-1 text-[11px] font-bold ${c.heading}`}>武器伤害</div>
+            <div className={`font-serif mb-1 text-[11px] font-bold ${c.heading}`}>武器伤害</div>
             <div className="space-y-1 text-[11px]">
               {(pl.weapons || []).map((w: any) => {
                 const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (pl.options?.aggressive ? 3 : 0));
@@ -319,7 +322,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
       {(pl.spells || []).length > 0 && (
         <section className="mb-3">
           <div className={`mb-1.5 flex items-center justify-between border-b pb-0.5 ${c.sectionBorder}`}>
-            <h2 className={`font-noto-serif text-xs font-bold ${c.heading}`}>
+            <h2 className={`font-serif text-xs font-bold ${c.heading}`}>
               法术矩阵与法术书（常备 {matrixSpells.length} / 法术书 {grimoireSpells.length}）
             </h2>
             <span className={`font-mono text-[11px] ${c.muted}`}>
@@ -334,15 +337,15 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 {matrixSpells.map((sp: any) => (
                   <div key={sp.instanceId} className={`break-inside-avoid rounded border p-1.5 text-[11px] ${c.card}`}>
                     <div className="flex items-center justify-between gap-1">
-                      <b className={c.title}>{sp.nameCn}</b>
+                      <b className={`font-serif ${c.title}`}>{sp.nameCn}</b>
                       <span className={`font-mono font-bold ${c.heading}`}>
-                        {sp.circle}环 · 已编织脉路 {sp.wovenThreads || 0}/{sp.threads || 0}
+                        <span className="font-pixel">{sp.circle}环</span> · 已编织脉路 {sp.wovenThreads || 0}/{sp.threads || 0}
                       </span>
                     </div>
                     <div className={`mt-0.5 font-mono text-[10px] ${c.muted}`}>
                       编织 {sp.weavingBase}/{sp.weavingHigh} · 施法 {sp.castingType === 'fixed' ? sp.castingDn : sp.aoe ? '群体TMD' : 'TMD'} · 效果 {sp.effectFormula}
                     </div>
-                    <div className={`mt-0.5 text-[10px] ${c.subtle}`}>
+                    <div className={`mt-0.5 font-prose text-[10px] ${c.subtle}`}>
                       {sp.range} · {sp.duration}{sp.aoe ? ` · ${sp.aoe}` : ''} — {sp.desc}
                     </div>
                   </div>
@@ -358,10 +361,12 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 {grimoireSpells.map((sp: any) => (
                   <div key={sp.instanceId} className={`break-inside-avoid rounded border p-1.5 text-[10px] ${c.subCard}`}>
                     <div className="flex items-center justify-between">
-                      <b className={c.title}>{sp.nameCn}</b>
-                      <span className="font-mono">{sp.circle}环 · {sp.threads || 0}脉路 · 编织{sp.weavingBase}</span>
+                      <b className={`font-serif ${c.title}`}>{sp.nameCn}</b>
+                      <span className="font-mono">
+                        <span className="font-pixel">{sp.circle}环</span> · {sp.threads || 0}脉路 · 编织{sp.weavingBase}
+                      </span>
                     </div>
-                    <div className={c.subtle}>{sp.effectFormula} · {sp.range} · {sp.duration}</div>
+                    <div className={`font-prose ${c.subtle}`}>{sp.effectFormula} · {sp.range} · {sp.duration}</div>
                   </div>
                 ))}
               </div>
@@ -373,7 +378,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
       {/* 装备、脉路物品与传说财富 */}
       <section className="grid grid-cols-2 gap-3">
         <div className="break-inside-avoid">
-          <h2 className={`font-noto-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
             普通装备与防具 ({(pl.gear || []).length})
           </h2>
           {(pl.gear || []).length === 0 ? (
@@ -383,7 +388,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               {pl.gear.map((g: any, i: number) => (
                 <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
                   <span>
-                    <span className={`font-mono text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
+                    <span className={`font-pixel text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
                     <b className={c.title}>{g.name}</b>
                     {g.rank && g.rank !== '-' ? ` (${g.rank})` : ''}
                   </span>
@@ -395,7 +400,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         </div>
 
         <div className="break-inside-avoid">
-          <h2 className={`font-noto-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
             脉路物品 ({(pl.threadItems || []).length}) 与传说财富
           </h2>
           {(pl.threadItems || []).length > 0 && (
@@ -403,7 +408,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               {pl.threadItems.map((ti: any, i: number) => (
                 <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
                   <span>
-                    <span className={`font-mono text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
+                    <span className={`font-pixel text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
                     <b className={c.title}>{ti.name}</b>
                     {ti.type && ti.type !== '-' ? ` (${ti.type})` : ''}
                   </span>
@@ -426,10 +431,10 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
 
       {/* 人物背景（独立宽栏，长文本自动换行且不被截断） */}
       <section className={`mt-3 rounded border p-2.5 ${c.card}`}>
-        <h2 className={`font-noto-serif break-inside-avoid mb-1.5 border-b pb-1 text-xs font-bold ${c.subLine} ${c.heading}`}>
+        <h2 className={`font-serif break-inside-avoid mb-1.5 border-b pb-1 text-xs font-bold ${c.subLine} ${c.heading}`}>
           人物背景
         </h2>
-        <div className={`whitespace-pre-wrap break-words text-[11px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
+        <div className={`font-prose whitespace-pre-wrap break-words text-[11px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
           {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
         </div>
       </section>

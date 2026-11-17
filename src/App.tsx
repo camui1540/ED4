@@ -1422,7 +1422,7 @@ export default function App() {
       {/* 顶部导航栏 */}
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2">
         <div className="flex flex-wrap items-center gap-2.5">
-          <span className="font-mono text-base font-bold tracking-tight text-foreground">Earthdawn 4E</span>
+          <span className="font-display text-base font-bold tracking-tight text-foreground">Earthdawn 4E</span>
           <nav className="flex items-center gap-1 rounded border border-border bg-muted/70 p-0.5">
             {visibleNavTabs.map(([tabId, label]) => (
               <button

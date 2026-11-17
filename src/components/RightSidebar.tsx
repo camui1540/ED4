@@ -46,6 +46,9 @@ function renderExplodingTrace(detail: string) {
         }
       >
         {part}
+        <span className="ml-1 inline-block rounded border border-accent/50 bg-accent/15 px-1 font-pixel text-[9px] leading-tight text-accent">
+          爆骰!
+        </span>
       </span>
     );
   });
@@ -170,12 +173,12 @@ export function RightSidebar(props: RightSidebarProps) {
                     <span className={`min-w-6 font-mono text-base font-bold tabular-nums ${isCurrent ? 'text-primary' : 'text-foreground'}`}>
                       {item.initVal}
                     </span>
-                    <span className="rounded border border-border px-1 font-mono text-[10px] font-semibold text-muted-foreground">
+                    <span className="rounded border border-border px-1 font-pixel text-[10px] font-semibold text-muted-foreground">
                       {item.type === 'pl' ? 'PL' : 'GM'}
                     </span>
                     <b className="truncate">{item.name}</b>
                     {tags.map((t) => (
-                      <span key={t} className="rounded border border-border px-1 text-[10px] text-muted-foreground">
+                      <span key={t} className="rounded border border-border px-1 font-pixel text-[10px] text-muted-foreground">
                         {t}
                       </span>
                     ))}
@@ -217,7 +220,7 @@ export function RightSidebar(props: RightSidebarProps) {
                 <div key={rc.id} className="rounded border border-border bg-background/70 px-2 py-1.5 text-[11px]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="rounded border border-border px-1 font-mono text-[10px] font-semibold text-primary">
+                      <span className="rounded border border-border px-1 font-pixel text-[10px] font-semibold text-primary">
                         {rc.role.toUpperCase()}
                       </span>
                       <b className="truncate text-foreground">
@@ -238,7 +241,7 @@ export function RightSidebar(props: RightSidebarProps) {
                   {(tags.length > 0 || wovenList.length > 0 || (rc.gear_summary || []).length > 0) && rc.role === 'pl' && (
                     <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
                       {tags.map((t) => (
-                        <span key={t} className="rounded border border-destructive/40 bg-destructive/10 px-1 text-destructive">
+                        <span key={t} className="rounded border border-destructive/40 bg-destructive/10 px-1 font-pixel text-destructive">
                           {t}
                         </span>
                       ))}
@@ -347,13 +350,13 @@ export function RightSidebar(props: RightSidebarProps) {
               >
                 <div className="flex items-start justify-between gap-2">
                   <span
-                    className={
+                    className={`font-prose ${
                       l.type === 'hit'
                         ? 'font-medium text-foreground'
                         : l.type === 'fail'
                         ? 'text-destructive'
                         : 'text-foreground/90'
-                    }
+                    }`}
                   >
                     {l.text}
                   </span>
