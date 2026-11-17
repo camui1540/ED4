@@ -15,6 +15,17 @@ import {
   getExportBaseName,
   serializeCharacterToTxt,
 } from './characterExport.ts';
+import {
+  buildCharacterSyncPayload,
+  buildLogInsertPayload,
+  buildRoomInviteUrl,
+  buildRoomStatePayload,
+  extractRoomCodeFromUrl,
+  generateRoomCode,
+  isSupabaseConfigured,
+  mergeCharacterList,
+  mergeIncomingLogs,
+} from './supabaseSync.ts';
 
 test('Step 1-40+ mapping and attribute step conversion match ED4 rules', () => {
   assert.equal(ED4Engine.attrToStep(10), 5);
@@ -281,4 +292,61 @@ test('TXT and Excel export perform 100% lossless round-trip for default & custom
   assert.equal(xlsxDerived2.ma, xlsxDerived.ma);
   assert.equal(xlsxDerived2.pd, xlsxDerived.pd);
   assert.equal(fromXlsx2.gear.length, fromXlsx.gear.length);
+});
+
+test('Supabase Realtime sync helpers handle graceful offline fallback, arbitrary room codes, and idempotent merges', () => {
+  assert.equal(isSupabaseConfigured, false);
+
+  const code = generateRoomCode();
+  assert.match(code, /^\d{6}$/);
+
+  assert.equal(extractRoomCodeFromUrl('?room=ED4921'), 'ED4921');
+  assert.equal(extractRoomCodeFromUrl('?foo=1&room=%E9%BE%99%E4%B8%8E%E5%9C%B0%E4%B8%8B%E5%9F%8E'), '龙与地下城');
+  assert.equal(buildRoomInviteUrl('龙与地下城'), '?room=%E9%BE%99%E4%B8%8E%E5%9C%B0%E4%B8%8B%E5%9F%8E');
+
+  const st = createInitialState();
+  const roomState = buildRoomStatePayload({ ...st, round: 3, turnIndex: 1 }, 'client_gm');
+  assert.equal(roomState.round, 3);
+  assert.equal(roomState.turnIndex, 1);
+  assert.equal(roomState.updatedBy, 'client_gm');
+
+  const charPayload = buildCharacterSyncPayload({
+    roomCode: '114514',
+    clientId: 'client_pl1',
+    nickname: '小王',
+    role: 'pl',
+    pl: {
+      ...st.pl,
+      currentDamage: 12,
+      wounds: 1,
+      spells: [{ nameCn: '心灵匕首', threads: 1, wovenThreads: 1, inMatrix: true }],
+      gear: [{ name: '附魔盾', effect: '物理防御+1', equipped: true }],
+    },
+  });
+  assert.equal(charPayload.id, '114514::client_pl1');
+  assert.equal(charPayload.current_damage, 12);
+  assert.equal(charPayload.wounds, 1);
+  assert.equal(charPayload.spells_summary[0].wovenThreads, 1);
+  assert.equal(charPayload.gear_summary.length, 1);
+
+  // Idempotent character upsert & delete
+  let roster = mergeCharacterList([], 'INSERT', charPayload);
+  roster = mergeCharacterList(roster, 'UPDATE', { ...charPayload, wounds: 2 });
+  assert.equal(roster.length, 1);
+  assert.equal(roster[0].wounds, 2);
+  roster = mergeCharacterList(roster, 'DELETE', null, { id: charPayload.id, client_id: charPayload.client_id });
+  assert.equal(roster.length, 0);
+
+  // Idempotent log deduplication
+  const logRow = buildLogInsertPayload({
+    roomCode: '114514',
+    clientId: 'client_pl1',
+    senderName: '小王',
+    senderRole: 'pl',
+    log: { id: 'log_abc', text: '掷骰 → 14', detail: 'D20[14]', type: 'hit', time: '12:00:00' },
+  });
+  assert.equal(logRow.room_code, '114514');
+  const logs1 = mergeIncomingLogs([], [{ id: 'log_abc', text: '掷骰 → 14' }]);
+  const logs2 = mergeIncomingLogs(logs1, [{ id: 'log_abc', text: '掷骰 → 14' }, { id: 'log_xyz', text: '掷骰 → 9' }]);
+  assert.equal(logs2.length, 2);
 });

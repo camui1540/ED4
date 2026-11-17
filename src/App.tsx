@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Wifi, WifiOff } from 'lucide-react';
 import ED4Engine from './engine/ed4_engine.js';
 import {
   applyDamageToMonsterPure,
@@ -18,7 +18,7 @@ import { PlSheetView } from './components/PlSheetView';
 import { GmMonsterView } from './components/GmMonsterView';
 import { StepTableView } from './components/StepTableView';
 import { RightSidebar } from './components/RightSidebar';
-import { ExportModal, ManualModal, SpellJsonModal } from './components/Modals';
+import { ExportModal, ManualModal, RoomModal, SpellJsonModal } from './components/Modals';
 import { PrintSheetView } from './components/PrintSheetView';
 import {
   buildCharacterWorkbook,
@@ -27,12 +27,47 @@ import {
   getExportBaseName,
   serializeCharacterToTxt,
 } from './engine/characterExport';
+import {
+  buildCharacterSyncPayload,
+  buildLogInsertPayload,
+  buildRoomInviteUrl,
+  buildRoomStatePayload,
+  createRoomInSupabase,
+  extractRoomCodeFromUrl,
+  getSessionClientId,
+  isSupabaseConfigured,
+  joinRoomInSupabase,
+  mergeCharacterList,
+  mergeIncomingLogs,
+  pushCharacterToSupabase,
+  pushLogsToSupabase,
+  pushRoomStateToSupabase,
+  removeCharacterFromSupabase,
+  subscribeRoomRealtime,
+  type RoomCharacterRow,
+  type RoomRole,
+  type RoomSession,
+} from './engine/supabaseSync';
 
 export default function App() {
   const [state, setState] = useState(() => createInitialState());
   const [spellJsonOpen, setSpellJsonOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [initialUrlRoom] = useState(() => extractRoomCodeFromUrl());
+  const [roomModalOpen, setRoomModalOpen] = useState(() => Boolean(extractRoomCodeFromUrl()));
+  const [roomSession, setRoomSession] = useState<RoomSession>(() => ({
+    connected: false,
+    roomCode: '',
+    role: null,
+    nickname: '',
+    clientId: getSessionClientId(),
+  }));
+  const [roomCharacters, setRoomCharacters] = useState<RoomCharacterRow[]>([]);
+  const knownLogIdsRef = useRef<Set<string>>(new Set());
+  const isApplyingRemoteStateRef = useRef(false);
+  const lastSyncedRoomJsonRef = useRef('');
+
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('ed4_sidebar_width'));
     return saved >= 280 && saved <= 720 ? saved : 360;
@@ -51,6 +86,165 @@ export default function App() {
       // 忽略本地存储受限场景
     }
   }, [isDark]);
+
+  // 订阅 Supabase Realtime Postgres Changes（rooms / room_logs / room_characters）
+  useEffect(() => {
+    if (!roomSession.connected || !roomSession.roomCode) return;
+
+    const unsubscribe = subscribeRoomRealtime(roomSession.roomCode, {
+      onRoomState: (nextState) => {
+        if (!nextState || nextState.updatedBy === roomSession.clientId) return;
+        const incomingCore = JSON.stringify({
+          round: nextState.round,
+          turnIndex: nextState.turnIndex,
+          initiativeList: nextState.initiativeList,
+          monsters: nextState.monsters,
+          pendingReaction: nextState.pendingReaction,
+          gmBlind: nextState.gmBlind,
+        });
+        if (incomingCore === lastSyncedRoomJsonRef.current) return;
+        lastSyncedRoomJsonRef.current = incomingCore;
+        isApplyingRemoteStateRef.current = true;
+        setState((prev) => {
+          const nextRound = Number(nextState.round) || 1;
+          const resetRoundOpts = nextRound > prev.round;
+          return {
+            ...prev,
+            round: nextRound,
+            turnIndex: Number(nextState.turnIndex) || 0,
+            initiativeList: Array.isArray(nextState.initiativeList) ? nextState.initiativeList : prev.initiativeList,
+            monsters: Array.isArray(nextState.monsters) ? nextState.monsters : prev.monsters,
+            pendingReaction: nextState.pendingReaction ?? null,
+            gmBlind: Boolean(nextState.gmBlind),
+            pl: resetRoundOpts
+              ? {
+                  ...prev.pl,
+                  options: { aggressive: false, defensive: false, knockdown: false, stun: false, splitMove: false, tailAttack: false },
+                  statuses: { ...prev.pl.statuses, surprised: false, reserved: false },
+                }
+              : prev.pl,
+          };
+        });
+      },
+      onLogInsert: (row) => {
+        if (!row || row.sender_id === roomSession.clientId) return;
+        const logId = String(row.id);
+        if (knownLogIdsRef.current.has(logId)) return;
+        knownLogIdsRef.current.add(logId);
+        const mapped = {
+          id: logId,
+          time: row.time || formatTime(),
+          text:
+            roomSession.role === 'pl' && state.gmBlind && row.blind_text
+              ? row.blind_text
+              : row.sender_name && !String(row.text || '').startsWith(row.sender_name)
+                ? `[${row.sender_name}] ${row.text}`
+                : row.text,
+          detail:
+            roomSession.role === 'pl' && state.gmBlind && row.blind_text
+              ? '（GM脱敏模式已隐藏具体抗性与阈值）'
+              : row.detail || '',
+          type: row.type || '',
+        };
+        setState((prev) => ({
+          ...prev,
+          logs: mergeIncomingLogs(prev.logs, [mapped]),
+        }));
+      },
+      onCharacterChange: (eventType, newRow, oldRow) => {
+        setRoomCharacters((prev) => mergeCharacterList(prev, eventType, newRow, oldRow));
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [roomSession.connected, roomSession.roomCode, roomSession.clientId, roomSession.role, state.gmBlind]);
+
+  // 本地新增战报实时推送到 room_logs
+  useEffect(() => {
+    if (!roomSession.connected || !roomSession.roomCode || !roomSession.role) return;
+    const unsent = state.logs.filter((l) => !knownLogIdsRef.current.has(String(l.id)));
+    if (unsent.length === 0) return;
+    unsent.forEach((l) => knownLogIdsRef.current.add(String(l.id)));
+    const senderName =
+      roomSession.nickname.trim() || (roomSession.role === 'gm' ? 'GM' : state.pl.name || '玩家');
+    const rows = unsent.map((log) =>
+      buildLogInsertPayload({
+        roomCode: roomSession.roomCode,
+        clientId: roomSession.clientId,
+        senderName,
+        senderRole: roomSession.role!,
+        log,
+      })
+    );
+    pushLogsToSupabase(rows);
+  }, [
+    state.logs,
+    roomSession.connected,
+    roomSession.roomCode,
+    roomSession.role,
+    roomSession.nickname,
+    roomSession.clientId,
+    state.pl.name,
+  ]);
+
+  // PL 角色卡伤害/负伤/脉路/装备状态防抖同步至 room_characters
+  useEffect(() => {
+    if (!roomSession.connected || !roomSession.roomCode || !roomSession.role) return;
+    const timer = window.setTimeout(() => {
+      const payload = buildCharacterSyncPayload({
+        roomCode: roomSession.roomCode,
+        clientId: roomSession.clientId,
+        nickname: roomSession.nickname,
+        role: roomSession.role!,
+        pl: state.pl,
+      });
+      pushCharacterToSupabase(payload);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [
+    state.pl,
+    roomSession.connected,
+    roomSession.roomCode,
+    roomSession.role,
+    roomSession.nickname,
+    roomSession.clientId,
+  ]);
+
+  // 共享房间战斗状态（回合、先攻、怪物、反应、脱敏）同步至 rooms.state
+  useEffect(() => {
+    if (!roomSession.connected || !roomSession.roomCode) return;
+    const coreJson = JSON.stringify({
+      round: state.round,
+      turnIndex: state.turnIndex,
+      initiativeList: state.initiativeList,
+      monsters: state.monsters,
+      pendingReaction: state.pendingReaction,
+      gmBlind: state.gmBlind,
+    });
+    if (isApplyingRemoteStateRef.current) {
+      isApplyingRemoteStateRef.current = false;
+      lastSyncedRoomJsonRef.current = coreJson;
+      return;
+    }
+    if (coreJson === lastSyncedRoomJsonRef.current) return;
+    lastSyncedRoomJsonRef.current = coreJson;
+    const timer = window.setTimeout(() => {
+      pushRoomStateToSupabase(roomSession.roomCode, buildRoomStatePayload(state, roomSession.clientId));
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [
+    state.round,
+    state.turnIndex,
+    state.initiativeList,
+    state.monsters,
+    state.pendingReaction,
+    state.gmBlind,
+    roomSession.connected,
+    roomSession.roomCode,
+    roomSession.clientId,
+  ]);
 
   // 桌面端拖拽分栏逻辑
   useEffect(() => {
@@ -81,7 +275,7 @@ export default function App() {
 
   // 统一日志追加函数
   const makeLog = (text: string, detail = '', type = '', blindText = '', gmBlind = state.gmBlind) => ({
-    id: Date.now() + Math.random(),
+    id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     time: formatTime(),
     text: gmBlind && blindText ? blindText : text,
     detail: gmBlind && blindText ? '（GM脱敏模式已隐藏具体抗性与阈值）' : detail,
@@ -187,8 +381,19 @@ export default function App() {
       const d = getPlDerivedView(prev.pl);
       const step = Math.max(1, d.initStep + getEffectiveActionMod(prev.pl));
       const res = ED4Engine.rollStepTest(step, { isAction: false, karmaDie: prev.pl.karmaDie });
-      const entry = { id: 'pl', type: 'pl', name: prev.pl.name, initVal: res.total, initStep: step, dexVal: d.attrs.DEX };
-      const idx = prev.initiativeList.findIndex((x) => x.type === 'pl');
+      const entryId = roomSession.connected ? `pl_${roomSession.clientId}` : 'pl';
+      const entry = {
+        id: entryId,
+        clientId: roomSession.clientId,
+        type: 'pl',
+        name: prev.pl.name,
+        initVal: res.total,
+        initStep: step,
+        dexVal: d.attrs.DEX,
+      };
+      const idx = prev.initiativeList.findIndex((x) =>
+        roomSession.connected ? x.clientId === roomSession.clientId || x.id === entryId : x.type === 'pl'
+      );
       const nextInit = idx >= 0 ? prev.initiativeList.map((x, i) => (i === idx ? entry : x)) : [...prev.initiativeList, entry];
       const log = makeLog(`${prev.pl.name} 投掷先攻 (Step ${step}) → ${res.total}`, res.trace, 'warn', '', prev.gmBlind);
       return { ...prev, initiativeList: sortInitiativeList(nextInit), logs: [log, ...prev.logs].slice(0, 60) };
@@ -674,27 +879,32 @@ export default function App() {
     });
   };
 
-  const handleMonsterAttackPl = (instanceId: string) => {
+  const handleMonsterAttackPl = (instanceId: string, targetClientId?: string) => {
     setState((prev) => {
       const m = prev.monsters.find((x) => x.instanceId === instanceId);
       if (!m) return prev;
-      const d = getPlDerivedView(prev.pl);
+      const remoteTarget = targetClientId
+        ? roomCharacters.find((c) => c.client_id === targetClientId && c.role === 'pl')
+        : null;
+      const targetName = remoteTarget ? remoteTarget.char_name : prev.pl.name;
+      const targetPd = remoteTarget ? remoteTarget.pd : getPlDerivedView(prev.pl).pd;
+      const targetId = remoteTarget ? remoteTarget.client_id : 'pl';
       const atkStep = Math.max(1, m.atkStep - m.wounds);
-      const res = ED4Engine.rollStepTest(atkStep, { dn: d.pd, isAction: true, karmaDie: prev.pl.karmaDie });
+      const res = ED4Engine.rollStepTest(atkStep, { dn: targetPd, isAction: true, karmaDie: prev.pl.karmaDie });
       if (!res.isSuccess) {
-        const log = makeLog(`${m.name} 攻击 ${prev.pl.name} → 未命中 (${res.total} vs ${d.pd})`, res.trace, '', '', prev.gmBlind);
+        const log = makeLog(`${m.name} 攻击 ${targetName} → 未命中 (${res.total} vs ${targetPd})`, res.trace, '', '', prev.gmBlind);
         return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
       }
       const nextPending = {
         attackerId: m.instanceId,
         attackerType: 'gm',
         attackerName: m.name,
-        targetId: 'pl',
+        targetId,
         targetType: 'pl',
-        targetName: prev.pl.name,
+        targetName,
         attackName: '近战攻击',
         atkTotal: res.total,
-        targetDef: d.pd,
+        targetDef: targetPd,
         extraSuccesses: res.extraSuccesses,
         dmgStep: m.dmgStep,
         isMelee: true,
@@ -703,13 +913,26 @@ export default function App() {
         armorType: 'pa',
       };
       const log = makeLog(
-        `${m.name} 命中 ${prev.pl.name} (${res.total} vs ${d.pd}，额外成功 +${res.extraSuccesses})，等待反应`,
+        `${m.name} 命中 ${targetName} (${res.total} vs ${targetPd}，额外成功 +${res.extraSuccesses})，等待反应`,
         res.trace,
         'warn',
         '',
         prev.gmBlind
       );
       return { ...prev, pendingReaction: nextPending, logs: [log, ...prev.logs].slice(0, 60) };
+    });
+  };
+
+  const handleClearMonsters = () => {
+    setState((prev) => {
+      const log = makeLog('GM 已清空战场（移除全部怪物）', '', 'warn', '', prev.gmBlind);
+      return {
+        ...prev,
+        monsters: [],
+        initiativeList: prev.initiativeList.filter((i) => i.type !== 'gm'),
+        pendingReaction: null,
+        logs: [log, ...prev.logs].slice(0, 60),
+      };
     });
   };
 
@@ -817,11 +1040,38 @@ export default function App() {
   // 先攻与轮次推进
   const handleRollAllInitiative = () => {
     setState((prev) => {
-      const d = getPlDerivedView(prev.pl);
       const list: any[] = [];
-      const plStep = Math.max(1, d.initStep + getEffectiveActionMod(prev.pl));
-      const plRoll = ED4Engine.rollStepTest(plStep, { isAction: false, karmaDie: prev.pl.karmaDie });
-      list.push({ id: 'pl', type: 'pl', name: prev.pl.name, initVal: plRoll.total, initStep: plStep, dexVal: d.attrs.DEX });
+      const syncedPls = roomSession.connected ? roomCharacters.filter((c) => c.role === 'pl') : [];
+
+      if (syncedPls.length > 0) {
+        syncedPls.forEach((rc) => {
+          const penalty = -(Number(rc.wounds) || 0) - (rc.statuses?.knockedDown ? 3 : 0) - (rc.statuses?.harried ? 2 : 0) - (rc.options?.defensive ? 3 : 0);
+          const step = Math.max(1, (Number(rc.init_step) || 5) + penalty);
+          const roll = ED4Engine.rollStepTest(step, { isAction: false, karmaDie: 6 });
+          list.push({
+            id: `pl_${rc.client_id}`,
+            clientId: rc.client_id,
+            type: 'pl',
+            name: rc.char_name || rc.nickname,
+            initVal: roll.total,
+            initStep: step,
+            dexVal: rc.dex_val || 10,
+          });
+        });
+      } else {
+        const d = getPlDerivedView(prev.pl);
+        const plStep = Math.max(1, d.initStep + getEffectiveActionMod(prev.pl));
+        const plRoll = ED4Engine.rollStepTest(plStep, { isAction: false, karmaDie: prev.pl.karmaDie });
+        list.push({
+          id: roomSession.connected ? `pl_${roomSession.clientId}` : 'pl',
+          clientId: roomSession.clientId,
+          type: 'pl',
+          name: prev.pl.name,
+          initVal: plRoll.total,
+          initStep: plStep,
+          dexVal: d.attrs.DEX,
+        });
+      }
 
       prev.monsters.forEach((m) => {
         if (m.currentDamage >= m.death) return;
@@ -954,6 +1204,177 @@ export default function App() {
     pushLog(`已调用浏览器打印 / 另存为 PDF：${printTitle}.pdf`, '', 'hit');
   };
 
+  // 联机大厅：身份切换、建房、进房、退房与复制邀请链接
+  const copyPlainText = async (content: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(content);
+        return true;
+      }
+    } catch {
+      // 降级 execCommand
+    }
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = content;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleSelectRole = (role: RoomRole) => {
+    setRoomSession((prev) => ({
+      ...prev,
+      role,
+      nickname: role === 'gm' && !prev.nickname.trim() ? 'GM' : prev.nickname,
+    }));
+    setState((prev) => {
+      if (role === 'gm') return { ...prev, activeTab: 'gm' };
+      return prev.activeTab === 'gm' ? { ...prev, activeTab: 'pl' } : prev;
+    });
+  };
+
+  const handleCreateRoom = async (roomCode: string, nickname: string, role: RoomRole): Promise<string | null> => {
+    const cleanCode = roomCode.trim();
+    const roomPayload = buildRoomStatePayload(state, roomSession.clientId);
+    const res = await createRoomInSupabase(cleanCode, roomPayload);
+    if (!res.ok) return res.error;
+
+    lastSyncedRoomJsonRef.current = JSON.stringify({
+      round: roomPayload.round,
+      turnIndex: roomPayload.turnIndex,
+      initiativeList: roomPayload.initiativeList,
+      monsters: roomPayload.monsters,
+      pendingReaction: roomPayload.pendingReaction,
+      gmBlind: roomPayload.gmBlind,
+    });
+    state.logs.forEach((l) => knownLogIdsRef.current.add(String(l.id)));
+
+    const nextSession: RoomSession = {
+      connected: true,
+      roomCode: res.code,
+      role,
+      nickname,
+      clientId: roomSession.clientId,
+    };
+    setRoomSession(nextSession);
+
+    const charRow = buildCharacterSyncPayload({
+      roomCode: res.code,
+      clientId: roomSession.clientId,
+      nickname,
+      role,
+      pl: state.pl,
+    });
+    setRoomCharacters([charRow]);
+    await pushCharacterToSupabase(charRow);
+    pushLog(`${nickname} 创建了联机房间【${res.code}】`, buildRoomInviteUrl(res.code), 'hit');
+    return null;
+  };
+
+  const handleJoinRoom = async (roomCode: string, nickname: string, role: RoomRole): Promise<string | null> => {
+    const res = await joinRoomInSupabase(roomCode);
+    if (!res.ok) return res.error;
+
+    const mappedLogs = (res.logs || []).map((row: any) => {
+      knownLogIdsRef.current.add(String(row.id));
+      return {
+        id: String(row.id),
+        time: row.time || formatTime(),
+        text:
+          role === 'pl' && res.roomState?.gmBlind && row.blind_text
+            ? row.blind_text
+            : row.sender_name && !String(row.text || '').startsWith(row.sender_name)
+              ? `[${row.sender_name}] ${row.text}`
+              : row.text,
+        detail:
+          role === 'pl' && res.roomState?.gmBlind && row.blind_text
+            ? '（GM脱敏模式已隐藏具体抗性与阈值）'
+            : row.detail || '',
+        type: row.type || '',
+      };
+    });
+
+    if (res.roomState) {
+      const rs = res.roomState;
+      lastSyncedRoomJsonRef.current = JSON.stringify({
+        round: Number(rs.round) || 1,
+        turnIndex: Number(rs.turnIndex) || 0,
+        initiativeList: Array.isArray(rs.initiativeList) ? rs.initiativeList : [],
+        monsters: Array.isArray(rs.monsters) ? rs.monsters : [],
+        pendingReaction: rs.pendingReaction ?? null,
+        gmBlind: Boolean(rs.gmBlind),
+      });
+      isApplyingRemoteStateRef.current = true;
+      setState((prev) => ({
+        ...prev,
+        activeTab: role === 'pl' && prev.activeTab === 'gm' ? 'pl' : role === 'gm' ? 'gm' : prev.activeTab,
+        round: Number(rs.round) || 1,
+        turnIndex: Number(rs.turnIndex) || 0,
+        initiativeList: Array.isArray(rs.initiativeList) ? rs.initiativeList : [],
+        monsters: Array.isArray(rs.monsters) ? rs.monsters : [],
+        pendingReaction: rs.pendingReaction ?? null,
+        gmBlind: Boolean(rs.gmBlind),
+        logs: mappedLogs,
+      }));
+    } else if (mappedLogs.length > 0) {
+      setState((prev) => ({ ...prev, logs: mappedLogs }));
+    }
+
+    const nextSession: RoomSession = {
+      connected: true,
+      roomCode: res.code,
+      role,
+      nickname,
+      clientId: roomSession.clientId,
+    };
+    setRoomSession(nextSession);
+
+    const charRow = buildCharacterSyncPayload({
+      roomCode: res.code,
+      clientId: roomSession.clientId,
+      nickname,
+      role,
+      pl: state.pl,
+    });
+    setRoomCharacters(mergeCharacterList(res.characters, 'INSERT', charRow));
+    await pushCharacterToSupabase(charRow);
+    pushLog(`${nickname} (${role.toUpperCase()}) 加入了房间【${res.code}】`, '', 'hit');
+    setRoomModalOpen(false);
+    return null;
+  };
+
+  const handleLeaveRoom = async () => {
+    const prevCode = roomSession.roomCode;
+    const prevNick = roomSession.nickname;
+    if (prevCode) {
+      await removeCharacterFromSupabase(prevCode, roomSession.clientId);
+    }
+    setRoomSession((prev) => ({ ...prev, connected: false, roomCode: '' }));
+    setRoomCharacters([]);
+    if (prevCode) pushLog(`${prevNick || '成员'} 退出了房间【${prevCode}】`, '', 'warn');
+  };
+
+  const visibleNavTabs = ([
+    ['pl', '角色卡（PL）'],
+    ['gm', '怪物面板（GM）'],
+    ['step', 'STEP表'],
+  ] as const).filter(([tabId]) => !(roomSession.role === 'pl' && tabId === 'gm'));
+
+  const gmPlTargets = roomSession.connected
+    ? roomCharacters
+        .filter((c) => c.role === 'pl')
+        .map((c) => ({ clientId: c.client_id, label: `${c.char_name} (${c.nickname})` }))
+    : [];
+
   return (
     <>
     <div className="flex min-h-screen flex-col bg-background text-foreground lg:h-screen lg:overflow-hidden print:hidden">
@@ -962,11 +1383,7 @@ export default function App() {
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="font-mono text-base font-bold tracking-tight text-foreground">Earthdawn 4E</span>
           <nav className="flex items-center gap-1 rounded border border-border bg-muted/70 p-0.5">
-            {([
-              ['pl', '角色卡（PL）'],
-              ['gm', '怪物面板（GM）'],
-              ['step', 'STEP表'],
-            ] as const).map(([tabId, label]) => (
+            {visibleNavTabs.map(([tabId, label]) => (
               <button
                 key={tabId}
                 type="button"
@@ -984,6 +1401,28 @@ export default function App() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRoomModalOpen(true)}
+            className={`inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              roomSession.connected
+                ? 'border-primary bg-primary/15 text-foreground hover:bg-primary/25'
+                : 'border-border bg-secondary text-secondary-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            {roomSession.connected ? (
+              <Wifi className="h-3.5 w-3.5 text-primary" />
+            ) : (
+              <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+            <span>
+              {roomSession.connected
+                ? `已联机 · ${roomSession.roomCode}`
+                : isSupabaseConfigured
+                  ? '联机'
+                  : '联机（单机）'}
+            </span>
+          </button>
           <button
             type="button"
             onClick={() => setSpellJsonOpen(true)}
@@ -1060,9 +1499,10 @@ export default function App() {
             />
           )}
 
-          {state.activeTab === 'gm' && (
+          {state.activeTab === 'gm' && roomSession.role !== 'pl' && (
             <GmMonsterView
               plName={state.pl.name}
+              plTargets={gmPlTargets}
               templates={state.monsterTemplates}
               monsters={state.monsters}
               showAddForm={state.showAddMonsterForm}
@@ -1087,6 +1527,7 @@ export default function App() {
                   initiativeList: p.initiativeList.filter((i) => i.id !== id),
                 }))
               }
+              onClearMonsters={handleClearMonsters}
               onToggleMonsterFlag={(id, flag) =>
                 setState((p) => ({
                   ...p,
@@ -1132,6 +1573,8 @@ export default function App() {
             gmBlind={state.gmBlind}
             pendingReaction={state.pendingReaction}
             logs={state.logs}
+            roomSession={roomSession}
+            roomCharacters={roomCharacters}
             onRollAllInitiative={handleRollAllInitiative}
             onNextTurn={() =>
               setState((p) => ({
@@ -1170,6 +1613,20 @@ export default function App() {
         onCopyTxt={handleCopyTxt}
         onExportExcel={handleExportExcel}
         onExportPdf={handleExportPdf}
+      />
+      <RoomModal
+        open={roomModalOpen}
+        session={roomSession}
+        initialRoomCode={initialUrlRoom}
+        charDefaultName={state.pl.name}
+        members={roomCharacters}
+        onClose={() => setRoomModalOpen(false)}
+        onSelectRole={handleSelectRole}
+        onUpdateNickname={(nick) => setRoomSession((prev) => ({ ...prev, nickname: nick }))}
+        onCreateRoom={handleCreateRoom}
+        onJoinRoom={handleJoinRoom}
+        onLeaveRoom={handleLeaveRoom}
+        onCopyInviteLink={(code) => copyPlainText(buildRoomInviteUrl(code))}
       />
     </div>
     <PrintSheetView pl={state.pl} />

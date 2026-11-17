@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getPlDerivedView } from '../engine/combatHelpers';
+import type { RoomCharacterRow, RoomSession } from '../engine/supabaseSync';
 
 interface RightSidebarProps {
   round: number;
@@ -10,6 +11,8 @@ interface RightSidebarProps {
   gmBlind: boolean;
   pendingReaction: any;
   logs: any[];
+  roomSession?: RoomSession;
+  roomCharacters?: RoomCharacterRow[];
   onRollAllInitiative: () => void;
   onNextTurn: () => void;
   onNextRound: () => void;
@@ -58,6 +61,8 @@ export function RightSidebar(props: RightSidebarProps) {
     gmBlind,
     pendingReaction,
     logs,
+    roomSession,
+    roomCharacters = [],
     onRollAllInitiative,
     onNextTurn,
     onNextRound,
@@ -72,13 +77,26 @@ export function RightSidebar(props: RightSidebarProps) {
   const [freeDn, setFreeDn] = useState('');
   const [freeKarma, setFreeKarma] = useState(false);
 
+  const isPlLocked = roomSession?.role === 'pl';
   const d = getPlDerivedView(pl);
   const canReact =
     pendingReaction &&
     pendingReaction.targetType === 'pl' &&
+    (!pendingReaction.targetId || pendingReaction.targetId === 'pl' || pendingReaction.targetId === roomSession?.clientId) &&
     !pl.statuses.blindsided &&
     !pl.statuses.knockedDown &&
     !pl.statuses.surprised;
+
+  const collectTags = (statuses: any = {}, options: any = {}) => {
+    const tags: string[] = [];
+    if (statuses?.knockedDown) tags.push('倒地');
+    if (statuses?.blindsided) tags.push('盲区');
+    if (statuses?.surprised) tags.push('惊愕');
+    if (statuses?.harried) tags.push('受扰');
+    if (options?.aggressive) tags.push('猛攻');
+    if (options?.defensive) tags.push('防御');
+    return tags;
+  };
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -88,35 +106,44 @@ export function RightSidebar(props: RightSidebarProps) {
           <span className="font-serif text-sm font-semibold text-card-foreground">先攻追踪</span>
           <span className="text-muted-foreground tabular-nums">第 {round} 轮</span>
         </div>
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
-          <button type="button" onClick={onRollAllInitiative} className={`${btnPrimaryCls} tactile-btn`}>
-            全员投先攻
-          </button>
-          <button type="button" onClick={onNextTurn} className={btnCls}>
-            下一顺位
-          </button>
-          <button type="button" onClick={onNextRound} className={btnCls}>
-            下一轮
-          </button>
-          <button type="button" onClick={onPartyFullRest} className={btnCls}>
-            全队休整
-          </button>
-        </div>
+        {!isPlLocked && (
+          <div className="mb-2.5 flex flex-wrap gap-1.5">
+            <button type="button" onClick={onRollAllInitiative} className={`${btnPrimaryCls} tactile-btn`}>
+              全员投先攻
+            </button>
+            <button type="button" onClick={onNextTurn} className={btnCls}>
+              下一顺位
+            </button>
+            <button type="button" onClick={onNextRound} className={btnCls}>
+              下一轮
+            </button>
+            <button type="button" onClick={onPartyFullRest} className={btnCls}>
+              全队休整
+            </button>
+          </div>
+        )}
 
         {initiativeList.length === 0 ? (
-          <div className="py-1 text-[11px] text-muted-foreground">点击「全员投先攻」或角色卡「投先攻」生成序列</div>
+          <div className="py-1 text-[11px] text-muted-foreground">
+            {isPlLocked ? '等待 GM 或玩家投先攻生成序列' : '点击「全员投先攻」或角色卡「投先攻」生成序列'}
+          </div>
         ) : (
           <div className="space-y-1.5">
             {initiativeList.map((item, idx) => {
               const isCurrent = idx === turnIndex;
               let hpInfo = '';
-              const tags: string[] = [];
+              let tags: string[] = [];
               if (item.type === 'pl') {
-                hpInfo = `伤 ${pl.currentDamage}/${d.effUncon} · 负伤 ${pl.wounds}`;
-                if (pl.statuses.knockedDown) tags.push('倒地');
-                if (pl.statuses.blindsided) tags.push('盲区');
-                if (pl.options.aggressive) tags.push('猛攻');
-                if (pl.options.defensive) tags.push('防御');
+                const remoteChar = item.clientId
+                  ? roomCharacters.find((c) => c.client_id === item.clientId)
+                  : null;
+                if (remoteChar && item.clientId !== roomSession?.clientId) {
+                  hpInfo = `伤 ${remoteChar.current_damage}/${remoteChar.eff_uncon} · 负伤 ${remoteChar.wounds}`;
+                  tags = collectTags(remoteChar.statuses, remoteChar.options);
+                } else {
+                  hpInfo = `伤 ${pl.currentDamage}/${d.effUncon} · 负伤 ${pl.wounds}`;
+                  tags = collectTags(pl.statuses, pl.options);
+                }
               } else {
                 const m = monsters.find((x) => x.instanceId === item.id);
                 if (m) {
@@ -155,7 +182,7 @@ export function RightSidebar(props: RightSidebarProps) {
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <span className="text-[11px] text-muted-foreground tabular-nums">{hpInfo}</span>
-                    {item.type === 'gm' && (
+                    {!isPlLocked && item.type === 'gm' && (
                       <button
                         type="button"
                         onClick={() => onRemoveMonster(item.id)}
@@ -171,6 +198,68 @@ export function RightSidebar(props: RightSidebarProps) {
           </div>
         )}
       </section>
+
+      {/* 联机队友实时状态 */}
+      {roomSession?.connected && roomCharacters.length > 0 && (
+        <section className="tactile-card p-3">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="font-serif text-sm font-semibold text-card-foreground">联机成员状态</span>
+            <span className="font-mono text-[10px] text-muted-foreground">{roomCharacters.length} 人</span>
+          </div>
+          <div className="space-y-1.5">
+            {roomCharacters.map((rc) => {
+              const initIdx = initiativeList.findIndex(
+                (i) => i.type === 'pl' && (i.clientId === rc.client_id || (!i.clientId && rc.client_id === roomSession.clientId))
+              );
+              const tags = collectTags(rc.statuses, rc.options);
+              const wovenList = (rc.spells_summary || []).filter((s) => s.wovenThreads > 0 || s.threads > 0);
+              return (
+                <div key={rc.id} className="rounded border border-border bg-background/70 px-2 py-1.5 text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="rounded border border-border px-1 font-mono text-[10px] font-semibold text-primary">
+                        {rc.role.toUpperCase()}
+                      </span>
+                      <b className="truncate text-foreground">
+                        {rc.role === 'pl' ? `${rc.char_name} (${rc.nickname})` : rc.nickname}
+                      </b>
+                      {initIdx >= 0 && (
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          先攻#{initIdx + 1}
+                        </span>
+                      )}
+                    </div>
+                    {rc.role === 'pl' && (
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums">
+                        伤 {rc.current_damage}/{rc.eff_uncon} · 负伤 {rc.wounds}
+                      </span>
+                    )}
+                  </div>
+                  {(tags.length > 0 || wovenList.length > 0 || (rc.gear_summary || []).length > 0) && rc.role === 'pl' && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground">
+                      {tags.map((t) => (
+                        <span key={t} className="rounded border border-destructive/40 bg-destructive/10 px-1 text-destructive">
+                          {t}
+                        </span>
+                      ))}
+                      {wovenList.map((s, si) => (
+                        <span key={si} className="rounded border border-border px-1 font-mono">
+                          {s.nameCn} {s.wovenThreads}/{s.threads}脉
+                        </span>
+                      ))}
+                      {(rc.gear_summary || []).length > 0 && (
+                        <span className="rounded border border-border px-1">
+                          装备×{rc.gear_summary.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {/* 待确认反应 */}
       {pendingReaction && (

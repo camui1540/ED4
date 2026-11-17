@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 interface GmMonsterViewProps {
   plName: string;
+  plTargets?: Array<{ clientId: string; label: string }>;
   templates: any[];
   monsters: any[];
   showAddForm: boolean;
@@ -9,8 +10,9 @@ interface GmMonsterViewProps {
   onSaveTemplate: (tpl: any) => void;
   onDeleteTemplate: (templateId: string) => void;
   onSpawnMonster: (templateId: string, count: number) => void;
-  onAttackPl: (instanceId: string) => void;
+  onAttackPl: (instanceId: string, targetClientId?: string) => void;
   onRemoveMonster: (instanceId: string) => void;
+  onClearMonsters: () => void;
   onToggleMonsterFlag: (instanceId: string, flag: 'knockedDown' | 'blindsided' | 'harried') => void;
   onManualApplyDamage: (target: string, rawDmg: number, armorType: 'pa' | 'ma') => void;
 }
@@ -42,6 +44,7 @@ const DEFAULT_FORM = {
 export function GmMonsterView(props: GmMonsterViewProps) {
   const {
     plName,
+    plTargets = [],
     templates,
     monsters,
     showAddForm,
@@ -51,14 +54,19 @@ export function GmMonsterView(props: GmMonsterViewProps) {
     onSpawnMonster,
     onAttackPl,
     onRemoveMonster,
+    onClearMonsters,
     onToggleMonsterFlag,
     onManualApplyDamage,
   } = props;
 
   const [form, setForm] = useState(DEFAULT_FORM);
+  const [attackTargetId, setAttackTargetId] = useState('');
   const [calcTarget, setCalcTarget] = useState('pl');
   const [calcRawDmg, setCalcRawDmg] = useState('');
   const [calcArmorType, setCalcArmorType] = useState<'pa' | 'ma'>('pa');
+
+  const resolvedAttackTargetId =
+    plTargets.find((t) => t.clientId === attackTargetId)?.clientId || plTargets[0]?.clientId || '';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +180,32 @@ export function GmMonsterView(props: GmMonsterViewProps) {
 
       {/* 已加入战斗的怪物 */}
       <section className="tactile-card p-3">
-        <div className="mb-2.5 font-serif text-sm font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</div>
+        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+          <span className="font-serif text-sm font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</span>
+          <div className="flex flex-wrap items-center gap-2">
+            {plTargets.length > 0 && (
+              <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>攻击目标</span>
+                <select
+                  value={resolvedAttackTargetId}
+                  onChange={(e) => setAttackTargetId(e.target.value)}
+                  className={inputCls}
+                >
+                  {plTargets.map((t) => (
+                    <option key={t.clientId} value={t.clientId}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {monsters.length > 0 && (
+              <button type="button" onClick={onClearMonsters} className={btnCls}>
+                清空战场
+              </button>
+            )}
+          </div>
+        </div>
         {monsters.length === 0 ? (
           <div className="text-xs text-muted-foreground">暂无已加入战斗的怪物，可从上方模板生成。</div>
         ) : (
@@ -196,7 +229,7 @@ export function GmMonsterView(props: GmMonsterViewProps) {
                       <button
                         type="button"
                         disabled={isDead}
-                        onClick={() => onAttackPl(m.instanceId)}
+                        onClick={() => onAttackPl(m.instanceId, resolvedAttackTargetId || undefined)}
                         className={btnPrimaryCls}
                       >
                         攻击
