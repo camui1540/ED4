@@ -71,6 +71,54 @@ function uint8ToBase64(bytes: Uint8Array): string {
 }
 
 /**
+ * 解析 PNG / GIF / JPEG 二进制头部的原始像素宽高，用于保持导出图片原始比例。
+ */
+function getImageDimensions(bytes: Uint8Array, ext: string): { width: number; height: number } | null {
+  if (ext === 'png' && bytes.length >= 24) {
+    const width = ((bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19]) >>> 0;
+    const height = ((bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23]) >>> 0;
+    if (width > 0 && height > 0) return { width, height };
+  }
+  if (ext === 'gif' && bytes.length >= 10) {
+    const width = bytes[6] | (bytes[7] << 8);
+    const height = bytes[8] | (bytes[9] << 8);
+    if (width > 0 && height > 0) return { width, height };
+  }
+  if (ext === 'jpeg' && bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let i = 2;
+    while (i + 8 < bytes.length) {
+      if (bytes[i] !== 0xff) {
+        i++;
+        continue;
+      }
+      while (i < bytes.length && bytes[i] === 0xff) i++;
+      if (i >= bytes.length) break;
+      const marker = bytes[i++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (i + 1 >= bytes.length) break;
+      const segLen = (bytes[i] << 8) | bytes[i + 1];
+      if (segLen < 2 || i + segLen > bytes.length) break;
+      if (
+        (marker >= 0xc0 && marker <= 0xc3) ||
+        (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) ||
+        (marker >= 0xcd && marker <= 0xcf)
+      ) {
+        if (i + 7 < bytes.length) {
+          const height = (bytes[i + 3] << 8) | bytes[i + 4];
+          const width = (bytes[i + 5] << 8) | bytes[i + 6];
+          if (width > 0 && height > 0) return { width, height };
+        }
+        break;
+      }
+      i += segLen;
+    }
+  }
+  return null;
+}
+
+/**
  * 规范化 WPS / Office 生成的 .xlsx zip 内的注释与关系路径，确保 exceljs 稳定加载。
  */
 async function normalizeXlsxForExcelJs(buffer: ArrayBuffer): Promise<ArrayBuffer> {
@@ -406,20 +454,52 @@ export async function exportCharacterExcelBuffer(
     sheet.getCell(r, 12).value = ti.effect || '';
   });
 
-  // 写入角色立绘（若存在 Data URL 图片则嵌入 I{29+midShift}:K{37+midShift}）
+  // 清理模板/导入文件在中栏(I:Q)遗留的旧立绘，避免二次导出时重叠
+  let reusableImageId: number | null = null;
   const portraitMatch =
     typeof pl.portraitUrl === 'string'
       ? pl.portraitUrl.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i)
       : null;
+
+  if (Array.isArray((sheet as any)._media)) {
+    (sheet as any)._media = (sheet as any)._media.filter((m: any) => {
+      if (m?.type !== 'image') return true;
+      const col = m?.range?.tl?.nativeCol ?? m?.range?.tl?.col ?? 0;
+      if (col >= 7 && col <= 16) {
+        if (portraitMatch && reusableImageId === null) {
+          const media = workbook.getImage(Number(m.imageId));
+          if (media?.buffer) {
+            const existingB64 = uint8ToBase64(new Uint8Array(media.buffer as ArrayBuffer));
+            if (existingB64 === portraitMatch[2]) reusableImageId = Number(m.imageId);
+          }
+        }
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // 按原图比例缩放写入单张立绘（使用 ext 像素宽高，避免 tl+br 强制拉伸压缩）
   if (portraitMatch) {
     const ext = (portraitMatch[1].toLowerCase() === 'jpg' ? 'jpeg' : portraitMatch[1].toLowerCase()) as
       | 'png'
       | 'jpeg'
       | 'gif';
-    const imgId = workbook.addImage({ base64: portraitMatch[2], extension: ext });
+    const imgBytes = new Uint8Array(decodeBase64ToArrayBuffer(portraitMatch[2]));
+    const dim = getImageDimensions(imgBytes, ext);
+    const maxW = 264;
+    const maxH = 314;
+    let width = maxW;
+    let height = maxW;
+    if (dim) {
+      const scale = Math.min(maxW / dim.width, maxH / dim.height);
+      width = Math.max(1, Math.round(dim.width * scale));
+      height = Math.max(1, Math.round(dim.height * scale));
+    }
+    const imgId = reusableImageId ?? workbook.addImage({ base64: portraitMatch[2], extension: ext });
     sheet.addImage(imgId, {
-      tl: { col: 8.05, row: 28 + midShift + 0.05 },
-      br: { col: 10.95, row: 37 + midShift - 0.05 },
+      tl: { col: 8.02, row: 28 + midShift + 0.02 },
+      ext: { width, height },
       editAs: 'oneCell',
     } as any);
   }

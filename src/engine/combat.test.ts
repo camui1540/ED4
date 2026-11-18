@@ -785,6 +785,38 @@ test('Talent/Skill action & strain rules, Excel dataValidation sync, and upgrade
   assert.equal(parsedLegacyXlsx.talents[2].strain, 1);
 });
 
+test('Excel portrait export preserves original aspect ratio and avoids duplicate overlapping images on re-export', async () => {
+  const st = createInitialState();
+  // Create a PNG byte payload with 600x900 IHDR dimensions (2:3 portrait aspect ratio)
+  const rawPng = Uint8Array.from(
+    atob('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEwMhAAQAyAAQBwQ5pGgAAAABJRU5ErkJggg=='),
+    (c) => c.charCodeAt(0)
+  );
+  const dv = new DataView(rawPng.buffer);
+  dv.setUint32(16, 600, false);
+  dv.setUint32(20, 900, false);
+  let b64 = '';
+  for (let i = 0; i < rawPng.length; i++) b64 += String.fromCharCode(rawPng[i]);
+  const portraitDataUrl = `data:image/png;base64,${btoa(b64)}`;
+
+  const plWithPortrait = { ...st.pl, portraitUrl: portraitDataUrl };
+  const firstBuf = await exportCharacterExcelBuffer(plWithPortrait);
+  const wb1 = new ExcelJS.Workbook();
+  await wb1.xlsx.load(firstBuf);
+  const imgs1 = wb1.worksheets[0].getImages();
+  assert.equal(imgs1.length, 1);
+  assert.equal((imgs1[0].range as any).br, undefined);
+  assert.deepEqual((imgs1[0].range as any).ext, { width: 209, height: 314 });
+
+  // Re-exporting using firstBuf as cachedTemplateBuffer must NOT create overlapping duplicate portraits
+  const secondBuf = await exportCharacterExcelBuffer(plWithPortrait, firstBuf);
+  const wb2 = new ExcelJS.Workbook();
+  await wb2.xlsx.load(secondBuf);
+  const imgs2 = wb2.worksheets[0].getImages();
+  assert.equal(imgs2.length, 1);
+  assert.deepEqual((imgs2[0].range as any).ext, { width: 209, height: 314 });
+});
+
 
 
 
