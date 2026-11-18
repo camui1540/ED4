@@ -745,6 +745,44 @@ test('Talent/Skill action & strain rules, Excel dataValidation sync, and upgrade
   assert.equal(parsedLegacy.talents[1].action, '');
   assert.equal(parsedLegacy.skills[0].action, '标准');
   assert.equal(parsedLegacy.skills[1].action, '');
+
+  // 5. Excel import regression: when Action col is filled ('自由'/'攻击') or Strain col is blank / 0 / '负荷1', rules auto-fill strain
+  const legacyXlsxWb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(
+    legacyXlsxWb,
+    {
+      A2: { t: 's', v: '角色名' },
+      B2: { t: 's', v: '测试员' },
+      A32: { t: 's', v: '天赋' },
+      A33: { t: 's', v: '名称' },
+      B33: { t: 's', v: '等级' },
+      C33: { t: 's', v: '属性' },
+      D33: { t: 's', v: '动作' },
+      E33: { t: 's', v: '负荷' },
+      A34: { t: 's', v: '闪避Avoid Blow' },
+      B34: { t: 'n', v: 2 },
+      C34: { t: 's', v: 'RANK+DEX' },
+      D34: { t: 's', v: '自由' }, // action already filled, strain blank!
+      A35: { t: 's', v: '杂耍防御Acrobatic Defense' },
+      B35: { t: 'n', v: 1 },
+      C35: { t: 's', v: 'RANK+DEX' },
+      D35: { t: 's', v: '自由' },
+      E35: { t: 'n', v: 0 }, // legacy 0 placeholder!
+      A36: { t: 's', v: '捕风者Wind Catcher' },
+      B36: { t: 'n', v: 1 },
+      C36: { t: 's', v: 'RANK+PER' },
+      E36: { t: 's', v: '负荷1' },
+      '!ref': 'A1:G40',
+    },
+    'Sheet1'
+  );
+  const parsedLegacyXlsx = ED4Engine.parseExcelWorkbook(legacyXlsxWb);
+  assert.equal(parsedLegacyXlsx.talents[0].action, '自由');
+  assert.equal(parsedLegacyXlsx.talents[0].strain, 1);
+  assert.equal(parsedLegacyXlsx.talents[1].action, '自由');
+  assert.equal(parsedLegacyXlsx.talents[1].strain, 1);
+  assert.equal(parsedLegacyXlsx.talents[2].action, '简单');
+  assert.equal(parsedLegacyXlsx.talents[2].strain, 1);
 });
 
 

@@ -47,6 +47,8 @@ interface PlSheetViewProps {
 
 const inputCls =
   'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
+const noSpinInputCls =
+  `${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
 const btnCls =
   'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 const btnPrimaryCls =
@@ -751,15 +753,22 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} h-6 w-28 text-[11px]`}
               />
             </div>
-            <div className="mb-2 max-h-60 flex-1 overflow-y-auto">
-              <table className="w-full border-collapse text-xs">
+            <div className="mb-2 max-h-60 flex-1 overflow-y-auto overflow-x-auto">
+              <table className="w-full table-fixed border-collapse text-xs">
+                <colgroup>
+                  <col />
+                  <col className="w-[106px]" />
+                  <col className="w-[62px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[116px]" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
-                    <th className="py-1 font-medium">天赋</th>
-                    <th className="py-1 font-medium">动作 / 负荷</th>
-                    <th className="py-1 font-medium">等级</th>
-                    <th className="py-1 font-medium">Step</th>
-                    <th className="py-1 text-right font-medium">操作</th>
+                    <th className="py-1 pr-1 font-medium">天赋</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">动作 / 负荷</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">等级</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">Step</th>
+                    <th className="py-1 text-right font-medium whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -773,16 +782,16 @@ export function PlSheetView(props: PlSheetViewProps) {
                       const strainVal = Number(t.strain) || 0;
                       return (
                         <tr key={t.id} className="hover:bg-muted/50">
-                          <td className="py-1.5 pr-1">
+                          <td className="py-1.5 pr-1.5 align-middle break-words whitespace-normal">
                             <span className="font-medium text-foreground">{t.name}</span>{' '}
-                            <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
+                            <span className="text-[10px] whitespace-nowrap text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
                             {strainVal > 0 && (
-                              <span className="ml-1 inline-block rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
+                              <span className="ml-1 inline-block whitespace-nowrap rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
                                 负荷 {strainVal}
                               </span>
                             )}
                           </td>
-                          <td className="py-1.5 pr-1">
+                          <td className="py-1.5 pr-1 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <select
                                 aria-label={`${t.name} 动作`}
@@ -793,7 +802,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     talents: p.talents.map((x: any) => (x.id === t.id ? { ...x, action: e.target.value } : x)),
                                   }))
                                 }
-                                className={`${inputCls} h-5 w-14 px-1 text-[10px]`}
+                                className={`${inputCls} h-5 w-[64px] shrink-0 px-1 text-[11px]`}
                               >
                                 <option value="">-</option>
                                 {ED4Engine.ACTION_TYPES.map((act) => (
@@ -817,13 +826,15 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     ),
                                   }))
                                 }
-                                className={`${inputCls} h-5 w-9 px-1 text-center text-[10px] tabular-nums`}
+                                className={`${noSpinInputCls} h-5 w-[32px] shrink-0 px-0.5 text-center text-[11px] tabular-nums ${
+                                  strainVal > 0 ? 'border-destructive/60 bg-destructive/10 font-bold text-destructive' : ''
+                                }`}
                                 title="负荷"
                               />
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 tabular-nums">
-                            <div className="flex items-center gap-1">
+                          <td className="py-1.5 pr-1 align-middle tabular-nums whitespace-nowrap">
+                            <div className="flex items-center gap-0.5">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -832,7 +843,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     talents: p.talents.map((x: any) => (x.id === t.id ? { ...x, rank: Math.max(1, x.rank - 1) } : x)),
                                   }))
                                 }
-                                className={`${btnSmCls} h-5 w-5 px-0`}
+                                className={`${btnSmCls} h-5 w-4.5 px-0`}
                               >
                                 -
                               </button>
@@ -845,14 +856,14 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     talents: p.talents.map((x: any) => (x.id === t.id ? { ...x, rank: x.rank + 1 } : x)),
                                   }))
                                 }
-                                className={`${btnSmCls} h-5 w-5 px-0`}
+                                className={`${btnSmCls} h-5 w-4.5 px-0`}
                               >
                                 +
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-mono font-bold text-foreground tabular-nums">Step {effStep}</td>
-                          <td className="py-1.5 text-right">
+                          <td className="py-1.5 pr-1 align-middle font-mono font-bold text-foreground tabular-nums whitespace-nowrap">Step {effStep}</td>
+                          <td className="py-1.5 text-right align-middle whitespace-nowrap">
                             <div className="inline-flex items-center gap-1">
                               <label className="inline-flex cursor-pointer items-center gap-0.5 text-[11px] text-muted-foreground">
                                 <input
@@ -875,7 +886,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                 onClick={() =>
                                   onUpdatePl((p) => ({ ...p, talents: p.talents.filter((x: any) => x.id !== t.id) }))
                                 }
-                                className={`${btnSmCls} h-6 w-6 px-0 text-muted-foreground hover:text-foreground`}
+                                className={`${btnSmCls} h-6 w-5.5 px-0 text-muted-foreground hover:text-foreground`}
                               >
                                 ×
                               </button>
@@ -919,7 +930,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 aria-label="新天赋动作"
                 value={newTalent.action}
                 onChange={(e) => setNewTalent((s) => ({ ...s, action: e.target.value }))}
-                className={`${inputCls} w-14 px-1`}
+                className={`${inputCls} w-[68px] px-1.5`}
                 title="动作"
               >
                 <option value="">动作</option>
@@ -935,7 +946,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 max={15}
                 value={newTalent.rank}
                 onChange={(e) => setNewTalent((s) => ({ ...s, rank: Number(e.target.value) || 1 }))}
-                className={`${inputCls} w-11 tabular-nums`}
+                className={`${noSpinInputCls} w-10 text-center tabular-nums`}
                 title="等级"
               />
               <input
@@ -944,7 +955,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 max={9}
                 value={newTalent.strain}
                 onChange={(e) => setNewTalent((s) => ({ ...s, strain: Number(e.target.value) || 0 }))}
-                className={`${inputCls} w-11 tabular-nums`}
+                className={`${noSpinInputCls} w-10 text-center tabular-nums`}
                 title="负荷"
               />
               <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -963,7 +974,7 @@ export function PlSheetView(props: PlSheetViewProps) {
           </div>
 
           {/* 角色技能（去盒化无外套框） */}
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col">
             <div className="mb-2 flex items-center justify-between gap-2 border-b border-border pb-1.5">
               <span className="font-serif text-xs font-semibold text-card-foreground">角色技能 ({(pl.skills || []).length})</span>
               <input
@@ -974,15 +985,22 @@ export function PlSheetView(props: PlSheetViewProps) {
                 className={`${inputCls} h-6 w-28 text-[11px]`}
               />
             </div>
-            <div className="mb-2 max-h-60 flex-1 overflow-y-auto">
-              <table className="w-full border-collapse text-xs">
+            <div className="mb-2 max-h-60 flex-1 overflow-y-auto overflow-x-auto">
+              <table className="w-full table-fixed border-collapse text-xs">
+                <colgroup>
+                  <col />
+                  <col className="w-[106px]" />
+                  <col className="w-[62px]" />
+                  <col className="w-[56px]" />
+                  <col className="w-[72px]" />
+                </colgroup>
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
-                    <th className="py-1 font-medium">技能</th>
-                    <th className="py-1 font-medium">动作 / 负荷</th>
-                    <th className="py-1 font-medium">等级</th>
-                    <th className="py-1 font-medium">Step</th>
-                    <th className="py-1 text-right font-medium">操作</th>
+                    <th className="py-1 pr-1 font-medium">技能</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">动作 / 负荷</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">等级</th>
+                    <th className="py-1 pr-1 font-medium whitespace-nowrap">Step</th>
+                    <th className="py-1 text-right font-medium whitespace-nowrap">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -996,19 +1014,19 @@ export function PlSheetView(props: PlSheetViewProps) {
                       const strainVal = Number(sk.strain) || 0;
                       return (
                         <tr key={sk.id} className="hover:bg-muted/50">
-                          <td className="py-1.5 pr-1">
+                          <td className="py-1.5 pr-1.5 align-middle break-words whitespace-normal">
                             {sk.category ? (
                               <span className="mr-1 font-serif text-[10px] text-muted-foreground">[{sk.category.replace('技能', '')}]</span>
                             ) : null}
                             <span className="font-medium text-foreground">{sk.name}</span>{' '}
-                            <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
+                            <span className="text-[10px] whitespace-nowrap text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
                             {strainVal > 0 && (
-                              <span className="ml-1 inline-block rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
+                              <span className="ml-1 inline-block whitespace-nowrap rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
                                 负荷 {strainVal}
                               </span>
                             )}
                           </td>
-                          <td className="py-1.5 pr-1">
+                          <td className="py-1.5 pr-1 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-1">
                               <select
                                 aria-label={`${sk.name} 动作`}
@@ -1019,7 +1037,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     skills: p.skills.map((x: any) => (x.id === sk.id ? { ...x, action: e.target.value } : x)),
                                   }))
                                 }
-                                className={`${inputCls} h-5 w-14 px-1 text-[10px]`}
+                                className={`${inputCls} h-5 w-[64px] shrink-0 px-1 text-[11px]`}
                               >
                                 <option value="">-</option>
                                 {ED4Engine.ACTION_TYPES.map((act) => (
@@ -1043,13 +1061,15 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     ),
                                   }))
                                 }
-                                className={`${inputCls} h-5 w-9 px-1 text-center text-[10px] tabular-nums`}
+                                className={`${noSpinInputCls} h-5 w-[32px] shrink-0 px-0.5 text-center text-[11px] tabular-nums ${
+                                  strainVal > 0 ? 'border-destructive/60 bg-destructive/10 font-bold text-destructive' : ''
+                                }`}
                                 title="负荷"
                               />
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 tabular-nums">
-                            <div className="flex items-center gap-1">
+                          <td className="py-1.5 pr-1 align-middle tabular-nums whitespace-nowrap">
+                            <div className="flex items-center gap-0.5">
                               <button
                                 type="button"
                                 onClick={() =>
@@ -1058,7 +1078,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     skills: p.skills.map((x: any) => (x.id === sk.id ? { ...x, rank: Math.max(1, x.rank - 1) } : x)),
                                   }))
                                 }
-                                className={`${btnSmCls} h-5 w-5 px-0`}
+                                className={`${btnSmCls} h-5 w-4.5 px-0`}
                               >
                                 -
                               </button>
@@ -1071,14 +1091,14 @@ export function PlSheetView(props: PlSheetViewProps) {
                                     skills: p.skills.map((x: any) => (x.id === sk.id ? { ...x, rank: x.rank + 1 } : x)),
                                   }))
                                 }
-                                className={`${btnSmCls} h-5 w-5 px-0`}
+                                className={`${btnSmCls} h-5 w-4.5 px-0`}
                               >
                                 +
                               </button>
                             </div>
                           </td>
-                          <td className="py-1.5 pr-1 font-mono font-bold text-foreground tabular-nums">Step {effStep}</td>
-                          <td className="py-1.5 text-right">
+                          <td className="py-1.5 pr-1 align-middle font-mono font-bold text-foreground tabular-nums whitespace-nowrap">Step {effStep}</td>
+                          <td className="py-1.5 text-right align-middle whitespace-nowrap">
                             <div className="inline-flex items-center gap-1">
                               <button
                                 type="button"
@@ -1092,7 +1112,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                                 onClick={() =>
                                   onUpdatePl((p) => ({ ...p, skills: p.skills.filter((x: any) => x.id !== sk.id) }))
                                 }
-                                className={`${btnSmCls} h-6 w-6 px-0 text-muted-foreground hover:text-foreground`}
+                                className={`${btnSmCls} h-6 w-5.5 px-0 text-muted-foreground hover:text-foreground`}
                               >
                                 ×
                               </button>
@@ -1162,7 +1182,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 aria-label="新技能动作"
                 value={newSkill.action}
                 onChange={(e) => setNewSkill((s) => ({ ...s, action: e.target.value }))}
-                className={`${inputCls} w-14 px-1`}
+                className={`${inputCls} w-[68px] px-1.5`}
                 title="动作"
               >
                 <option value="">动作</option>
@@ -1178,7 +1198,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 max={15}
                 value={newSkill.rank}
                 onChange={(e) => setNewSkill((s) => ({ ...s, rank: Number(e.target.value) || 1 }))}
-                className={`${inputCls} w-11 tabular-nums`}
+                className={`${noSpinInputCls} w-10 text-center tabular-nums`}
                 title="等级"
               />
               <input
@@ -1187,7 +1207,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 max={9}
                 value={newSkill.strain}
                 onChange={(e) => setNewSkill((s) => ({ ...s, strain: Number(e.target.value) || 0 }))}
-                className={`${inputCls} w-11 tabular-nums`}
+                className={`${noSpinInputCls} w-10 text-center tabular-nums`}
                 title="负荷"
               />
               <button type="button" onClick={addSkill} className={btnSmCls}>

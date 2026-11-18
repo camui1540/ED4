@@ -288,104 +288,231 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         <tbody>
           <tr>
             <td className="px-[14mm] py-0 align-top">
-      {/* 天赋与技能（表行防分页腰斩） */}
-      <section className="mb-3 grid grid-cols-2 gap-3">
-        <div>
-          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
-            门类天赋 ({(pl.talents || []).length})
-          </h2>
-          <table className="w-full border-collapse text-[11px]">
-            <thead>
-              <tr className={`border-b text-left ${c.subLine} ${c.muted}`}>
-                <th className="py-1 font-semibold">名称</th>
-                <th className="py-1 font-semibold">属性</th>
-                <th className="py-1 font-semibold">等级</th>
-                <th className="py-1 font-semibold">Step</th>
-                <th className="py-1 text-right font-semibold">骰池/负荷</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${c.rowDivide}`}>
-              {(pl.talents || []).map((t: any) => {
-                const effStep = Math.max(1, d.steps[t.attr] + t.rank + actionMod + (t.isAttack && pl.options?.aggressive ? 3 : 0));
-                const dice = ED4Engine.getStepDice(effStep).label;
-                return (
-                  <tr key={t.id} className="break-inside-avoid">
-                    <td className={`py-1 pr-1 font-medium ${c.title}`}>
-                      {t.name}{t.action ? <span className={`ml-1 text-[9px] ${c.subtle}`}>[{t.action}]</span> : null}
-                    </td>
-                    <td className={`py-1 pr-1 ${c.muted}`}>{ED4Engine.ATTR_NAMES[t.attr]}</td>
-                    <td className="py-1 pr-1 font-mono">{t.rank}</td>
-                    <td className={`py-1 pr-1 font-mono font-bold ${c.title}`}>Step {effStep}</td>
-                    <td className={`py-1 text-right font-mono ${c.muted}`}>
-                      {dice}{t.strain ? ` · 负荷${t.strain}` : ''}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+              {(() => {
+                const talents = pl.talents || [];
+                const skills = pl.skills || [];
+                const weapons = pl.weapons || [];
+                const gearList = pl.gear || [];
+                const threadItems = pl.threadItems || [];
 
-        <div>
-          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
-            角色技能 ({(pl.skills || []).length}) & 武器 ({(pl.weapons || []).length})
-          </h2>
-          <table className="mb-2 w-full border-collapse text-[11px]">
-            <thead>
-              <tr className={`border-b text-left ${c.subLine} ${c.muted}`}>
-                <th className="py-1 font-semibold">技能</th>
-                <th className="py-1 font-semibold">属性</th>
-                <th className="py-1 font-semibold">等级</th>
-                <th className="py-1 font-semibold">Step</th>
-                <th className="py-1 text-right font-semibold">骰池/负荷</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y ${c.rowDivide}`}>
-              {(pl.skills || []).map((sk: any) => {
-                const effStep = Math.max(1, d.steps[sk.attr] + sk.rank + actionMod + (sk.isAttack && pl.options?.aggressive ? 3 : 0));
-                const dice = ED4Engine.getStepDice(effStep).label;
-                return (
-                  <tr key={sk.id} className="break-inside-avoid">
-                    <td className={`py-1 pr-1 font-medium ${c.title}`}>
-                      {sk.category ? `[${sk.category.replace('技能', '')}] ` : ''}{sk.name}
-                      {sk.action ? <span className={`ml-1 text-[9px] ${c.subtle}`}>[{sk.action}]</span> : null}
-                    </td>
-                    <td className={`py-1 pr-1 ${c.muted}`}>{ED4Engine.ATTR_NAMES[sk.attr]}</td>
-                    <td className="py-1 pr-1 font-mono">{sk.rank}</td>
-                    <td className={`py-1 pr-1 font-mono font-bold ${c.title}`}>Step {effStep}</td>
-                    <td className={`py-1 text-right font-mono ${c.muted}`}>
-                      {dice}{sk.strain ? ` · 负荷${sk.strain}` : ''}
-                    </td>
-                  </tr>
-                );
-              })}
-              {(pl.skills || []).length === 0 && (
-                <tr>
-                  <td colSpan={5} className={`py-1.5 text-center ${c.subtle}`}>暂无技能</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                const renderTestRows = (
+                  items: any[],
+                  emptyText: string,
+                  titlePrefix?: (item: any) => string
+                ) =>
+                  items.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className={`py-1.5 text-center ${c.subtle}`}>
+                        {emptyText}
+                      </td>
+                    </tr>
+                  ) : (
+                    items.map((item: any) => {
+                      const effStep = Math.max(
+                        1,
+                        d.steps[item.attr] + item.rank + actionMod + (item.isAttack && pl.options?.aggressive ? 3 : 0)
+                      );
+                      const dice = ED4Engine.getStepDice(effStep).label;
+                      const strainVal = Number(item.strain) || 0;
+                      const actText = ED4Engine.normalizeActionType(item.action) || '-';
+                      return (
+                        <tr key={item.id} className="break-inside-avoid">
+                          <td className={`py-1 pr-1.5 align-middle font-medium break-words ${c.title}`}>
+                            {titlePrefix ? titlePrefix(item) : ''}
+                            {item.name}
+                          </td>
+                          <td className={`py-1 pr-1 align-middle whitespace-nowrap ${c.muted}`}>
+                            {ED4Engine.ATTR_NAMES[item.attr]}
+                          </td>
+                          <td className={`py-1 pr-1 text-center align-middle whitespace-nowrap ${c.muted}`}>
+                            {actText}
+                          </td>
+                          <td className="py-1 pr-1 text-center align-middle font-mono whitespace-nowrap">
+                            {item.rank}
+                          </td>
+                          <td className={`py-1 pr-1 align-middle font-mono font-bold whitespace-nowrap ${c.title}`}>
+                            Step {effStep}
+                          </td>
+                          <td className={`py-1 text-right align-middle font-mono text-[10px] whitespace-nowrap ${c.muted}`}>
+                            {dice}
+                            {strainVal > 0 ? ` · 负荷${strainVal}` : ''}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  );
 
-          <div className={`break-inside-avoid border-t pt-1.5 ${c.subLine}`}>
-            <div className={`font-serif mb-1 text-[11px] font-bold ${c.heading}`}>武器伤害</div>
-            <div className="space-y-1 text-[11px]">
-              {(pl.weapons || []).map((w: any) => {
-                const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (pl.options?.aggressive ? 3 : 0));
-                const dmgDice = ED4Engine.getStepDice(dmgStep).label;
-                return (
-                  <div key={w.id} className={`break-inside-avoid flex items-center justify-between rounded border px-2 py-0.5 ${c.subCard}`}>
-                    <span className={`font-semibold ${c.title}`}>{w.name}</span>
-                    <span className={`font-mono ${c.body}`}>
-                      基础 +{w.dmgStep} · 伤害 <b>Step {dmgStep}</b> ({dmgDice})
-                    </span>
+                const renderTestColGroup = () => (
+                  <colgroup>
+                    <col />
+                    <col className="w-[36px]" />
+                    <col className="w-[34px]" />
+                    <col className="w-[30px]" />
+                    <col className="w-[48px]" />
+                    <col className="w-[78px]" />
+                  </colgroup>
+                );
+
+                const talentsCard = (
+                  <div key="talents">
+                    <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+                      门类天赋 ({talents.length})
+                    </h2>
+                    <table className="w-full table-fixed border-collapse text-[11px] leading-[1.35]">
+                      {renderTestColGroup()}
+                      <thead>
+                        <tr className={`border-b text-left ${c.subLine} ${c.muted}`}>
+                          <th className="py-1 pr-1.5 font-semibold">名称</th>
+                          <th className="py-1 pr-1 font-semibold whitespace-nowrap">属性</th>
+                          <th className="py-1 pr-1 text-center font-semibold whitespace-nowrap">动作</th>
+                          <th className="py-1 pr-1 text-center font-semibold whitespace-nowrap">等级</th>
+                          <th className="py-1 pr-1 font-semibold whitespace-nowrap">Step</th>
+                          <th className="py-1 text-right font-semibold whitespace-nowrap">骰池/负荷</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${c.rowDivide}`}>
+                        {renderTestRows(talents, '暂无天赋')}
+                      </tbody>
+                    </table>
                   </div>
                 );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
+
+                const skillsCard = (
+                  <div key="skills">
+                    <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+                      角色技能 ({skills.length})
+                    </h2>
+                    <table className="w-full table-fixed border-collapse text-[11px] leading-[1.35]">
+                      {renderTestColGroup()}
+                      <thead>
+                        <tr className={`border-b text-left ${c.subLine} ${c.muted}`}>
+                          <th className="py-1 pr-1.5 font-semibold">技能</th>
+                          <th className="py-1 pr-1 font-semibold whitespace-nowrap">属性</th>
+                          <th className="py-1 pr-1 text-center font-semibold whitespace-nowrap">动作</th>
+                          <th className="py-1 pr-1 text-center font-semibold whitespace-nowrap">等级</th>
+                          <th className="py-1 pr-1 font-semibold whitespace-nowrap">Step</th>
+                          <th className="py-1 text-right font-semibold whitespace-nowrap">骰池/负荷</th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${c.rowDivide}`}>
+                        {renderTestRows(skills, '暂无技能', (sk) =>
+                          sk.category ? `[${sk.category.replace('技能', '')}] ` : ''
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+
+                const weaponsCard = (
+                  <div key="weapons" className="break-inside-avoid">
+                    <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+                      武器伤害 ({weapons.length})
+                    </h2>
+                    {weapons.length === 0 ? (
+                      <div className={`text-[11px] ${c.subtle}`}>暂无武器</div>
+                    ) : (
+                      <div className="space-y-1 text-[11px]">
+                        {weapons.map((w: any) => {
+                          const dmgStep = Math.max(1, d.steps.STR + (Number(w.dmgStep) || 0) + (pl.options?.aggressive ? 3 : 0));
+                          const dmgDice = ED4Engine.getStepDice(dmgStep).label;
+                          return (
+                            <div key={w.id} className={`break-inside-avoid flex items-center justify-between rounded border px-2 py-0.5 ${c.subCard}`}>
+                              <span className={`font-semibold ${c.title}`}>{w.name}</span>
+                              <span className={`font-mono whitespace-nowrap ${c.body}`}>
+                                基础 +{w.dmgStep} · 伤害 <b>Step {dmgStep}</b> ({dmgDice})
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+
+                const gearCard = (
+                  <div key="gear" className="break-inside-avoid">
+                    <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+                      普通装备与防具 ({gearList.length})
+                    </h2>
+                    {gearList.length === 0 ? (
+                      <div className={`text-[11px] ${c.subtle}`}>暂无额外记录装备</div>
+                    ) : (
+                      <ul className="space-y-0.5 text-[11px]">
+                        {gearList.map((g: any, i: number) => (
+                          <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
+                            <span>
+                              <span className={`font-serif text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
+                              <b className={c.title}>{g.name}</b>
+                              {g.rank && g.rank !== '-' ? ` (${g.rank})` : ''}
+                            </span>
+                            <span className={`shrink-0 ${c.muted}`}>{g.effect || '-'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                );
+
+                const threadAndWealthCard = (
+                  <div key="threadWealth" className="break-inside-avoid">
+                    <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
+                      脉路物品 ({threadItems.length}) 与传说财富
+                    </h2>
+                    {threadItems.length > 0 && (
+                      <ul className="mb-1.5 space-y-0.5 text-[11px]">
+                        {threadItems.map((ti: any, i: number) => (
+                          <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
+                            <span>
+                              <span className={`font-serif text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
+                              <b className={c.title}>{ti.name}</b>
+                              {ti.type && ti.type !== '-' ? ` (${ti.type})` : ''}
+                            </span>
+                            <span className={`shrink-0 ${c.muted}`}>{ti.effect || '-'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div className={`rounded border p-1.5 text-[11px] ${c.subCard}`}>
+                      <div>
+                        传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望/声誉：<b>{pl.legend?.renown || '-'}</b>
+                      </div>
+                      <div className="mt-0.5 font-mono">
+                        金币 {pl.wealth?.gold ?? 0} · 银币 {pl.wealth?.silver ?? 0} · 铜币 {pl.wealth?.copper ?? 0}
+                        {pl.wealth?.other ? ` · ${pl.wealth.other}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                );
+
+                // 按左右独立列高度贪心自动平衡（天赋较少时将武器伤害与装备优先排至左栏下方）
+                const leftNodes: React.ReactNode[] = [talentsCard];
+                const rightNodes: React.ReactNode[] = [skillsCard];
+                let leftWeight = Math.max(1, talents.length) + 1.5;
+                let rightWeight = Math.max(1, skills.length) + 1.5;
+
+                const extraCards: Array<{ node: React.ReactNode; weight: number }> = [
+                  { node: weaponsCard, weight: Math.max(1, weapons.length) + 1.5 },
+                  { node: gearCard, weight: Math.max(1, gearList.length) + 1.5 },
+                  { node: threadAndWealthCard, weight: threadItems.length + 3 },
+                ];
+
+                for (const card of extraCards) {
+                  if (leftWeight <= rightWeight) {
+                    leftNodes.push(card.node);
+                    leftWeight += card.weight;
+                  } else {
+                    rightNodes.push(card.node);
+                    rightWeight += card.weight;
+                  }
+                }
+
+                return (
+                  <section className="mb-3 flex items-start gap-[16px]">
+                    <div className="flex min-w-0 flex-1 flex-col gap-[12px]">{leftNodes}</div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-[12px]">{rightNodes}</div>
+                  </section>
+                );
+              })()}
             </td>
           </tr>
 
@@ -449,64 +576,6 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               </td>
             </tr>
           )}
-
-          {/* 装备、脉路物品与传说财富 */}
-          <tr>
-            <td className="px-[14mm] py-0 align-top">
-      <section className="grid grid-cols-2 gap-3">
-        <div className="break-inside-avoid">
-          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
-            普通装备与防具 ({(pl.gear || []).length})
-          </h2>
-          {(pl.gear || []).length === 0 ? (
-            <div className={`text-[11px] ${c.subtle}`}>暂无额外记录装备</div>
-          ) : (
-            <ul className="space-y-0.5 text-[11px]">
-              {pl.gear.map((g: any, i: number) => (
-                <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
-                  <span>
-                    <span className={`font-serif text-[10px] ${c.subtle}`}>[{g.equipped !== false ? '激活' : '未穿'}]</span>{' '}
-                    <b className={c.title}>{g.name}</b>
-                    {g.rank && g.rank !== '-' ? ` (${g.rank})` : ''}
-                  </span>
-                  <span className={c.muted}>{g.effect || '-'}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="break-inside-avoid">
-          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
-            脉路物品 ({(pl.threadItems || []).length}) 与传说财富
-          </h2>
-          {(pl.threadItems || []).length > 0 && (
-            <ul className="mb-1.5 space-y-0.5 text-[11px]">
-              {pl.threadItems.map((ti: any, i: number) => (
-                <li key={i} className={`break-inside-avoid flex items-baseline justify-between gap-2 border-b py-0.5 ${c.rowBorder}`}>
-                  <span>
-                    <span className={`font-serif text-[10px] ${c.subtle}`}>[{ti.equipped !== false ? '激活' : '未启'}]</span>{' '}
-                    <b className={c.title}>{ti.name}</b>
-                    {ti.type && ti.type !== '-' ? ` (${ti.type})` : ''}
-                  </span>
-                  <span className={c.muted}>{ti.effect || '-'}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className={`rounded border p-1.5 text-[11px] ${c.subCard}`}>
-            <div>
-              传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望/声誉：<b>{pl.legend?.renown || '-'}</b>
-            </div>
-            <div className="mt-0.5 font-mono">
-              金币 {pl.wealth?.gold ?? 0} · 银币 {pl.wealth?.silver ?? 0} · 铜币 {pl.wealth?.copper ?? 0}
-              {pl.wealth?.other ? ` · ${pl.wealth.other}` : ''}
-            </div>
-          </div>
-        </div>
-      </section>
-            </td>
-          </tr>
         </tbody>
       </table>
 

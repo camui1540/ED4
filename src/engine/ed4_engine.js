@@ -369,7 +369,7 @@ const RACES = {
       { keys: ['领导', 'leadership'], action: '简单', strain: 0 },
       { keys: ['察觉', '感知检定', '敏锐感官', 'awareness', 'perception'], action: '简单', strain: 0 },
       { keys: ['隐秘行动', '潜行', 'stealthy stride', 'stealth'], action: '简单', strain: 0 },
-      { keys: ['空帆航行', '飞空航行', 'air sailing'], action: '简单', strain: 0 },
+      { keys: ['空帆航行', '飞空航行', '驾空驭风', 'air sailing'], action: '简单', strain: 0 },
       { keys: ['攀爬', 'climbing'], action: '简单', strain: 0 },
       { keys: ['游泳', 'swimming'], action: '简单', strain: 0 },
       { keys: ['跳跃', 'jumping'], action: '简单', strain: 0 },
@@ -383,13 +383,13 @@ const RACES = {
       { keys: ['投掷武器', 'throwing weapons'], action: '标准', strain: 0 },
       { keys: ['徒手搏斗', '空手搏斗', '格斗', 'unarmed combat'], action: '标准', strain: 0 },
       { keys: ['施法', 'spellcasting'], action: '标准', strain: 0 },
-      { keys: ['交涉', '谈吐', '说服', '礼仪', '贿赂', '魅惑', 'first impression', 'persuasion', 'conversation', 'diplomacy', 'etiquette', 'bribery', 'seduction'], action: '标准', strain: 0 },
+      { keys: ['交涉', '谈吐', '说服', '议价', '礼仪', '贿赂', '魅惑', 'first impression', 'persuasion', 'conversation', 'diplomacy', 'etiquette', 'bribery', 'seduction', 'haggling'], action: '标准', strain: 0 },
       { keys: ['第一印象'], action: '标准', strain: 0 },
       { keys: ['急救', '医疗', '治疗伤势', 'physician', 'treat wounds'], action: '标准', strain: 0 },
       { keys: ['撬锁', '开锁', 'lock picking'], action: '标准', strain: 0 },
       { keys: ['解除陷阱', 'disarm trap'], action: '标准', strain: 0 },
       { keys: ['扒窃', '妙手', 'pick pockets'], action: '标准', strain: 0 },
-      { keys: ['炼金术', '制图', '工匠', '锻造', '知识', '历史', '语言', '读写', 'alchemy', 'artisan', 'mapmaking', 'knowledge', 'speak language', 'read and write'], action: '标准', strain: 0 },
+      { keys: ['炼金术', '制图', '工匠', '锻造', '知识', '历史', '学识', '语言', '读写', 'alchemy', 'artisan', 'mapmaking', 'knowledge', 'speak language', 'read and write'], action: '标准', strain: 0 },
       { keys: ['野兽契约', '驯兽', 'animal bond', 'dominate beast'], action: '标准', strain: 0 },
 
       // 持续 / 无动作
@@ -402,11 +402,11 @@ const RACES = {
       if (!s || s === '-' || s === '未设') return '';
       if (ACTION_TYPES.includes(s)) return s;
       const low = s.toLowerCase();
-      if (low.includes('standard') || s.includes('标准')) return '标准';
+      if (low.includes('standard') || low === 'std' || s.includes('标准')) return '标准';
       if (low.includes('simple') || s.includes('简单')) return '简单';
       if (low.includes('free') || s.includes('自由')) return '自由';
       if (low.includes('sustained') || s.includes('持续')) return '持续';
-      if (low === 'none' || low === 'na' || s === '无' || s === '无动作') return '无';
+      if (low === 'none' || low === 'na' || low === 'passive' || s === '无' || s === '无动作' || s === '被动') return '无';
       return '';
     }
 
@@ -849,8 +849,8 @@ function matchRaceId(raw) {
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
           else if (h === '属性') attrCol = c;
-          else if (h === '动作' || h.includes('动作')) actionCol = c;
-          else if (h.includes('负荷') || h.includes('劳累')) strainCol = c;
+          else if (h === '动作' || h.includes('动作') || h.toLowerCase().includes('action')) actionCol = c;
+          else if (h.includes('负荷') || h.includes('劳累') || h.toLowerCase().includes('strain')) strainCol = c;
         }
         for (let r = hr + 1; r <= maxR; r++) {
           const tName = cellStr(r, nameCol).replace(/\s+/g, ' ').trim();
@@ -863,8 +863,10 @@ function matchRaceId(raw) {
           const parsedAction = normalizeActionType(rawAction);
           const rule = lookupTalentSkillRule(tName);
           const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
-          const rawStrain = strainCol > 0 ? cellNum(r, strainCol) : undefined;
-          const strain = rawStrain !== undefined ? rawStrain : ((!rawAction && rule?.strain) ? rule.strain : 0);
+          const strainText = strainCol > 0 ? cellStr(r, strainCol) : '';
+          const strainMatch = strainText.match(/\d+/);
+          const rawStrain = strainMatch ? Number(strainMatch[0]) : undefined;
+          const strain = (rawStrain !== undefined && rawStrain > 0) ? rawStrain : (rule?.strain ?? 0);
           const isAttack = tName.includes('攻击') || tName.includes('武器') || tName.includes('徒手') || tName.toLowerCase().includes('weapon');
           data.talents.push({ id: `t_imp_${r}`, name: tName, attr, rank: rank || 1, action, strain, isAttack });
         }
@@ -1102,8 +1104,8 @@ function matchRaceId(raw) {
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
           else if (h === '属性' || h === '关键属性') attrCol = c;
-          else if (h === '动作' || h.includes('动作')) actionCol = c;
-          else if (h.includes('负荷') || h.includes('劳累')) strainCol = c;
+          else if (h === '动作' || h.includes('动作') || h.toLowerCase().includes('action')) actionCol = c;
+          else if (h.includes('负荷') || h.includes('劳累') || h.toLowerCase().includes('strain')) strainCol = c;
         }
         for (let r = hr + 1; r <= maxR; r++) {
           const skName = cellStr(r, nameCol);
@@ -1115,8 +1117,10 @@ function matchRaceId(raw) {
           const parsedAction = normalizeActionType(rawAction);
           const rule = lookupTalentSkillRule(skName, cat);
           const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
-          const rawStrain = strainCol > 0 ? cellNum(r, strainCol) : undefined;
-          const strain = rawStrain !== undefined ? rawStrain : ((!rawAction && rule?.strain) ? rule.strain : 0);
+          const strainText = strainCol > 0 ? cellStr(r, strainCol) : '';
+          const strainMatch = strainText.match(/\d+/);
+          const rawStrain = strainMatch ? Number(strainMatch[0]) : undefined;
+          const strain = (rawStrain !== undefined && rawStrain > 0) ? rawStrain : (rule?.strain ?? 0);
           data.skills.push({
             id: `sk_imp_${r}`,
             category: cat,
