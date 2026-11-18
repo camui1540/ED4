@@ -109,40 +109,38 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             <td className="h-[12mm] p-0" aria-hidden="true" />
           </tr>
         </tfoot>
-        {/* A4 第一页：角色抬头 + 档案/立绘/外观 + 核心属性/衍生数值 + 健康/护甲 + 人物背景 */}
+        {/* A4 第一页：角色抬头 + 立绘/档案/背景 + 核心属性/衍生数值 + 健康 + 防具与状态 */}
         <tbody className="print-page-one break-after-page">
           <tr>
             <td className="px-[14mm] py-0 align-top">
         <header className={`break-inside-avoid mb-2.5 border-b-2 pb-2 ${c.headerBorder}`}>
           <div className="flex items-baseline justify-between gap-4">
-            <div className="flex items-baseline gap-3">
-              <h1 className={`font-display text-2xl font-bold tracking-tight ${c.title}`}>
-                {pl.name || '未命名角色'}
-              </h1>
-              <span className={`font-display text-sm font-semibold ${c.body}`}>
-                {d.race.name} · {prog.disc.name}
-              </span>
-              <span className={`font-serif rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
-                {pl.circle}环
-              </span>
-            </div>
-            <div className={`font-mono text-xs font-semibold ${c.muted}`}>
+            <h1 className={`min-w-0 font-display text-2xl font-bold leading-snug tracking-tight ${c.title}`}>
+              {pl.name || '未命名角色'}
+            </h1>
+            <div className={`shrink-0 whitespace-nowrap font-mono text-xs font-semibold ${c.muted}`}>
               Earthdawn 4E 角色档案 · 业力骰 D{pl.karmaDie || 6}
             </div>
           </div>
-          <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${c.muted}`}>
-            <span>移速 <b className="font-mono">{d.moveDisplay ?? d.race.move}</b> 码</span>
-            <span>负重 <b className="font-mono">{d.carry}</b> 磅</span>
-            <span>种族特性：{d.race.traits}</span>
+          <div className={`mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] ${c.muted}`}>
+            <span className={`whitespace-nowrap font-display text-xs font-semibold ${c.body}`}>
+              {d.race.name} · {prog.disc.name}
+            </span>
+            <span className={`whitespace-nowrap font-serif rounded border px-1.5 py-0.5 text-[10px] font-semibold ${c.badge}`}>
+              {pl.circle}环
+            </span>
+            <span className="whitespace-nowrap">移速 <b className="font-mono">{d.moveDisplay ?? d.race.move}</b> 码</span>
+            <span className="whitespace-nowrap">负重 <b className="font-mono">{d.carry}</b> 磅</span>
+            <span className="whitespace-nowrap">种族特性：{d.race.traits}</span>
             {bonusTags.map((b) => (
-              <span key={b} className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.badge}`}>
+              <span key={b} className={`whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.badge}`}>
                 {b}
               </span>
             ))}
           </div>
         </header>
 
-        {/* 独立角色立绘（5cm-9cm 自适应高，兼容横图/竖图） + 个人档案与防具状态 */}
+        {/* 独立角色立绘（5cm-9cm 自适应高，兼容横图/竖图） + 个人档案与人物背景 */}
         <section className="break-inside-avoid mb-2.5 flex items-stretch gap-3.5">
           {pl.portraitUrl && (
             <div className="flex shrink-0 items-center justify-center">
@@ -153,8 +151,8 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
               />
             </div>
           )}
-          <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
-            <div className={`flex flex-1 flex-col justify-between rounded border p-2 ${c.card}`}>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className={`rounded border p-2 ${c.card}`}>
               <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
                 个人档案与外貌特征
               </div>
@@ -167,27 +165,17 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 <div>发色：<b className={c.title}>{pl.hairColor || '-'}</b></div>
                 <div className="col-span-2">肤色：<b className={c.title}>{pl.skinColor || '-'}</b></div>
               </div>
-              <div className={`mt-1 border-t pt-1 text-[10px] ${c.rowBorder} ${c.muted}`}>
+              <div className={`mt-1.5 border-t pt-1 text-[10px] ${c.rowBorder} ${c.muted}`}>
                 传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望：<b>{pl.legend?.renown || '-'}</b> · 财富：金币 <b className="font-mono">{pl.wealth?.gold ?? 0}</b> / 银币 <b className="font-mono">{pl.wealth?.silver ?? 0}</b> / 铜币 <b className="font-mono">{pl.wealth?.copper ?? 0}</b>
               </div>
             </div>
 
-            <div className={`rounded border p-2 ${c.card}`}>
+            <div className={`flex flex-1 flex-col rounded border p-2 ${c.card}`}>
               <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
-                防具盾牌与当前激活状态
+                人物背景
               </div>
-              <div className={`space-y-0.5 text-[10px] ${c.body}`}>
-                <div>
-                  <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
-                </div>
-                <div>
-                  <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
-                </div>
-                <div>
-                  <b>当前战斗选项</b>：{activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态'}
-                  {' · '}
-                  <b>异常状态</b>：{activeStatuses.length > 0 ? activeStatuses.join('、') : '正常'}
-                </div>
+              <div className={`font-pixel whitespace-pre-wrap break-words text-[10px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
+                {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
               </div>
             </div>
           </div>
@@ -273,13 +261,24 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </section>
 
-        {/* 人物背景（固定排在 A4 第一页末尾） */}
-        <section className={`rounded border p-2 ${c.card}`}>
-          <h2 className={`font-serif break-inside-avoid mb-1 border-b pb-0.5 text-xs font-bold ${c.subLine} ${c.heading}`}>
-            人物背景
+        {/* 防具盾牌与当前激活状态（固定排在 A4 第一页末尾） */}
+        <section className={`break-inside-avoid rounded border p-2 ${c.card}`}>
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.subLine} ${c.heading}`}>
+            防具盾牌与当前激活状态
           </h2>
-          <div className={`font-pixel whitespace-pre-wrap break-words text-[10px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
-            {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
+          <div className={`grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] ${c.body}`}>
+            <div>
+              <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
+            </div>
+            <div>
+              <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
+            </div>
+            <div>
+              <b>当前战斗选项</b>：{activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态'}
+            </div>
+            <div>
+              <b>异常状态</b>：{activeStatuses.length > 0 ? activeStatuses.join('、') : '无'}
+            </div>
           </div>
         </section>
             </td>
