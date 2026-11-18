@@ -139,6 +139,10 @@ export default function App() {
   }, [pdfMode]);
 
   useEffect(() => {
+    if (exportModalOpen) void prewarmPrintFonts(false);
+  }, [exportModalOpen]);
+
+  useEffect(() => {
     try {
       localStorage.setItem('ed4_pl_sheet', JSON.stringify(state.pl));
     } catch {
@@ -1463,7 +1467,61 @@ export default function App() {
     }
   };
 
-  const handleExportPdf = () => {
+  const prewarmPrintFonts = async (waitForReady: boolean) => {
+    const printEl = document.querySelector<HTMLElement>('.print-sheet');
+    if (!printEl) return;
+    printEl.dataset.fontPrewarm = 'true';
+    void printEl.offsetHeight;
+
+    const uniqueChars =
+      Array.from(new Set((printEl.textContent || '').replace(/\s+/g, ''))).join('') || '角色档案0123';
+    const fontsApi = document.fonts;
+    if (fontsApi) {
+      const seen = new Set<string>();
+      const loadTasks: Promise<unknown>[] = [];
+      const enqueueLoad = (descriptor: string) => {
+        if (seen.has(descriptor)) return;
+        seen.add(descriptor);
+        loadTasks.push(Promise.resolve(fontsApi.load(descriptor, uniqueChars)).catch(() => []));
+      };
+
+      for (const face of fontsApi) {
+        const cleanFamily = face.family.replace(/^["']|["']$/g, '');
+        enqueueLoad(`${face.style || 'normal'} ${face.weight || '400'} 14px "${cleanFamily}"`);
+      }
+      for (const fam of [
+        'SuCaiJiShi-SheHuiTi',
+        'Source Han Serif CN for Display',
+        'Sarasa Gothic SC',
+        'Sarasa UI SC',
+        'Cubic 11',
+        'JetBrains Mono',
+      ]) {
+        for (const w of ['400', '600', '700']) {
+          enqueueLoad(`normal ${w} 14px "${fam}"`);
+        }
+      }
+
+      if (waitForReady) {
+        await Promise.race([
+          Promise.allSettled(loadTasks).then(() => fontsApi.ready),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 2500)),
+        ]);
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        );
+      }
+    }
+    if (waitForReady) {
+      delete printEl.dataset.fontPrewarm;
+    } else {
+      window.setTimeout(() => {
+        delete printEl.dataset.fontPrewarm;
+      }, 1200);
+    }
+  };
+
+  const handleExportPdf = async () => {
     const originalTitle = document.title;
     const printTitle = getExportBaseName(state.pl);
     let restored = false;
@@ -1473,10 +1531,12 @@ export default function App() {
       document.title = originalTitle;
     };
 
-    setExportModalOpen(false);
     document.documentElement.dataset.printMode = pdfMode;
     document.title = printTitle;
     window.addEventListener('afterprint', restoreTitle, { once: true });
+
+    await prewarmPrintFonts(true);
+    setExportModalOpen(false);
 
     window.setTimeout(() => {
       window.print();

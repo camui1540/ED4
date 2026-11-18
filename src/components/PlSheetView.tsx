@@ -1687,7 +1687,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                       if (!rawUrl) return;
                       const img = new Image();
                       img.onload = () => {
-                        const maxEdge = 480;
+                        const maxEdge = 720;
                         const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
                         const canvas = document.createElement('canvas');
                         canvas.width = Math.max(1, Math.round(img.width * scale));
@@ -1696,7 +1696,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                         if (ctx) {
                           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                           const isPng = file.type === 'image/png';
-                          const compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+                          const compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.88);
                           onUpdatePl((p) => ({ ...p, portraitUrl: compressed }));
                         } else {
                           onUpdatePl((p) => ({ ...p, portraitUrl: rawUrl }));

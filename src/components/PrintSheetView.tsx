@@ -42,6 +42,7 @@ const PRINT_PALETTE = {
     muted: 'text-neutral-700',
     subtle: 'text-neutral-600',
     badge: 'border-neutral-400 text-neutral-900',
+    portraitFrame: 'border-neutral-800 shadow-[4px_4px_0px_0px_rgba(23,23,23,0.9)]',
   },
   theme: {
     page: 'bg-background text-foreground',
@@ -58,6 +59,7 @@ const PRINT_PALETTE = {
     muted: 'text-muted-foreground',
     subtle: 'text-muted-foreground',
     badge: 'border-primary/50 bg-secondary text-secondary-foreground',
+    portraitFrame: 'border-border shadow-[var(--shadow-md)]',
   },
 };
 
@@ -127,30 +129,53 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </header>
 
-        {/* 角色档案、立绘与外貌特征 */}
-        <section className={`break-inside-avoid mb-2.5 flex gap-3 rounded border p-2 ${c.card}`}>
-          <div className={`flex h-28 w-21 shrink-0 items-center justify-center overflow-hidden rounded border ${c.subCard}`}>
-            {pl.portraitUrl ? (
-              <img src={pl.portraitUrl} alt={pl.name || '角色立绘'} className="h-full w-full object-cover" />
-            ) : (
-              <span className={`text-[10px] ${c.subtle}`}>角色图像</span>
-            )}
-          </div>
-          <div className="flex flex-1 flex-col justify-between">
-            <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
-              个人档案与外貌特征
+        {/* 独立角色立绘（~6cm高，带主题阴影） + 个人档案与防具状态 */}
+        <section className="break-inside-avoid mb-2.5 flex items-stretch gap-3.5">
+          {pl.portraitUrl && (
+            <div className="flex shrink-0 items-center justify-center">
+              <img
+                src={pl.portraitUrl}
+                alt={pl.name || '角色立绘'}
+                className={`h-[6cm] w-auto max-w-[5.6cm] rounded-[var(--radius)] border object-cover ${c.portraitFrame}`}
+              />
             </div>
-            <div className={`grid grid-cols-4 gap-x-3 gap-y-1.5 text-[11px] ${c.body}`}>
-              <div>性别：<b className={c.title}>{pl.gender || '-'}</b></div>
-              <div>年龄：<b className={`font-mono ${c.title}`}>{pl.age || '-'}</b></div>
-              <div>身高：<b className={`font-mono ${c.title}`}>{pl.height || '-'}</b></div>
-              <div>体重：<b className={`font-mono ${c.title}`}>{pl.weight || '-'}</b></div>
-              <div>瞳色：<b className={c.title}>{pl.eyeColor || '-'}</b></div>
-              <div>发色：<b className={c.title}>{pl.hairColor || '-'}</b></div>
-              <div className="col-span-2">肤色：<b className={c.title}>{pl.skinColor || '-'}</b></div>
+          )}
+          <div className="flex min-w-0 flex-1 flex-col justify-between gap-2">
+            <div className={`flex flex-1 flex-col justify-between rounded border p-2 ${c.card}`}>
+              <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
+                个人档案与外貌特征
+              </div>
+              <div className={`grid grid-cols-4 gap-x-2.5 gap-y-1 text-[11px] ${c.body}`}>
+                <div>性别：<b className={c.title}>{pl.gender || '-'}</b></div>
+                <div>年龄：<b className={`font-mono ${c.title}`}>{pl.age || '-'}</b></div>
+                <div>身高：<b className={`font-mono ${c.title}`}>{pl.height || '-'}</b></div>
+                <div>体重：<b className={`font-mono ${c.title}`}>{pl.weight || '-'}</b></div>
+                <div>瞳色：<b className={c.title}>{pl.eyeColor || '-'}</b></div>
+                <div>发色：<b className={c.title}>{pl.hairColor || '-'}</b></div>
+                <div className="col-span-2">肤色：<b className={c.title}>{pl.skinColor || '-'}</b></div>
+              </div>
+              <div className={`mt-1 border-t pt-1 text-[10px] ${c.rowBorder} ${c.muted}`}>
+                传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望：<b>{pl.legend?.renown || '-'}</b> · 财富：金币 <b className="font-mono">{pl.wealth?.gold ?? 0}</b> / 银币 <b className="font-mono">{pl.wealth?.silver ?? 0}</b> / 铜币 <b className="font-mono">{pl.wealth?.copper ?? 0}</b>
+              </div>
             </div>
-            <div className={`mt-1 border-t pt-1 text-[10px] ${c.rowBorder} ${c.muted}`}>
-              传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望：<b>{pl.legend?.renown || '-'}</b> · 财富：金币 <b className="font-mono">{pl.wealth?.gold ?? 0}</b> / 银币 <b className="font-mono">{pl.wealth?.silver ?? 0}</b> / 铜币 <b className="font-mono">{pl.wealth?.copper ?? 0}</b>
+
+            <div className={`rounded border p-2 ${c.card}`}>
+              <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
+                防具盾牌与当前激活状态
+              </div>
+              <div className={`space-y-0.5 text-[10px] ${c.body}`}>
+                <div>
+                  <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
+                </div>
+                <div>
+                  <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
+                </div>
+                <div>
+                  <b>当前战斗选项</b>：{activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态'}
+                  {' · '}
+                  <b>异常状态</b>：{activeStatuses.length > 0 ? activeStatuses.join('、') : '正常'}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -196,59 +221,41 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </section>
 
-        {/* 健康轨、资源与当前实时状态 */}
-        <section className="break-inside-avoid mb-2.5 grid grid-cols-2 gap-2.5">
-          <div className={`rounded border p-2 ${c.card}`}>
-            <div className={`mb-1 flex items-center justify-between border-b pb-1 ${c.rowBorder}`}>
-              <span className={`font-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
-              <span className={`font-mono text-[11px] ${c.muted}`}>
-                动作修正 {actionMod >= 0 ? `+${actionMod}` : actionMod} Step
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
-              <div className={`rounded border p-1 ${c.subCard}`}>
-                <div className={c.muted}>当前伤害</div>
-                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.currentDamage}</div>
-              </div>
-              <div className={`rounded border p-1 ${c.subCard}`}>
-                <div className={c.muted}>血魔法伤害</div>
-                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.bloodDamage}</div>
-              </div>
-              <div className={`rounded border p-1 ${c.subCard}`}>
-                <div className={c.muted}>负伤</div>
-                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.wounds}</div>
-              </div>
-            </div>
-            <div className={`mt-1 grid grid-cols-3 gap-1 text-[10px] ${c.body}`}>
-              <div>意识丧失：<b className="font-mono">{d.effUncon}</b></div>
-              <div>死亡：<b className="font-mono">{d.effDeath}</b></div>
-              <div>负伤阈值：<b className="font-mono">{d.woundThreshold}</b></div>
-              <div>可用业力：<b className="font-mono">{pl.karmaCurrent}/{d.karmaMax}</b> (D{pl.karmaDie})</div>
-              <div className="col-span-2">
-                回复：<b className="font-mono">{pl.recoveryCurrent}/{d.recoveryMax}</b> · Step <b className="font-mono">{recStep}</b> ({recDice})
-              </div>
-            </div>
+        {/* 实时健康轨与资源 */}
+        <section className={`break-inside-avoid mb-2.5 rounded border p-2 ${c.card}`}>
+          <div className={`mb-1.5 flex items-center justify-between border-b pb-1 ${c.rowBorder}`}>
+            <span className={`font-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
+            <span className={`font-mono text-[11px] ${c.muted}`}>
+              动作修正 {actionMod >= 0 ? `+${actionMod}` : actionMod} Step
+            </span>
           </div>
-
-          <div className={`rounded border p-2 ${c.card}`}>
-            <div className={`mb-1 border-b pb-1 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
-              防具盾牌与当前激活状态
+          <div className="grid grid-cols-6 gap-2 text-center text-[11px]">
+            <div className={`rounded border p-1 ${c.subCard}`}>
+              <div className={c.muted}>当前伤害</div>
+              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.currentDamage}</div>
             </div>
-            <div className={`space-y-1 text-[10px] ${c.body}`}>
-              <div>
-                <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
-              </div>
-              <div>
-                <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
-              </div>
-              <div>
-                <b>当前战斗选项</b>：
-                {activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态'}
-              </div>
-              <div>
-                <b>当前异常状态</b>：
-                {activeStatuses.length > 0 ? activeStatuses.join('、') : '正常'}
-              </div>
+            <div className={`rounded border p-1 ${c.subCard}`}>
+              <div className={c.muted}>血魔法伤害</div>
+              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.bloodDamage}</div>
+            </div>
+            <div className={`rounded border p-1 ${c.subCard}`}>
+              <div className={c.muted}>负伤</div>
+              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.wounds}</div>
+            </div>
+            <div className={`flex flex-col justify-center rounded border p-1 text-[10px] ${c.subCard}`}>
+              <div className={c.muted}>意识丧失 / 死亡</div>
+              <div className={`font-mono font-bold ${c.title}`}>{d.effUncon} / {d.effDeath}</div>
+              <div className={c.subtle}>阈值 {d.woundThreshold}</div>
+            </div>
+            <div className={`flex flex-col justify-center rounded border p-1 text-[10px] ${c.subCard}`}>
+              <div className={c.muted}>可用业力</div>
+              <div className={`font-mono font-bold ${c.title}`}>{pl.karmaCurrent}/{d.karmaMax}</div>
+              <div className={c.subtle}>D{pl.karmaDie}</div>
+            </div>
+            <div className={`flex flex-col justify-center rounded border p-1 text-[10px] ${c.subCard}`}>
+              <div className={c.muted}>回复检定</div>
+              <div className={`font-mono font-bold ${c.title}`}>{pl.recoveryCurrent}/{d.recoveryMax}</div>
+              <div className={c.subtle}>Step {recStep} ({recDice})</div>
             </div>
           </div>
         </section>
