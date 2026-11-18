@@ -1120,6 +1120,7 @@ export default function App() {
       if (!result) return;
       let data: any;
       if (ext === 'txt') {
+        importedXlsxBufferRef.current = null;
         data = ED4Engine.parseTxtSheet(String(result));
       } else {
         const buf = result as ArrayBuffer;
