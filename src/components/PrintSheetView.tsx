@@ -310,7 +310,9 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 const dice = ED4Engine.getStepDice(effStep).label;
                 return (
                   <tr key={t.id} className="break-inside-avoid">
-                    <td className={`py-1 pr-1 font-medium ${c.title}`}>{t.name}</td>
+                    <td className={`py-1 pr-1 font-medium ${c.title}`}>
+                      {t.name}{t.action ? <span className={`ml-1 text-[9px] ${c.subtle}`}>[{t.action}]</span> : null}
+                    </td>
                     <td className={`py-1 pr-1 ${c.muted}`}>{ED4Engine.ATTR_NAMES[t.attr]}</td>
                     <td className="py-1 pr-1 font-mono">{t.rank}</td>
                     <td className={`py-1 pr-1 font-mono font-bold ${c.title}`}>Step {effStep}</td>
@@ -335,7 +337,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                 <th className="py-1 font-semibold">属性</th>
                 <th className="py-1 font-semibold">等级</th>
                 <th className="py-1 font-semibold">Step</th>
-                <th className="py-1 text-right font-semibold">骰池</th>
+                <th className="py-1 text-right font-semibold">骰池/负荷</th>
               </tr>
             </thead>
             <tbody className={`divide-y ${c.rowDivide}`}>
@@ -346,11 +348,14 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
                   <tr key={sk.id} className="break-inside-avoid">
                     <td className={`py-1 pr-1 font-medium ${c.title}`}>
                       {sk.category ? `[${sk.category.replace('技能', '')}] ` : ''}{sk.name}
+                      {sk.action ? <span className={`ml-1 text-[9px] ${c.subtle}`}>[{sk.action}]</span> : null}
                     </td>
                     <td className={`py-1 pr-1 ${c.muted}`}>{ED4Engine.ATTR_NAMES[sk.attr]}</td>
                     <td className="py-1 pr-1 font-mono">{sk.rank}</td>
                     <td className={`py-1 pr-1 font-mono font-bold ${c.title}`}>Step {effStep}</td>
-                    <td className={`py-1 text-right font-mono ${c.muted}`}>{dice}</td>
+                    <td className={`py-1 text-right font-mono ${c.muted}`}>
+                      {dice}{sk.strain ? ` · 负荷${sk.strain}` : ''}
+                    </td>
                   </tr>
                 );
               })}

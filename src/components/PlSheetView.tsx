@@ -102,8 +102,8 @@ export function PlSheetView(props: PlSheetViewProps) {
   const [draggedSpellId, setDraggedSpellId] = useState<string | null>(null);
   const [dragOverZone, setDragOverZone] = useState<'matrix' | 'grimoire' | null>(null);
 
-  const [newTalent, setNewTalent] = useState({ name: '', attr: 'DEX', rank: 1, strain: 0, isAttack: false });
-  const [newSkill, setNewSkill] = useState({ category: '通用技能', name: '', attr: 'PER', rank: 1, strain: 0 });
+  const [newTalent, setNewTalent] = useState({ name: '', attr: 'DEX', rank: 1, action: '', strain: 0, isAttack: false });
+  const [newSkill, setNewSkill] = useState({ category: '通用技能', name: '', attr: 'PER', rank: 1, action: '', strain: 0 });
   const [newWeapon, setNewWeapon] = useState({ name: '', dmgStep: 4 });
   const [selectedDbSpell, setSelectedDbSpell] = useState('');
   const [newGear, setNewGear] = useState({ name: '', rank: '', effect: '' });
@@ -212,24 +212,30 @@ export function PlSheetView(props: PlSheetViewProps) {
   const addTalent = () => {
     const name = newTalent.name.trim();
     if (!name) return;
+    const rule = ED4Engine.lookupTalentSkillRule(name);
+    const action = newTalent.action || rule?.action || '';
+    const strain = Number(newTalent.strain) || rule?.strain || 0;
     onUpdatePl((prev) => ({
       ...prev,
-      talents: [...prev.talents, { id: `t_${Date.now()}`, ...newTalent, name }],
+      talents: [...prev.talents, { id: `t_${Date.now()}`, ...newTalent, name, action, strain }],
     }));
-    setNewTalent({ name: '', attr: 'DEX', rank: 1, strain: 0, isAttack: false });
+    setNewTalent({ name: '', attr: 'DEX', rank: 1, action: '', strain: 0, isAttack: false });
   };
 
   const addSkill = () => {
     const name = newSkill.name.trim();
     if (!name) return;
+    const rule = ED4Engine.lookupTalentSkillRule(name, newSkill.category);
+    const action = newSkill.action || rule?.action || '';
+    const strain = Number(newSkill.strain) || rule?.strain || 0;
     onUpdatePl((prev) => ({
       ...prev,
       skills: [
         ...prev.skills,
-        { id: `sk_${Date.now()}`, ...newSkill, name, isAttack: name.includes('武器') || name.includes('攻击') },
+        { id: `sk_${Date.now()}`, ...newSkill, name, action, strain, isAttack: name.includes('武器') || name.includes('攻击') },
       ],
     }));
-    setNewSkill({ category: '通用技能', name: '', attr: 'PER', rank: 1, strain: 0 });
+    setNewSkill({ category: '通用技能', name: '', attr: 'PER', rank: 1, action: '', strain: 0 });
   };
 
   const addWeapon = () => {
@@ -750,6 +756,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                     <th className="py-1 font-medium">天赋</th>
+                    <th className="py-1 font-medium">动作 / 负荷</th>
                     <th className="py-1 font-medium">等级</th>
                     <th className="py-1 font-medium">Step</th>
                     <th className="py-1 text-right font-medium">操作</th>
@@ -763,16 +770,57 @@ export function PlSheetView(props: PlSheetViewProps) {
                         1,
                         d.steps[t.attr] + t.rank + actionMod + (t.isAttack && pl.options.aggressive ? 3 : 0)
                       );
+                      const strainVal = Number(t.strain) || 0;
                       return (
                         <tr key={t.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
                             <span className="font-medium text-foreground">{t.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[t.attr]}</span>
-                            {t.strain ? (
-                              <span className="ml-1 rounded border border-border px-1 font-serif text-[10px] text-muted-foreground">
-                                负荷{t.strain}
+                            {strainVal > 0 && (
+                              <span className="ml-1 inline-block rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
+                                负荷 {strainVal}
                               </span>
-                            ) : null}
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-1">
+                            <div className="flex items-center gap-1">
+                              <select
+                                aria-label={`${t.name} 动作`}
+                                value={t.action || ''}
+                                onChange={(e) =>
+                                  onUpdatePl((p) => ({
+                                    ...p,
+                                    talents: p.talents.map((x: any) => (x.id === t.id ? { ...x, action: e.target.value } : x)),
+                                  }))
+                                }
+                                className={`${inputCls} h-5 w-14 px-1 text-[10px]`}
+                              >
+                                <option value="">-</option>
+                                {ED4Engine.ACTION_TYPES.map((act) => (
+                                  <option key={act} value={act}>
+                                    {act}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                aria-label={`${t.name} 负荷`}
+                                type="number"
+                                min={0}
+                                max={9}
+                                value={strainVal || ''}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  onUpdatePl((p) => ({
+                                    ...p,
+                                    talents: p.talents.map((x: any) =>
+                                      x.id === t.id ? { ...x, strain: Math.max(0, Number(e.target.value) || 0) } : x
+                                    ),
+                                  }))
+                                }
+                                className={`${inputCls} h-5 w-9 px-1 text-center text-[10px] tabular-nums`}
+                                title="负荷"
+                              />
+                            </div>
                           </td>
                           <td className="py-1.5 pr-1 tabular-nums">
                             <div className="flex items-center gap-1">
@@ -844,7 +892,16 @@ export function PlSheetView(props: PlSheetViewProps) {
                 type="text"
                 placeholder="天赋名"
                 value={newTalent.name}
-                onChange={(e) => setNewTalent((s) => ({ ...s, name: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const rule = ED4Engine.lookupTalentSkillRule(val);
+                  setNewTalent((s) => ({
+                    ...s,
+                    name: val,
+                    action: rule ? rule.action : s.action,
+                    strain: rule ? rule.strain : s.strain,
+                  }));
+                }}
                 className={`${inputCls} w-24`}
               />
               <select
@@ -858,22 +915,36 @@ export function PlSheetView(props: PlSheetViewProps) {
                   </option>
                 ))}
               </select>
+              <select
+                aria-label="新天赋动作"
+                value={newTalent.action}
+                onChange={(e) => setNewTalent((s) => ({ ...s, action: e.target.value }))}
+                className={`${inputCls} w-14 px-1`}
+                title="动作"
+              >
+                <option value="">动作</option>
+                {ED4Engine.ACTION_TYPES.map((act) => (
+                  <option key={act} value={act}>
+                    {act}
+                  </option>
+                ))}
+              </select>
               <input
                 type="number"
                 min={1}
                 max={15}
                 value={newTalent.rank}
                 onChange={(e) => setNewTalent((s) => ({ ...s, rank: Number(e.target.value) || 1 }))}
-                className={`${inputCls} w-12 tabular-nums`}
+                className={`${inputCls} w-11 tabular-nums`}
                 title="等级"
               />
               <input
                 type="number"
                 min={0}
-                max={5}
+                max={9}
                 value={newTalent.strain}
                 onChange={(e) => setNewTalent((s) => ({ ...s, strain: Number(e.target.value) || 0 }))}
-                className={`${inputCls} w-12 tabular-nums`}
+                className={`${inputCls} w-11 tabular-nums`}
                 title="负荷"
               />
               <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -908,6 +979,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 <thead>
                   <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                     <th className="py-1 font-medium">技能</th>
+                    <th className="py-1 font-medium">动作 / 负荷</th>
                     <th className="py-1 font-medium">等级</th>
                     <th className="py-1 font-medium">Step</th>
                     <th className="py-1 text-right font-medium">操作</th>
@@ -921,6 +993,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                         1,
                         d.steps[sk.attr] + sk.rank + actionMod + (sk.isAttack && pl.options.aggressive ? 3 : 0)
                       );
+                      const strainVal = Number(sk.strain) || 0;
                       return (
                         <tr key={sk.id} className="hover:bg-muted/50">
                           <td className="py-1.5 pr-1">
@@ -929,6 +1002,51 @@ export function PlSheetView(props: PlSheetViewProps) {
                             ) : null}
                             <span className="font-medium text-foreground">{sk.name}</span>{' '}
                             <span className="text-[10px] text-muted-foreground">{ED4Engine.ATTR_NAMES[sk.attr]}</span>
+                            {strainVal > 0 && (
+                              <span className="ml-1 inline-block rounded border border-destructive/40 bg-destructive/10 px-1 py-0 text-[10px] font-semibold text-destructive">
+                                负荷 {strainVal}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-1">
+                            <div className="flex items-center gap-1">
+                              <select
+                                aria-label={`${sk.name} 动作`}
+                                value={sk.action || ''}
+                                onChange={(e) =>
+                                  onUpdatePl((p) => ({
+                                    ...p,
+                                    skills: p.skills.map((x: any) => (x.id === sk.id ? { ...x, action: e.target.value } : x)),
+                                  }))
+                                }
+                                className={`${inputCls} h-5 w-14 px-1 text-[10px]`}
+                              >
+                                <option value="">-</option>
+                                {ED4Engine.ACTION_TYPES.map((act) => (
+                                  <option key={act} value={act}>
+                                    {act}
+                                  </option>
+                                ))}
+                              </select>
+                              <input
+                                aria-label={`${sk.name} 负荷`}
+                                type="number"
+                                min={0}
+                                max={9}
+                                value={strainVal || ''}
+                                placeholder="0"
+                                onChange={(e) =>
+                                  onUpdatePl((p) => ({
+                                    ...p,
+                                    skills: p.skills.map((x: any) =>
+                                      x.id === sk.id ? { ...x, strain: Math.max(0, Number(e.target.value) || 0) } : x
+                                    ),
+                                  }))
+                                }
+                                className={`${inputCls} h-5 w-9 px-1 text-center text-[10px] tabular-nums`}
+                                title="负荷"
+                              />
+                            </div>
                           </td>
                           <td className="py-1.5 pr-1 tabular-nums">
                             <div className="flex items-center gap-1">
@@ -985,7 +1103,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                     })}
                   {(pl.skills || []).length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-3 text-center text-muted-foreground">
+                      <td colSpan={5} className="py-3 text-center text-muted-foreground">
                         暂无技能
                       </td>
                     </tr>
@@ -996,7 +1114,16 @@ export function PlSheetView(props: PlSheetViewProps) {
             <div className="mt-auto flex flex-wrap items-center gap-1.5 border-t border-border pt-2">
               <select
                 value={newSkill.category}
-                onChange={(e) => setNewSkill((s) => ({ ...s, category: e.target.value }))}
+                onChange={(e) => {
+                  const cat = e.target.value;
+                  const rule = ED4Engine.lookupTalentSkillRule(newSkill.name, cat);
+                  setNewSkill((s) => ({
+                    ...s,
+                    category: cat,
+                    action: rule ? rule.action : s.action,
+                    strain: rule ? rule.strain : s.strain,
+                  }));
+                }}
                 className={`${inputCls} w-20`}
               >
                 <option value="通用技能">通用</option>
@@ -1008,7 +1135,16 @@ export function PlSheetView(props: PlSheetViewProps) {
                 type="text"
                 placeholder="技能名"
                 value={newSkill.name}
-                onChange={(e) => setNewSkill((s) => ({ ...s, name: e.target.value }))}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const rule = ED4Engine.lookupTalentSkillRule(val, newSkill.category);
+                  setNewSkill((s) => ({
+                    ...s,
+                    name: val,
+                    action: rule ? rule.action : s.action,
+                    strain: rule ? rule.strain : s.strain,
+                  }));
+                }}
                 className={`${inputCls} w-24`}
               />
               <select
@@ -1022,13 +1158,37 @@ export function PlSheetView(props: PlSheetViewProps) {
                   </option>
                 ))}
               </select>
+              <select
+                aria-label="新技能动作"
+                value={newSkill.action}
+                onChange={(e) => setNewSkill((s) => ({ ...s, action: e.target.value }))}
+                className={`${inputCls} w-14 px-1`}
+                title="动作"
+              >
+                <option value="">动作</option>
+                {ED4Engine.ACTION_TYPES.map((act) => (
+                  <option key={act} value={act}>
+                    {act}
+                  </option>
+                ))}
+              </select>
               <input
                 type="number"
                 min={1}
                 max={15}
                 value={newSkill.rank}
                 onChange={(e) => setNewSkill((s) => ({ ...s, rank: Number(e.target.value) || 1 }))}
-                className={`${inputCls} w-12 tabular-nums`}
+                className={`${inputCls} w-11 tabular-nums`}
+                title="等级"
+              />
+              <input
+                type="number"
+                min={0}
+                max={9}
+                value={newSkill.strain}
+                onChange={(e) => setNewSkill((s) => ({ ...s, strain: Number(e.target.value) || 0 }))}
+                className={`${inputCls} w-11 tabular-nums`}
+                title="负荷"
               />
               <button type="button" onClick={addSkill} className={btnSmCls}>
                 + 技能

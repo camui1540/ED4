@@ -53,14 +53,14 @@ export function createInitialState() {
       reserved: false,
     },
     talents: [
-      { id: 't1', name: '近战武器', attr: 'DEX', rank: 2, strain: 0, isAttack: true },
-      { id: 't2', name: '回避打击', attr: 'DEX', rank: 2, strain: 1, isAttack: false },
-      { id: 't3', name: '机动', attr: 'DEX', rank: 1, strain: 1, isAttack: false },
-      { id: 't4', name: '嘲讽', attr: 'CHA', rank: 1, strain: 0, isAttack: false },
-      { id: 't5', name: '负伤平衡', attr: 'STR', rank: 1, strain: 0, isAttack: false },
+      { id: 't1', name: '近战武器', attr: 'DEX', rank: 2, action: '标准', strain: 0, isAttack: true },
+      { id: 't2', name: '回避打击', attr: 'DEX', rank: 2, action: '自由', strain: 1, isAttack: false },
+      { id: 't3', name: '机动', attr: 'DEX', rank: 1, action: '简单', strain: 1, isAttack: false },
+      { id: 't4', name: '嘲讽', attr: 'CHA', rank: 1, action: '简单', strain: 0, isAttack: false },
+      { id: 't5', name: '负伤平衡', attr: 'STR', rank: 1, action: '自由', strain: 0, isAttack: false },
     ],
     skills: [
-      { id: 'sk1', category: '通用技能', name: '察觉', attr: 'PER', rank: 1, strain: 0, isAttack: false },
+      { id: 'sk1', category: '通用技能', name: '察觉', attr: 'PER', rank: 1, action: '简单', strain: 0, isAttack: false },
     ],
     weapons: [
       { id: 'w1', name: '阔剑', dmgStep: 5 },

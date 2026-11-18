@@ -10,6 +10,13 @@ declare const ED4Engine: {
   SPELL_ALIASES: Record<string, string>;
   LEGACY_SPELL_ID_MAP: Record<string, string>;
   WEAVING_KEYWORDS: string[];
+  ACTION_TYPES: readonly ['标准', '简单', '自由', '持续', '无'];
+  TALENT_SKILL_RULES: Array<{ keys: string[]; action: '标准' | '简单' | '自由' | '持续' | '无'; strain: number }>;
+  normalizeActionType(raw: string): '' | '标准' | '简单' | '自由' | '持续' | '无';
+  lookupTalentSkillRule(
+    name: string,
+    category?: string
+  ): { action: '标准' | '简单' | '自由' | '持续' | '无'; strain: number } | null;
   attrToStep(val: number): number;
   getStepDice(step: number): { dice: number[]; mod: number; label: string };
   rollExplodingDie(sides: number): { sum: number; first: number; text: string };

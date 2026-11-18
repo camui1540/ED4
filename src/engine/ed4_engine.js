@@ -333,6 +333,98 @@ const RACES = {
       'story weaving', 'war weaving', 'thread smithing'
     ];
 
+    const ACTION_TYPES = ['标准', '简单', '自由', '持续', '无'];
+
+    const TALENT_SKILL_RULES = [
+      // 常见自由动作天赋/技能
+      { keys: ['回避打击', '闪避', 'avoid blow'], action: '自由', strain: 1 },
+      { keys: ['杂耍防御', 'acrobatic defense'], action: '自由', strain: 1 },
+      { keys: ['反击', 'riposte'], action: '自由', strain: 2 },
+      { keys: ['负伤平衡', 'wound balance'], action: '自由', strain: 0 },
+      { keys: ['钢铁意志', 'iron will'], action: '自由', strain: 0 },
+      { keys: ['钢骨', 'steel thought'], action: '自由', strain: 0 },
+      { keys: ['心智防御', 'mind armor'], action: '自由', strain: 0 },
+      { keys: ['抵抗嘲讽', 'resist taunt'], action: '自由', strain: 0 },
+      { keys: ['第二攻击', 'second attack'], action: '自由', strain: 1 },
+      { keys: ['第二武器', 'second weapon'], action: '自由', strain: 1 },
+      { keys: ['疾步', 'sprint'], action: '自由', strain: 1 },
+      { keys: ['猛扑', 'tiger spring'], action: '自由', strain: 1 },
+      { keys: ['惊吓一击', '奇袭打击', 'surprise strike'], action: '自由', strain: 1 },
+      { keys: ['洞察弱点', 'spot armor flaw'], action: '自由', strain: 1 },
+      { keys: ['木皮', 'wood skin'], action: '自由', strain: 1 },
+      { keys: ['狂暴', 'frenzy'], action: '自由', strain: 1 },
+      { keys: ['意志之力', 'willforce'], action: '自由', strain: 1 },
+      { keys: ['法术矩阵', '强化矩阵', '共享矩阵', '护甲矩阵', 'spell matrix', 'enhanced matrix', 'shared matrix', 'armored matrix'], action: '自由', strain: 0 },
+      { keys: ['跃起', 'kip up'], action: '自由', strain: 2 },
+
+      // 常见简单动作天赋/技能
+      { keys: ['捕风者', 'wind catcher'], action: '简单', strain: 1 },
+      { keys: ['脉路编织', '元素编织', '幻术编织', '下界编织', '巫术编织', '武器编织', '战争编织', '天空编织', '骑乘编织', '野兽编织', '航行编织', '箭矢编织', '斥候编织', '窃贼编织', '故事编织', '匠脉编织', 'thread weaving', 'weaving'], action: '简单', strain: 0 },
+      { keys: ['星界感知', '星界视界', 'astral sight'], action: '简单', strain: 1 },
+      { keys: ['机动', 'maneuver'], action: '简单', strain: 1 },
+      { keys: ['气之步', 'air dance'], action: '简单', strain: 1 },
+      { keys: ['嘲讽', 'taunt'], action: '简单', strain: 0 },
+      { keys: ['威胁', '恐吓', 'intimidate', 'threaten'], action: '简单', strain: 0 },
+      { keys: ['战斗咆哮', 'battle shout', 'battle bellow'], action: '简单', strain: 0 },
+      { keys: ['领导', 'leadership'], action: '简单', strain: 0 },
+      { keys: ['察觉', '感知检定', '敏锐感官', 'awareness', 'perception'], action: '简单', strain: 0 },
+      { keys: ['隐秘行动', '潜行', 'stealthy stride', 'stealth'], action: '简单', strain: 0 },
+      { keys: ['空帆航行', '飞空航行', 'air sailing'], action: '简单', strain: 0 },
+      { keys: ['攀爬', 'climbing'], action: '简单', strain: 0 },
+      { keys: ['游泳', 'swimming'], action: '简单', strain: 0 },
+      { keys: ['跳跃', 'jumping'], action: '简单', strain: 0 },
+      { keys: ['追踪', 'tracking'], action: '简单', strain: 0 },
+      { keys: ['杂技', '翻滚', 'acrobatics'], action: '简单', strain: 0 },
+      { keys: ['骑术', '驾驭', 'riding', 'animal handling'], action: '简单', strain: 0 },
+
+      // 常见标准动作天赋/技能
+      { keys: ['近战武器', 'melee weapons'], action: '标准', strain: 0 },
+      { keys: ['投射武器', '远程武器', 'missile weapons'], action: '标准', strain: 0 },
+      { keys: ['投掷武器', 'throwing weapons'], action: '标准', strain: 0 },
+      { keys: ['徒手搏斗', '空手搏斗', '格斗', 'unarmed combat'], action: '标准', strain: 0 },
+      { keys: ['施法', 'spellcasting'], action: '标准', strain: 0 },
+      { keys: ['交涉', '谈吐', '说服', '礼仪', '贿赂', '魅惑', 'first impression', 'persuasion', 'conversation', 'diplomacy', 'etiquette', 'bribery', 'seduction'], action: '标准', strain: 0 },
+      { keys: ['第一印象'], action: '标准', strain: 0 },
+      { keys: ['急救', '医疗', '治疗伤势', 'physician', 'treat wounds'], action: '标准', strain: 0 },
+      { keys: ['撬锁', '开锁', 'lock picking'], action: '标准', strain: 0 },
+      { keys: ['解除陷阱', 'disarm trap'], action: '标准', strain: 0 },
+      { keys: ['扒窃', '妙手', 'pick pockets'], action: '标准', strain: 0 },
+      { keys: ['炼金术', '制图', '工匠', '锻造', '知识', '历史', '语言', '读写', 'alchemy', 'artisan', 'mapmaking', 'knowledge', 'speak language', 'read and write'], action: '标准', strain: 0 },
+      { keys: ['野兽契约', '驯兽', 'animal bond', 'dominate beast'], action: '标准', strain: 0 },
+
+      // 持续 / 无动作
+      { keys: ['冥想', '物品历史', '纹路学', '锻造武器', '锻造护甲', 'meditation', 'item history', 'patterncraft', 'forge weapon', 'forge armor'], action: '持续', strain: 0 },
+      { keys: ['耐久', 'durability'], action: '无', strain: 0 },
+    ];
+
+    function normalizeActionType(raw) {
+      const s = String(raw || '').trim();
+      if (!s || s === '-' || s === '未设') return '';
+      if (ACTION_TYPES.includes(s)) return s;
+      const low = s.toLowerCase();
+      if (low.includes('standard') || s.includes('标准')) return '标准';
+      if (low.includes('simple') || s.includes('简单')) return '简单';
+      if (low.includes('free') || s.includes('自由')) return '自由';
+      if (low.includes('sustained') || s.includes('持续')) return '持续';
+      if (low === 'none' || low === 'na' || s === '无' || s === '无动作') return '无';
+      return '';
+    }
+
+    function lookupTalentSkillRule(name, category = '') {
+      const clean = String(name || '').trim().toLowerCase();
+      if (!clean) return null;
+      for (const rule of TALENT_SKILL_RULES) {
+        if (rule.keys.some(k => clean.includes(k))) {
+          return { action: rule.action, strain: rule.strain };
+        }
+      }
+      const cat = String(category || '');
+      if (cat.includes('知识') || cat.includes('工匠') || cat.includes('语言')) {
+        return { action: '标准', strain: 0 };
+      }
+      return null;
+    }
+
     // ========================================================================
     // 1. 门类环数进阶、装备穿脱解析与角色衍生属性计算 (Pure Functions)
     // ========================================================================
@@ -751,12 +843,13 @@ function matchRaceId(raw) {
         for (let r = talAnchor.r; r <= talAnchor.r + 2; r++) {
           if (cellStr(r, 1) === '名称' || cellStr(r, 2) === '名称') { hr = r; break; }
         }
-        let nameCol = 1, rankCol = 2, attrCol = 3, strainCol = -1;
+        let nameCol = 1, rankCol = 2, attrCol = 3, actionCol = 4, strainCol = 5;
         for (let c = 1; c <= 7; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
           else if (h === '属性') attrCol = c;
+          else if (h === '动作' || h.includes('动作')) actionCol = c;
           else if (h.includes('负荷') || h.includes('劳累')) strainCol = c;
         }
         for (let r = hr + 1; r <= maxR; r++) {
@@ -766,9 +859,14 @@ function matchRaceId(raw) {
           const rank = cellNum(r, rankCol);
           if (rank === undefined && !cellStr(r, attrCol)) continue;
           const attr = parseAttrKey(cellStr(r, attrCol));
-          const strain = strainCol > 0 ? (cellNum(r, strainCol) || 0) : 0;
+          const rawAction = cellStr(r, actionCol);
+          const parsedAction = normalizeActionType(rawAction);
+          const rule = lookupTalentSkillRule(tName);
+          const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
+          const rawStrain = strainCol > 0 ? cellNum(r, strainCol) : undefined;
+          const strain = rawStrain !== undefined ? rawStrain : ((!rawAction && rule?.strain) ? rule.strain : 0);
           const isAttack = tName.includes('攻击') || tName.includes('武器') || tName.includes('徒手') || tName.toLowerCase().includes('weapon');
-          data.talents.push({ id: `t_imp_${r}`, name: tName, attr, rank: rank || 1, strain, isAttack });
+          data.talents.push({ id: `t_imp_${r}`, name: tName, attr, rank: rank || 1, action, strain, isAttack });
         }
       }
 
@@ -998,12 +1096,13 @@ function matchRaceId(raw) {
 
       if (skAnchor) {
         const hr = skAnchor.r;
-        let catCol = skAnchor.c, nameCol = skAnchor.c + 1, rankCol = skAnchor.c + 2, attrCol = skAnchor.c + 3, strainCol = -1;
+        let catCol = skAnchor.c, nameCol = skAnchor.c + 1, rankCol = skAnchor.c + 2, attrCol = skAnchor.c + 3, actionCol = 24, strainCol = 25;
         for (let c = skAnchor.c; c <= 26; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
           else if (h === '属性' || h === '关键属性') attrCol = c;
+          else if (h === '动作' || h.includes('动作')) actionCol = c;
           else if (h.includes('负荷') || h.includes('劳累')) strainCol = c;
         }
         for (let r = hr + 1; r <= maxR; r++) {
@@ -1012,13 +1111,19 @@ function matchRaceId(raw) {
           const cat = cellStr(r, catCol) || '通用技能';
           const rank = cellNum(r, rankCol) || 1;
           const attr = parseAttrKey(cellStr(r, attrCol));
-          const strain = strainCol > 0 ? (cellNum(r, strainCol) || 0) : 0;
+          const rawAction = cellStr(r, actionCol);
+          const parsedAction = normalizeActionType(rawAction);
+          const rule = lookupTalentSkillRule(skName, cat);
+          const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
+          const rawStrain = strainCol > 0 ? cellNum(r, strainCol) : undefined;
+          const strain = rawStrain !== undefined ? rawStrain : ((!rawAction && rule?.strain) ? rule.strain : 0);
           data.skills.push({
             id: `sk_imp_${r}`,
             category: cat,
             name: skName,
             rank,
             attr,
+            action,
             strain,
             isAttack: skName.includes('武器') || skName.includes('攻击')
           });
@@ -1039,11 +1144,15 @@ function matchRaceId(raw) {
         return '';
       };
 
+      const rawPortrait = grabField('立绘链接') || grabField('角色图像');
+      const safePortrait = /^https?:\/\//i.test(rawPortrait) ? rawPortrait : '';
+      const rawCircle = grabField('环数') || grabField('环位') || grabField('环');
+
       const data = {
         name: grabField('角色名'),
         raceId: matchRaceId(grabField('种族')),
         disciplineId: matchDisciplineId(grabField('门类')),
-        circle: Number((grabField('环数').match(/\d+/) || [1])[0]),
+        circle: Number((rawCircle.match(/\d+/) || [1])[0]),
         gender: grabField('性别'),
         age: grabField('年龄'),
         eyeColor: grabField('瞳色'),
@@ -1051,7 +1160,7 @@ function matchRaceId(raw) {
         skinColor: grabField('肤色'),
         height: grabField('身高'),
         weight: grabField('体重'),
-        portraitUrl: '',
+        portraitUrl: safePortrait,
         background: '',
         attrs: {},
         talents: [],
@@ -1096,10 +1205,30 @@ function matchRaceId(raw) {
       let section = '';
       let readingBg = false;
       const bgLines = [];
-      const ALL_SECTIONS = ['属性', '先攻', '业力', '健康等级', '天赋', '武器', '法术', '装备', '传说点数', '财富', '技能', '脉路物品和编织脉路', '角色印象'];
+      let hasExplicitMatrixFlag = false;
+      const ALL_SECTIONS = ['属性', '先攻', '业力', '健康等级', '天赋', '武器', '法术', '装备', '传说点数', '财富', '技能', '脉路物品和编织脉路', '脉路物品', '角色印象'];
+
+      const extractTaggedMeta = (line) => {
+        const actionM = line.match(/动作\s*[:：]\s*([^|\t]+)/);
+        const strainM = line.match(/(?:负荷|劳累)\s*[:：]\s*(\d+)/);
+        const effectM = line.match(/效果\s*[:：]\s*([^|\t]+)/);
+        const typeM = line.match(/类型\s*[:：]\s*([^|\t]+)/);
+        const rankM = line.match(/等级\s*[:：]?\s*(\d+)/);
+        const dmgM = line.match(/(?:基础伤害|伤害)\s*[:：]?\s*(\d+)/);
+        return {
+          rawAction: actionM ? actionM[1].trim() : '',
+          hasActionTag: Boolean(actionM),
+          rawStrain: strainM ? Number(strainM[1]) : undefined,
+          effect: effectM ? effectM[1].trim() : '',
+          typeVal: typeM ? typeM[1].trim() : '',
+          rankVal: rankM ? Number(rankM[1]) : undefined,
+          dmgVal: dmgM ? Number(dmgM[1]) : undefined,
+        };
+      };
+
       for (const rawLine of lines) {
         const l = rawLine.trim();
-        const bgMatch = l.match(/^(?:【背景】|\[背景\]|背景[：:])(.*)$/);
+        const bgMatch = l.match(/^(?:【背景故事】|\[背景故事\]|【背景】|\[背景\]|背景故事[：:]|背景[：:])(.*)$/);
         if (bgMatch) {
           readingBg = true;
           section = '背景';
@@ -1115,8 +1244,9 @@ function matchRaceId(raw) {
           }
         }
         if (!l || l.startsWith('+++')) continue;
-        if (ALL_SECTIONS.includes(l)) {
-          section = l;
+        const cleanHeader = l.replace(/^【|】$/g, '');
+        if (ALL_SECTIONS.includes(l) || ALL_SECTIONS.includes(cleanHeader)) {
+          section = cleanHeader === '脉路物品' ? '脉路物品和编织脉路' : cleanHeader;
           continue;
         }
         if (/^【[^】]+】$/.test(l) || /^\[[^\]]+\]$/.test(l)) {
@@ -1125,13 +1255,117 @@ function matchRaceId(raw) {
         }
         if (['传说点数', '财富', '属性', '先攻', '业力', '健康等级', '角色印象', '背景'].includes(section)) continue;
         if (l.startsWith('名称')) continue;
-        const cols = l.split(/\s{2,}|\t+/);
+
+        const isPipeRow = l.includes('|') || /^[-•·]\s+/.test(l);
+        if (isPipeRow && l.includes('|')) {
+          const parts = l.replace(/^[-•·]\s*/, '').split('|').map(s => s.trim()).filter(Boolean);
+          const meta = extractTaggedMeta(l);
+          if (section === '天赋' && parts.length >= 1) {
+            const tName = parts[0];
+            const rank = meta.rankVal ?? Number((parts[1]?.match(/\d+/) || [1])[0]);
+            const attrPart = parts.find(p => /(?:DEX|STR|TOU|PER|WIL|CHA|敏捷|力量|强韧|感知|意志|魅力)/i.test(p)) || parts[2] || 'DEX';
+            const attr = parseAttrKey(attrPart);
+            const rule = lookupTalentSkillRule(tName);
+            const action = meta.hasActionTag ? normalizeActionType(meta.rawAction) : (rule?.action || '');
+            const strain = meta.rawStrain !== undefined ? meta.rawStrain : (!meta.hasActionTag && rule?.strain ? rule.strain : 0);
+            data.talents.push({ id: `t_txt_${data.talents.length}`, name: tName, attr, rank, action, strain, isAttack: tName.includes('武器') || tName.includes('攻击') });
+            continue;
+          }
+          if (section === '技能' && parts.length >= 2) {
+            const hasCat = /技能$/.test(parts[0]) || ['通用', '知识', '工匠', '语言'].includes(parts[0]);
+            const cat = hasCat ? (parts[0].endsWith('技能') ? parts[0] : `${parts[0]}技能`) : '通用技能';
+            const skName = hasCat ? parts[1] : parts[0];
+            const rank = meta.rankVal ?? Number(((hasCat ? parts[2] : parts[1])?.match(/\d+/) || [1])[0]);
+            const attrPart = parts.find(p => /^(?:RANK\+)?(?:DEX|STR|TOU|PER|WIL|CHA)$/i.test(p) || ['敏捷', '力量', '强韧', '感知', '意志', '魅力'].includes(p)) || 'PER';
+            const attr = parseAttrKey(attrPart);
+            const rule = lookupTalentSkillRule(skName, cat);
+            const action = meta.hasActionTag ? normalizeActionType(meta.rawAction) : (rule?.action || '');
+            const strain = meta.rawStrain !== undefined ? meta.rawStrain : (!meta.hasActionTag && rule?.strain ? rule.strain : 0);
+            data.skills.push({ id: `sk_txt_${data.skills.length}`, category: cat, name: skName, rank, attr, action, strain, isAttack: skName.includes('武器') || skName.includes('攻击') });
+            continue;
+          }
+          if (section === '武器' && parts.length >= 1) {
+            const dmgStep = meta.dmgVal ?? Number((parts[1]?.match(/\d+/) || [4])[0]);
+            data.weapons.push({ id: `w_txt_${data.weapons.length}`, name: parts[0], dmgStep });
+            continue;
+          }
+          if (section === '装备' && parts.length >= 1) {
+            const rankPart = parts.find(p => /^等级/.test(p));
+            const rawRank = rankPart ? rankPart.replace(/^等级\s*[:：]?\s*/, '') : (meta.effect || parts.some(p => /未穿戴/.test(p)) ? '' : (parts[1] || ''));
+            const rank = rawRank === '-' ? '' : rawRank;
+            const effect = meta.effect === '-' ? '' : meta.effect;
+            const equipped = !parts.some(p => /未穿戴/.test(p));
+            data.gear.push({ name: parts[0], rank, effect, equipped });
+            continue;
+          }
+          if (section === '脉路物品和编织脉路' && parts.length >= 1) {
+            const typePart = parts.find(p => /^类型/.test(p));
+            const rawType = typePart ? typePart.replace(/^类型\s*[:：]?\s*/, '') : (meta.typeVal || '');
+            const type = rawType === '-' ? '' : rawType;
+            const effect = meta.effect === '-' ? '' : meta.effect;
+            const equipped = !parts.some(p => /未启用/.test(p));
+            data.threadItems.push({ name: parts[0], type, effect, equipped });
+            continue;
+          }
+          if (section === '法术' && parts.length >= 1) {
+            const sName = parts[0];
+            const matrixPart = parts.find(p => /已装载|未装载|常备矩阵/.test(p));
+            if (matrixPart) hasExplicitMatrixFlag = true;
+            const inMatrix = matrixPart ? !/未装载/.test(matrixPart) : undefined;
+            const threadM = l.match(/脉路\s*(\d+)(?:\/(\d+))?/);
+            const wovenThreads = threadM && threadM[2] !== undefined ? Number(threadM[1]) : 0;
+            const totalThreads = threadM ? Number(threadM[2] ?? threadM[1] ?? 0) : 0;
+            const dbMatch = findSpellInDb(sName);
+            if (dbMatch) {
+              data.spells.push({ ...dbMatch, instanceId: `sp_txt_${data.spells.length}`, wovenThreads, inMatrix, matchedDb: true });
+            } else {
+              const cirM = l.match(/(\d+)\s*环/);
+              const wM = l.match(/编织\s*[:：]?\s*(\d+)/);
+              const cPart = parts.find(p => /^施法/.test(p)) || '';
+              const cVal = cPart.replace(/^施法\s*[:：]?\s*/, '');
+              const isFixed = /^\d+$/.test(cVal);
+              const dPart = parts.find(p => /^持续/.test(p)) || '';
+              const ePart = parts.find(p => /^效果/.test(p)) || '';
+              data.spells.push({
+                id: `custom_txt_${data.spells.length}`,
+                instanceId: `sp_txt_${data.spells.length}`,
+                nameCn: sName,
+                nameEn: '',
+                discipline: data.disciplineId || 'wizard',
+                circle: cirM ? Number(cirM[1]) : 1,
+                threads: totalThreads,
+                weavingBase: wM ? Number(wM[1]) : 5,
+                weavingHigh: 10,
+                castingType: isFixed ? 'fixed' : 'TMD',
+                castingDn: isFixed ? Number(cVal) : null,
+                range: '见说明',
+                duration: dPart ? dPart.replace(/^持续\s*[:：]?\s*/, '') : '-',
+                aoe: '',
+                effectFormula: ePart ? ePart.replace(/^效果\s*[:：]?\s*/, '') : 'WIL',
+                effectType: 'utility',
+                armorType: 'ma',
+                desc: ePart ? ePart.replace(/^效果\s*[:：]?\s*/, '') : 'TXT导入法术',
+                extraThreads: [],
+                extraEffectStepPerThread: 0,
+                wovenThreads,
+                inMatrix,
+                matchedDb: false
+              });
+            }
+            continue;
+          }
+        }
+
+        const cols = l.replace(/^[-•·]\s*/, '').split(/\s{2,}|\t+/);
         if (section === '天赋' && cols.length >= 3) {
           const tName = cols[0];
           const rank = Number((cols[1].match(/\d+/) || [1])[0]);
           const attr = parseAttrKey(cols[2]);
-          const strain = cols[5] ? Number((cols[5].match(/\d+/) || [0])[0]) : 0;
-          data.talents.push({ id: `t_txt_${data.talents.length}`, name: tName, attr, rank, strain, isAttack: tName.includes('武器') || tName.includes('攻击') });
+          const rule = lookupTalentSkillRule(tName);
+          const colAction = cols[6] ? normalizeActionType(cols[6]) : '';
+          const action = colAction || rule?.action || '';
+          const strain = cols[5] ? Number((cols[5].match(/\d+/) || [0])[0]) : (rule?.strain || 0);
+          data.talents.push({ id: `t_txt_${data.talents.length}`, name: tName, attr, rank, action, strain, isAttack: tName.includes('武器') || tName.includes('攻击') });
         } else if (section === '武器' && cols.length >= 2) {
           const dmgStep = Number((cols[2]?.match(/\d+/) || cols[1]?.match(/\d+/) || [4])[0]);
           data.weapons.push({ id: `w_txt_${data.weapons.length}`, name: cols[0], dmgStep });
@@ -1171,12 +1405,18 @@ function matchRaceId(raw) {
         } else if (section === '脉路物品和编织脉路') {
           data.threadItems.push({ name: cols[0], type: cols[1] || '', effect: cols[2] || '' });
         } else if (section === '技能' && cols.length >= 3) {
-          data.skills.push({ id: `sk_txt_${data.skills.length}`, category: '通用技能', name: cols[0], rank: Number((cols[1].match(/\d+/) || [1])[0]), attr: parseAttrKey(cols[2]), strain: 0, isAttack: cols[0].includes('武器') || cols[0].includes('攻击') });
+          const skName = cols[0];
+          const rule = lookupTalentSkillRule(skName, '通用技能');
+          const action = cols[3] ? (normalizeActionType(cols[3]) || rule?.action || '') : (rule?.action || '');
+          const strain = cols[4] ? Number((cols[4].match(/\d+/) || [0])[0]) : (rule?.strain || 0);
+          data.skills.push({ id: `sk_txt_${data.skills.length}`, category: '通用技能', name: skName, rank: Number((cols[1].match(/\d+/) || [1])[0]), attr: parseAttrKey(cols[2]), action, strain, isAttack: skName.includes('武器') || skName.includes('攻击') });
         }
       }
 
       data.background = bgLines.join('\n').trim();
-      data.spells.forEach((sp, idx) => { sp.inMatrix = idx < 3; });
+      data.spells.forEach((sp, idx) => {
+        if (sp.inMatrix === undefined) sp.inMatrix = hasExplicitMatrixFlag ? false : idx < 3;
+      });
       return data;
     }
 
@@ -1229,6 +1469,7 @@ function matchRaceId(raw) {
 
     const ED4Engine = {
       ATTR_NAMES, ATTR_COST, CARRY_TABLE, STEP_BASE, STEP_CYCLE, RACES, DISCIPLINES, SPELLS_DB, SPELL_ALIASES, LEGACY_SPELL_ID_MAP, WEAVING_KEYWORDS,
+      ACTION_TYPES, TALENT_SKILL_RULES, normalizeActionType, lookupTalentSkillRule,
       attrToStep, getStepDice, rollExplodingDie, rollStepTest,
       getDisciplineBonuses, parseItemBonuses, calcEquippedBonuses, calcPlDerived, getPlActionMod,
       findSpellInDb, hasSpellEffectRoll, getThreadWeavingStep, getSpellcastingStep,

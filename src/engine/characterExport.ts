@@ -112,6 +112,17 @@ function colLetterToNumber(colStr: string): number {
   return n;
 }
 
+function colNumberToLetter(col: number): string {
+  let s = '';
+  let n = col;
+  while (n > 0) {
+    const r = (n - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
 function parseA1Range(rangeStr: string) {
   const [a, b] = rangeStr.split(':');
   const parsePart = (ref: string) => {
@@ -197,6 +208,26 @@ export function shiftColumnBlockDown(
 
   for (const m of movingMerges) {
     sheet.mergeCells(m.sRow + delta, m.sCol, m.eRow + delta, m.eCol);
+  }
+
+  // 同步下移该列区间内的数据验证规则（如技能动作/属性/分类下拉框）
+  const dvModel = (sheet as any).dataValidations?.model;
+  if (dvModel && typeof dvModel === 'object') {
+    const shiftedDv: Record<string, any> = {};
+    const toRemove: string[] = [];
+    for (const [addr, rule] of Object.entries(dvModel)) {
+      const { s, e } = parseA1Range(addr);
+      if (s.col >= colStart && e.col <= colEnd && s.row >= fromRow) {
+        toRemove.push(addr);
+        const nextAddr =
+          s.col === e.col && s.row === e.row
+            ? `${colNumberToLetter(s.col)}${s.row + delta}`
+            : `${colNumberToLetter(s.col)}${s.row + delta}:${colNumberToLetter(e.col)}${e.row + delta}`;
+        shiftedDv[nextAddr] = rule;
+      }
+    }
+    for (const k of toRemove) delete dvModel[k];
+    Object.assign(dvModel, shiftedDv);
   }
 }
 
@@ -286,7 +317,13 @@ export async function exportCharacterExcelBuffer(
   sheet.getCell('E20').value = pl.karmaCurrent ?? d.karmaMax;
   sheet.getCell('E21').value = d.race.karmaMod || 4;
 
-  // 天赋区 (预设 34..43 共 10 行；超出部分复制第 43 行样式与公式向下追加)
+  // 天赋区 (预设 34..43 共 10 行；超出部分复制第 43 行样式、公式与数据验证向下追加)
+  const dvActionList = { type: 'list' as const, allowBlank: true, formulae: ['"标准,简单,自由,持续,无"'] };
+  const dvTalentAttrList = {
+    type: 'list' as const,
+    allowBlank: true,
+    formulae: ['"RANK+DEX,RANK+STR,RANK+TOU,RANK+PER,RANK+WIL,RANK+CHA,RANK"'],
+  };
   for (let r = 34; r <= 43; r++) {
     for (const c of [1, 2, 3, 4, 5]) sheet.getCell(r, c).value = null;
   }
@@ -298,11 +335,13 @@ export async function exportCharacterExcelBuffer(
       sheet.getCell(r, 6).value = { formula: `VLOOKUP(C${r},Sheet2!$A$10:$B$16,2,FALSE)+B${r}` };
       sheet.getCell(r, 7).value = { formula: `VLOOKUP(F${r},step表!$A$2:$B$41,2,FALSE)` };
     }
+    if (!sheet.getCell(r, 3).dataValidation) sheet.getCell(r, 3).dataValidation = { ...dvTalentAttrList };
+    if (!sheet.getCell(r, 4).dataValidation) sheet.getCell(r, 4).dataValidation = { ...dvActionList };
     sheet.getCell(r, 1).value = t.name || '';
     sheet.getCell(r, 2).value = Number(t.rank) || 1;
     sheet.getCell(r, 3).value = t.attr ? `RANK+${t.attr}` : 'RANK';
-    sheet.getCell(r, 4).value = t.isAttack ? '攻击' : '';
-    sheet.getCell(r, 5).value = Number(t.strain) || 0;
+    sheet.getCell(r, 4).value = ED4Engine.normalizeActionType(t.action) || null;
+    sheet.getCell(r, 5).value = Number(t.strain) > 0 ? Number(t.strain) : null;
   });
 
   // === 2. 中栏 (I:Q, cols 9..17) — 严格保留 J6:J10, L10, J12, M15:N16 ===
@@ -421,6 +460,8 @@ export async function exportCharacterExcelBuffer(
     sheet.getCell(r, 25).value = sp.effectFormula || 'WIL';
   });
 
+  const dvSkillCatList = { type: 'list' as const, allowBlank: true, formulae: ['"通用技能,工匠技能,知识技能,语言技能"'] };
+  const dvSkillAttrList = { type: 'list' as const, allowBlank: true, formulae: ['"DEX,STR,TOU,PER,WIL,CHA"'] };
   const skills = pl.skills || [];
   const skStart = 28 + spExtra;
   for (let i = 0; i < 16; i++) {
@@ -433,12 +474,15 @@ export async function exportCharacterExcelBuffer(
       sheet.getCell(r, 22).value = { formula: `VLOOKUP(U${r},Sheet2!$A$2:$C$7,3,FALSE)+T${r}` };
       sheet.getCell(r, 23).value = { formula: `VLOOKUP(V${r},step表!$A$2:$B$41,2,FALSE)` };
     }
+    if (!sheet.getCell(r, 18).dataValidation) sheet.getCell(r, 18).dataValidation = { ...dvSkillCatList };
+    if (!sheet.getCell(r, 21).dataValidation) sheet.getCell(r, 21).dataValidation = { ...dvSkillAttrList };
+    if (!sheet.getCell(r, 24).dataValidation) sheet.getCell(r, 24).dataValidation = { ...dvActionList };
     sheet.getCell(r, 18).value = sk.category || '通用技能';
     sheet.getCell(r, 19).value = sk.name || '';
     sheet.getCell(r, 20).value = Number(sk.rank) || 1;
     sheet.getCell(r, 21).value = sk.attr || 'PER';
-    sheet.getCell(r, 24).value = sk.isAttack ? '攻击' : '';
-    sheet.getCell(r, 25).value = Number(sk.strain) || 0;
+    sheet.getCell(r, 24).value = ED4Engine.normalizeActionType(sk.action) || null;
+    sheet.getCell(r, 25).value = Number(sk.strain) > 0 ? Number(sk.strain) : null;
   });
 
   const out = await workbook.xlsx.writeBuffer();
@@ -463,6 +507,9 @@ export function serializeCharacterToTxt(pl: any): string {
   if (pl.skinColor) lines.push(`肤色：${pl.skinColor}`);
   if (pl.height) lines.push(`身高：${pl.height}`);
   if (pl.weight) lines.push(`体重：${pl.weight}`);
+  if (typeof pl.portraitUrl === 'string' && /^https?:\/\//i.test(pl.portraitUrl.trim())) {
+    lines.push(`立绘链接：${pl.portraitUrl.trim()}`);
+  }
   lines.push('');
 
   lines.push('属性');
@@ -492,81 +539,88 @@ export function serializeCharacterToTxt(pl: any): string {
   lines.push('');
 
   lines.push('天赋');
-  lines.push('名称\t等级\t属性\t属性步\t总步数\t负荷');
   (pl.talents || []).forEach((t: any) => {
-    const attrStep = d.steps[t.attr] || 1;
     const rank = Number(t.rank) || 1;
+    const totalStep = (d.steps[t.attr] || 1) + rank;
+    const dice = ED4Engine.getStepDice(totalStep).label;
+    const act = ED4Engine.normalizeActionType(t.action) || '-';
+    const strain = Number(t.strain) || 0;
+    const parts = [t.name, `等级 ${rank}`, `RANK+${t.attr || 'DEX'}`, `动作: ${act}`];
+    if (strain > 0) parts.push(`负荷: ${strain}`);
+    parts.push(`Step ${totalStep} (${dice})`);
+    lines.push(`- ${parts.join(' | ')}`);
+  });
+  lines.push('');
+
+  lines.push('技能');
+  (pl.skills || []).forEach((sk: any) => {
+    const rank = Number(sk.rank) || 1;
+    const totalStep = (d.steps[sk.attr] || 1) + rank;
+    const dice = ED4Engine.getStepDice(totalStep).label;
+    const act = ED4Engine.normalizeActionType(sk.action) || '-';
+    const strain = Number(sk.strain) || 0;
     lines.push(
-      [
-        t.name,
-        rank,
-        ED4Engine.ATTR_NAMES[t.attr] || '敏捷',
-        attrStep,
-        attrStep + rank,
-        Number(t.strain) || 0,
-      ].join('\t')
+      `- ${[
+        sk.category || '通用技能',
+        sk.name,
+        `等级 ${rank}`,
+        sk.attr || 'PER',
+        `动作: ${act}`,
+        `负荷: ${strain}`,
+        `Step ${totalStep} (${dice})`,
+      ].join(' | ')}`
     );
   });
   lines.push('');
 
   lines.push('武器');
-  lines.push('名称\t基础伤害');
   (pl.weapons || []).forEach((w: any) => {
-    lines.push([w.name, Number(w.dmgStep) || 0].join('\t'));
+    const baseDmg = Number(w.dmgStep) || 0;
+    const dmgStep = (d.steps.STR || 1) + baseDmg;
+    const dice = ED4Engine.getStepDice(dmgStep).label;
+    lines.push(`- ${w.name} | 基础伤害 ${baseDmg} | 伤害 Step ${dmgStep} (${dice})`);
   });
   lines.push('');
 
-  const orderedSpells = getOrderedSpellsForExport(pl);
-  if (orderedSpells.length > 0) {
-    lines.push('法术');
-    lines.push('名称\t环数\t脉路\t编织\t施法\t持续\t效果');
-    orderedSpells.forEach((sp: any) => {
-      lines.push(
-        [
-          sp.nameCn || sp.nameEn || '未命名法术',
-          Number(sp.circle) || 1,
-          Number(sp.threads) || 0,
-          Number(sp.weavingBase) || 5,
-          sp.castingType === 'fixed' ? (Number(sp.castingDn) || 6) : 'TMD',
-          sp.duration || '-',
-          sp.effectFormula || 'WIL',
-        ].join('\t')
-      );
-    });
-    lines.push('');
-  }
-
-  lines.push('装备');
-  lines.push('名称\t等级\t效果');
   const exportGear = buildExportGearList(pl);
+  lines.push('装备');
   exportGear.forEach((g: any) => {
-    const rankCol = g.rank || (g.effect ? '-' : '');
-    const cols = [g.name];
-    if (rankCol) cols.push(rankCol);
-    if (g.effect) cols.push(g.effect);
-    lines.push(cols.join('\t'));
+    lines.push(`- ${g.name} | 等级 ${g.rank || '-'} | 效果: ${g.effect || '-'}`);
   });
   lines.push('');
 
   if ((pl.threadItems || []).length > 0) {
     lines.push('脉路物品和编织脉路');
-    lines.push('名称\t类型\t效果');
     pl.threadItems.forEach((ti: any) => {
-      const typeCol = ti.type || (ti.effect ? '-' : '');
-      const cols = [ti.name];
-      if (typeCol) cols.push(typeCol);
-      if (ti.effect) cols.push(ti.effect);
-      lines.push(cols.join('\t'));
+      const parts = [ti.name, ti.type || '-'];
+      if (ti.equipped === false) parts.push('未启用');
+      parts.push(`效果: ${ti.effect || '-'}`);
+      lines.push(`- ${parts.join(' | ')}`);
     });
     lines.push('');
   }
 
-  lines.push('技能');
-  lines.push('名称\t等级\t属性');
-  (pl.skills || []).forEach((sk: any) => {
-    lines.push([sk.name, Number(sk.rank) || 1, ED4Engine.ATTR_NAMES[sk.attr] || '感知'].join('\t'));
-  });
-  lines.push('');
+  const orderedSpells = getOrderedSpellsForExport(pl);
+  if (orderedSpells.length > 0) {
+    lines.push('法术');
+    orderedSpells.forEach((sp: any) => {
+      const castDn = sp.castingType === 'fixed' ? Number(sp.castingDn) || 6 : 'TMD';
+      const matrixTag = sp.inMatrix !== false ? '已装载(常备矩阵)' : '未装载';
+      lines.push(
+        `- ${[
+          sp.nameCn || sp.nameEn || '未命名法术',
+          `${Number(sp.circle) || 1}环`,
+          matrixTag,
+          `脉路 ${Number(sp.wovenThreads) || 0}/${Number(sp.threads) || 0}`,
+          `编织 ${Number(sp.weavingBase) || 5}`,
+          `施法 ${castDn}`,
+          `持续 ${sp.duration || '-'}`,
+          `效果 ${sp.effectFormula || 'WIL'}`,
+        ].join(' | ')}`
+      );
+    });
+    lines.push('');
+  }
 
   lines.push('传说点数');
   lines.push(`总计：${pl.legend?.total ?? ''}`);
@@ -582,7 +636,7 @@ export function serializeCharacterToTxt(pl: any): string {
   lines.push(`金币：${pl.wealth?.gold ?? 0}`);
   lines.push(`其他：${pl.wealth?.other ?? ''}`);
 
-  return `${lines.join('\n')}\n\n【背景】\n${String(pl.background || '')}`;
+  return `${lines.join('\n')}\n\n【背景故事】\n${String(pl.background || '')}`;
 }
 
 export function getExportBaseName(pl: any): string {

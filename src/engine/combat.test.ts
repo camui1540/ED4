@@ -364,7 +364,7 @@ test('Character background supports TXT tags, Excel label/I44 merged fallback, a
 
   // 1. TXT round-trip & tag variants
   const exportedTxt = serializeCharacterToTxt(richPl);
-  assert.ok(exportedTxt.endsWith(`\n\n【背景】\n${bgStory}`));
+  assert.ok(exportedTxt.endsWith(`\n\n【背景故事】\n${bgStory}`));
   const fromTxt = applyImportedCharacter(st.pl, ED4Engine.parseTxtSheet(exportedTxt));
   assert.equal(fromTxt.background, bgStory);
 
@@ -603,6 +603,150 @@ test('ExcelJS template export preserves formulas, shifts column bands independen
   await cachedCheckWb.xlsx.load(cachedOutBuf);
   assert.equal(cachedCheckWb.worksheets[0].getCell('A1').value, 'CUSTOM_CACHED_MARKER');
 });
+
+test('Talent/Skill action & strain rules, Excel dataValidation sync, and upgraded reversible TXT export/import', async () => {
+  // 1. Rule dictionary official defaults
+  assert.deepEqual(ED4Engine.lookupTalentSkillRule('闪避 Avoid Blow'), { action: '自由', strain: 1 });
+  assert.deepEqual(ED4Engine.lookupTalentSkillRule('杂耍防御 Acrobatic Defense'), { action: '自由', strain: 1 });
+  assert.deepEqual(ED4Engine.lookupTalentSkillRule('捕风者 Wind Catcher'), { action: '简单', strain: 1 });
+  assert.deepEqual(ED4Engine.lookupTalentSkillRule('投射武器 Missile Weapons'), { action: '标准', strain: 0 });
+  assert.deepEqual(ED4Engine.lookupTalentSkillRule('脉路编织 Thread Weaving'), { action: '简单', strain: 0 });
+  assert.equal(ED4Engine.lookupTalentSkillRule('完全自创未知天赋'), null);
+
+  const st = createInitialState();
+  const base64Img =
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEwMhAAQAyAAQBwQ5pGgAAAABJRU5ErkJggg==';
+
+  const richPl = {
+    ...st.pl,
+    name: '星轨',
+    raceId: 'elf',
+    disciplineId: 'wizard',
+    circle: 4,
+    gender: '女',
+    age: '110',
+    eyeColor: '金',
+    hairColor: '银',
+    skinColor: '白',
+    height: '175cm',
+    weight: '55kg',
+    portraitUrl: base64Img,
+    background: '双行背景一\n双行背景二',
+    talents: Array.from({ length: 12 }, (_, i) => ({
+      id: `t_${i}`,
+      name: i === 0 ? '回避打击' : i === 1 ? '施法' : `测试天赋${i + 1}`,
+      attr: i === 0 ? 'DEX' : 'PER',
+      rank: i + 1,
+      action: i === 0 ? '自由' : i === 1 ? '标准' : '简单',
+      strain: i === 0 ? 1 : 0,
+      isAttack: false,
+    })),
+    skills: Array.from({ length: 18 }, (_, i) => ({
+      id: `sk_${i}`,
+      category: i % 2 === 0 ? '通用技能' : '知识技能',
+      name: i === 0 ? '察觉' : i === 1 ? '杂耍防御' : `测试技能${i + 1}`,
+      attr: 'PER',
+      rank: (i % 4) + 1,
+      action: i === 1 ? '自由' : '标准',
+      strain: i === 1 ? 1 : 0,
+      isAttack: false,
+    })),
+    spells: Array.from({ length: 25 }, (_, i) => ({
+      ...ED4Engine.SPELLS_DB[i % ED4Engine.SPELLS_DB.length],
+      instanceId: `sp_r_${i}`,
+      inMatrix: i < 2,
+      wovenThreads: i === 0 ? 1 : 0,
+    })),
+  };
+
+  // 2. Excel export writes action/strain 1:1 (blank when strain=0) and preserves/extends dataValidation
+  const xlsxBuf = await exportCharacterExcelBuffer(richPl);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(xlsxBuf);
+  const ws = wb.worksheets[0];
+
+  assert.equal(ws.getCell('D34').value, '自由');
+  assert.equal(ws.getCell('E34').value, 1);
+  assert.equal(ws.getCell('D35').value, '标准');
+  assert.equal(ws.getCell('E35').value, null);
+  assert.equal(ws.getCell('D45').value, '简单');
+
+  // Right column shifted by spExtra = 3 -> skills start at row 31..48
+  assert.equal(ws.getCell('X31').value, '标准');
+  assert.equal(ws.getCell('Y31').value, null);
+  assert.equal(ws.getCell('X32').value, '自由');
+  assert.equal(ws.getCell('Y32').value, 1);
+  assert.equal(ws.getCell('X48').value, '标准');
+
+  // Verify dropdown dataValidations exist on base, shifted, and overflow rows
+  assert.deepEqual(ws.getCell('D34').dataValidation?.formulae, ['"标准,简单,自由,持续,无"']);
+  assert.deepEqual(ws.getCell('D44').dataValidation?.formulae, ['"标准,简单,自由,持续,无"']);
+  assert.deepEqual(ws.getCell('C45').dataValidation?.formulae, ['"RANK+DEX,RANK+STR,RANK+TOU,RANK+PER,RANK+WIL,RANK+CHA,RANK"']);
+  assert.deepEqual(ws.getCell('X31').dataValidation?.formulae, ['"标准,简单,自由,持续,无"']);
+  assert.deepEqual(ws.getCell('X48').dataValidation?.formulae, ['"标准,简单,自由,持续,无"']);
+  assert.deepEqual(ws.getCell('R48').dataValidation?.formulae, ['"通用技能,工匠技能,知识技能,语言技能"']);
+  assert.deepEqual(ws.getCell('U48').dataValidation?.formulae, ['"DEX,STR,TOU,PER,WIL,CHA"']);
+
+  // Import back from Excel preserves action & strain
+  const importedFromXlsx = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(xlsxBuf), { type: 'array' }));
+  assert.equal(importedFromXlsx.talents[0].action, '自由');
+  assert.equal(importedFromXlsx.talents[0].strain, 1);
+  assert.equal(importedFromXlsx.talents[1].action, '标准');
+  assert.equal(importedFromXlsx.talents[1].strain, 0);
+  assert.equal(importedFromXlsx.skills[1].action, '自由');
+  assert.equal(importedFromXlsx.skills[1].strain, 1);
+
+  // 3. TXT export skips Base64 data:image, preserves http link when set, and round-trips action/strain/matrix/appearance
+  const txtWithBase64 = serializeCharacterToTxt(richPl);
+  assert.ok(!txtWithBase64.includes('data:image/png;base64'));
+  assert.ok(!txtWithBase64.includes('立绘链接'));
+  assert.ok(txtWithBase64.includes('- 回避打击 | 等级 1 | RANK+DEX | 动作: 自由 | 负荷: 1 |'));
+  assert.ok(txtWithBase64.includes('- 知识技能 | 杂耍防御 | 等级 2 | PER | 动作: 自由 | 负荷: 1 |'));
+  assert.ok(txtWithBase64.includes('已装载(常备矩阵)'));
+  assert.ok(txtWithBase64.includes('未装载'));
+  assert.ok(txtWithBase64.endsWith('\n\n【背景故事】\n双行背景一\n双行背景二'));
+
+  const parsedTxt = applyImportedCharacter(st.pl, ED4Engine.parseTxtSheet(txtWithBase64));
+  assert.equal(parsedTxt.gender, '女');
+  assert.equal(parsedTxt.height, '175cm');
+  assert.equal(parsedTxt.talents[0].action, '自由');
+  assert.equal(parsedTxt.talents[0].strain, 1);
+  assert.equal(parsedTxt.skills[1].action, '自由');
+  assert.equal(parsedTxt.skills[1].strain, 1);
+  assert.equal(parsedTxt.spells.length, 25);
+  assert.equal(parsedTxt.spells[0].inMatrix, true);
+  assert.equal(parsedTxt.spells[0].wovenThreads, 1);
+  assert.equal(parsedTxt.spells[2].inMatrix, false);
+  assert.equal(parsedTxt.background, '双行背景一\n双行背景二');
+
+  const httpPortraitTxt = serializeCharacterToTxt({ ...richPl, portraitUrl: 'https://example.com/hero.png' });
+  assert.ok(httpPortraitTxt.includes('立绘链接：https://example.com/hero.png'));
+  assert.equal(ED4Engine.parseTxtSheet(httpPortraitTxt).portraitUrl, 'https://example.com/hero.png');
+
+  // 4. Backward compatibility: legacy short TXT without 动作/负荷/外貌/背景 auto-fills dictionary defaults
+  const legacyShortTxt = [
+    '角色名：老版本风行者',
+    '种族：人类',
+    '门类：剑术大师',
+    '环：3',
+    '天赋',
+    '名称\t等级\t属性\t属性步\t总步数\t负荷',
+    '回避打击\t3\t敏捷\t7\t10\t1',
+    '自创无记录天赋\t1\t意志\t5\t6\t0',
+    '技能',
+    '名称\t等级\t属性',
+    '投射武器\t2\t敏捷',
+    '未知冷门技能\t1\t感知',
+  ].join('\n');
+  const parsedLegacy = ED4Engine.parseTxtSheet(legacyShortTxt);
+  assert.equal(parsedLegacy.circle, 3);
+  assert.equal(parsedLegacy.talents[0].action, '自由');
+  assert.equal(parsedLegacy.talents[0].strain, 1);
+  assert.equal(parsedLegacy.talents[1].action, '');
+  assert.equal(parsedLegacy.skills[0].action, '标准');
+  assert.equal(parsedLegacy.skills[1].action, '');
+});
+
 
 
 
