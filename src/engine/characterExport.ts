@@ -1,11 +1,12 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import JSZip from 'jszip';
 import ED4Engine from './ed4_engine.js';
 import { getPlDerivedView } from './combatHelpers';
+import { ED4_TEMPLATE_BASE64 } from '../templates/ed4TemplateBase64';
 
 /**
  * 构建用于导出的完整装备清单：
- * 若面板手动填写了物理/秘法护甲或盾牌防御，且尚未通过装备/脉路物品效果体现，
- * 则镜像为等价的已穿戴装备条目，保证导入后防御与护甲总值 100% 无损且不重复叠加。
+ * 若面板手动填写了物理/秘法护甲或盾牌防御，则镜像为等价的已穿戴装备条目，保证回导无损。
  */
 function buildExportGearList(pl: any) {
   const list = (pl.gear || []).map((g: any) => ({
@@ -47,14 +48,401 @@ function buildExportGearList(pl: any) {
 }
 
 /**
- * 将法术列表按“常备法术矩阵在前、法术书在后”排序，
- * 以便导入时前 3 条自动恢复至常备矩阵。
+ * 将法术列表按“常备法术矩阵在前、法术书在后”排序导出。
  */
 function getOrderedSpellsForExport(pl: any) {
   const spells = pl.spells || [];
   const matrix = spells.filter((s: any) => s.inMatrix !== false);
   const grimoire = spells.filter((s: any) => s.inMatrix === false);
   return [...matrix, ...grimoire];
+}
+
+function decodeBase64ToArrayBuffer(b64: string): ArrayBuffer {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+/**
+ * 规范化 WPS / Office 生成的 .xlsx zip 内的注释与关系路径，确保 exceljs 稳定加载。
+ */
+async function normalizeXlsxForExcelJs(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const zip = await JSZip.loadAsync(buffer);
+  const renameMap: Record<string, string> = {};
+  for (const name of Object.keys(zip.files)) {
+    const cm = name.match(/^xl\/comments\/comment(\d+)\.xml$/i);
+    if (cm) renameMap[name] = `xl/comments${cm[1]}.xml`;
+    const vm = name.match(/^xl\/drawings\/commentsDrawing(\d+)\.vml$/i);
+    if (vm) renameMap[name] = `xl/drawings/vmlDrawing${vm[1]}.vml`;
+  }
+  for (const [oldName, newName] of Object.entries(renameMap)) {
+    zip.file(newName, await zip.files[oldName].async('uint8array'));
+    zip.remove(oldName);
+  }
+  for (const name of Object.keys(zip.files)) {
+    if (name.endsWith('.rels') || name === '[Content_Types].xml') {
+      let xml = (await zip.files[name].async('string'))
+        .replace(/\/xl\/comments\/comment(\d+)\.xml/gi, '../comments$1.xml')
+        .replace(/\.\.\/comments\/comment(\d+)\.xml/gi, '../comments$1.xml')
+        .replace(/\/xl\/drawings\/commentsDrawing(\d+)\.vml/gi, '../drawings/vmlDrawing$1.vml')
+        .replace(/\.\.\/drawings\/commentsDrawing(\d+)\.vml/gi, '../drawings/vmlDrawing$1.vml')
+        .replace(/\/xl\/worksheets\//gi, 'worksheets/')
+        .replace(/\/xl\/externalLinks\//gi, 'externalLinks/');
+      if (name === '[Content_Types].xml') {
+        xml = xml
+          .replace(/\.\.\/comments(\d+)\.xml/gi, '/xl/comments$1.xml')
+          .replace(/\.\.\/drawings\/vmlDrawing(\d+)\.vml/gi, '/xl/drawings/vmlDrawing$1.vml');
+      }
+      zip.file(name, xml);
+    }
+  }
+  return zip.generateAsync({ type: 'arraybuffer' });
+}
+
+function colLetterToNumber(colStr: string): number {
+  let n = 0;
+  for (let i = 0; i < colStr.length; i++) n = n * 26 + (colStr.charCodeAt(i) - 64);
+  return n;
+}
+
+function parseA1Range(rangeStr: string) {
+  const [a, b] = rangeStr.split(':');
+  const parsePart = (ref: string) => {
+    const m = ref.match(/^([A-Z]+)(\d+)$/i)!;
+    return { col: colLetterToNumber(m[1].toUpperCase()), row: Number(m[2]) };
+  };
+  return { s: parsePart(a), e: parsePart(b || a) };
+}
+
+function shiftFormulaRowRefs(
+  formula: string,
+  colStart: number,
+  colEnd: number,
+  fromRow: number,
+  delta: number
+): string {
+  return formula.replace(
+    /((?:'[^']+'|[A-Za-z0-9_\u4e00-\u9fa5]+)!\$?[A-Z]{1,3}\$?\d+(?::\$?[A-Z]{1,3}\$?\d+)?)|(\$?)([A-Z]{1,3})(\$?)(\d+)/g,
+    (full, crossSheet, dCol, colStr, dRow, rowStr) => {
+      if (crossSheet) return full;
+      const colNum = colLetterToNumber(colStr.toUpperCase());
+      const rowNum = Number(rowStr);
+      if (colNum >= colStart && colNum <= colEnd && rowNum >= fromRow) {
+        return `${dCol}${colStr}${dRow}${rowNum + delta}`;
+      }
+      return full;
+    }
+  );
+}
+
+/**
+ * 局部下移指定列区间 [colStart..colEnd] 在 fromRow 及以下的所有单元格（值、样式、合并与列内公式行号），
+ * 严禁影响左右相邻分栏的排版与行号。
+ */
+export function shiftColumnBlockDown(
+  sheet: ExcelJS.Worksheet,
+  colStart: number,
+  colEnd: number,
+  fromRow: number,
+  delta: number
+) {
+  if (delta <= 0) return;
+
+  const merges: string[] = Array.isArray((sheet.model as any).merges)
+    ? [...(sheet.model as any).merges]
+    : [];
+  const movingMerges: Array<{ range: string; sCol: number; sRow: number; eCol: number; eRow: number }> = [];
+  let maxRow = sheet.rowCount || 60;
+
+  for (const mStr of merges) {
+    const { s, e } = parseA1Range(mStr);
+    if (s.col >= colStart && e.col <= colEnd && s.row >= fromRow) {
+      movingMerges.push({ range: mStr, sCol: s.col, sRow: s.row, eCol: e.col, eRow: e.row });
+      if (e.row > maxRow) maxRow = e.row;
+    }
+  }
+  for (const m of movingMerges) sheet.unMergeCells(m.range);
+
+  for (let r = maxRow; r >= fromRow; r--) {
+    const srcRowObj = sheet.getRow(r);
+    const dstRowObj = sheet.getRow(r + delta);
+    if (srcRowObj.height && !dstRowObj.height) dstRowObj.height = srcRowObj.height;
+
+    for (let c = colStart; c <= colEnd; c++) {
+      const src = sheet.getCell(r, c);
+      const dst = sheet.getCell(r + delta, c);
+
+      dst.style = src.style ? JSON.parse(JSON.stringify(src.style)) : {};
+      const val = src.value as any;
+      if (val && typeof val === 'object' && typeof val.formula === 'string') {
+        dst.value = { formula: shiftFormulaRowRefs(val.formula, colStart, colEnd, fromRow, delta) };
+      } else {
+        dst.value = val ?? null;
+      }
+      if (src.note) {
+        dst.note = src.note;
+        src.note = undefined as any;
+      }
+      src.value = null;
+      src.style = {};
+    }
+  }
+
+  for (const m of movingMerges) {
+    sheet.mergeCells(m.sRow + delta, m.sCol, m.eRow + delta, m.eCol);
+  }
+}
+
+function cloneRowBandStyle(
+  sheet: ExcelJS.Worksheet,
+  srcRow: number,
+  dstRow: number,
+  colStart: number,
+  colEnd: number
+) {
+  const h = sheet.getRow(srcRow).height;
+  if (h) sheet.getRow(dstRow).height = h;
+  for (let c = colStart; c <= colEnd; c++) {
+    const sStyle = sheet.getCell(srcRow, c).style;
+    sheet.getCell(dstRow, c).style = sStyle ? JSON.parse(JSON.stringify(sStyle)) : {};
+  }
+}
+
+/**
+ * 从导入的原 .xlsx 文件中提取内嵌的角色立绘（优先匹配中栏 I:Q 区域图片）。
+ */
+export async function extractPortraitFromXlsxBuffer(buffer: ArrayBuffer): Promise<string> {
+  try {
+    const normBuf = await normalizeXlsxForExcelJs(buffer);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(normBuf);
+    const sheet = wb.worksheets[0];
+    if (!sheet) return '';
+    const imgs = sheet.getImages();
+    if (!imgs || imgs.length === 0) return '';
+    const midImg =
+      imgs.find((img: any) => {
+        const col = img?.range?.tl?.nativeCol ?? img?.range?.tl?.col ?? 0;
+        return col >= 7 && col <= 16;
+      }) || imgs[0];
+    const media = wb.getImage(Number(midImg.imageId));
+    if (!media || !media.buffer) return '';
+    const bytes = new Uint8Array(media.buffer as ArrayBuffer);
+    const ext = String(media.extension || 'png').toLowerCase() === 'jpg' ? 'jpeg' : String(media.extension || 'png').toLowerCase();
+    return `data:image/${ext};base64,${uint8ToBase64(bytes)}`;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 基于无损 Base64 模板（或本次会话导入缓存的原始 .xlsx）通过 exceljs 注入数据与分栏动态扩展，导出 .xlsx 字节流。
+ */
+export async function exportCharacterExcelBuffer(
+  pl: any,
+  cachedTemplateBuffer?: ArrayBuffer | null
+): Promise<ArrayBuffer> {
+  const rawBuf = cachedTemplateBuffer
+    ? cachedTemplateBuffer.slice(0)
+    : decodeBase64ToArrayBuffer(ED4_TEMPLATE_BASE64);
+  const normBuf = await normalizeXlsxForExcelJs(rawBuf);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(normBuf);
+
+  const sheet = workbook.worksheets[0];
+  const d = getPlDerivedView(pl);
+
+  // === 1. 左栏 (A:G, cols 1..7) — 严格保留公式格 D12:F17, B20, B22:B23, E22, C26:D29, F34:G43 ===
+  sheet.getCell('B2').value = pl.name || '';
+  sheet.getCell('B3').value = d.race.name;
+  sheet.getCell('B4').value = d.prog.disc.name;
+  sheet.getCell('D4').value = Number(pl.circle) || 1;
+  sheet.getCell('B5').value = pl.gender || '';
+  sheet.getCell('D5').value = pl.age || '';
+  sheet.getCell('B6').value = pl.eyeColor || '';
+  sheet.getCell('D6').value = pl.hairColor || '';
+  sheet.getCell('B7').value = pl.skinColor || '';
+  sheet.getCell('D7').value = pl.height || '';
+  sheet.getCell('B8').value = pl.weight || '';
+
+  (['DEX', 'STR', 'TOU', 'PER', 'WIL', 'CHA'] as const).forEach((k, idx) => {
+    const r = 12 + idx;
+    const basePlusMod = (d.race.base[k] || 10) + ((pl.attrMods && Number(pl.attrMods[k])) || 0);
+    const adj = (d.attrs[k] || basePlusMod) - basePlusMod;
+    sheet.getCell(r, 2).value = basePlusMod;
+    sheet.getCell(r, 3).value = adj;
+  });
+
+  const initPen = (Number(pl.armor?.initPen) || 0) + (Number(pl.shield?.initPen) || 0);
+  const initAdj = (Number(pl.initBonus) || 0) - initPen + (d.prog.init || 0) + (d.itemBonuses?.init || 0);
+  sheet.getCell('B21').value = initAdj;
+  sheet.getCell('E20').value = pl.karmaCurrent ?? d.karmaMax;
+  sheet.getCell('E21').value = d.race.karmaMod || 4;
+
+  // 天赋区 (预设 34..43 共 10 行；超出部分复制第 43 行样式与公式向下追加)
+  for (let r = 34; r <= 43; r++) {
+    for (const c of [1, 2, 3, 4, 5]) sheet.getCell(r, c).value = null;
+  }
+  const talents = pl.talents || [];
+  talents.forEach((t: any, idx: number) => {
+    const r = 34 + idx;
+    if (r > 43) {
+      cloneRowBandStyle(sheet, 43, r, 1, 7);
+      sheet.getCell(r, 6).value = { formula: `VLOOKUP(C${r},Sheet2!$A$10:$B$16,2,FALSE)+B${r}` };
+      sheet.getCell(r, 7).value = { formula: `VLOOKUP(F${r},step表!$A$2:$B$41,2,FALSE)` };
+    }
+    sheet.getCell(r, 1).value = t.name || '';
+    sheet.getCell(r, 2).value = Number(t.rank) || 1;
+    sheet.getCell(r, 3).value = t.attr ? `RANK+${t.attr}` : 'RANK';
+    sheet.getCell(r, 4).value = t.isAttack ? '攻击' : '';
+    sheet.getCell(r, 5).value = Number(t.strain) || 0;
+  });
+
+  // === 2. 中栏 (I:Q, cols 9..17) — 严格保留 J6:J10, L10, J12, M15:N16 ===
+  sheet.getCell('J4').value = Number(pl.currentDamage) || 0;
+  sheet.getCell('J5').value = Number(pl.bloodDamage) || 0;
+  sheet.getCell('L6').value = Number(d.durabilityTotal) || 0;
+  sheet.getCell('J9').value = Number(pl.wounds) || 0;
+  sheet.getCell('J11').value = d.moveDisplay ?? String(d.race.move);
+
+  const weapons = pl.weapons || [];
+  const exportGear = buildExportGearList(pl);
+  const threadItems = pl.threadItems || [];
+
+  const wExtra = Math.max(0, weapons.length - 2);
+  const gExtra = Math.max(0, exportGear.length - 7);
+  const tExtra = Math.max(0, threadItems.length - 3);
+  const midShift = wExtra + gExtra + tExtra;
+
+  if (wExtra > 0) shiftColumnBlockDown(sheet, 9, 17, 17, wExtra);
+  if (gExtra > 0) shiftColumnBlockDown(sheet, 9, 17, 25 + wExtra, gExtra);
+  if (tExtra > 0) shiftColumnBlockDown(sheet, 9, 17, 29 + wExtra + gExtra, tExtra);
+
+  // 写入武器（15..16 保留公式 M15:N16，超出复制第 16 行样式并写入公式）
+  for (let r = 15; r <= 16; r++) {
+    for (const c of [10, 11, 12, 15, 16]) sheet.getCell(r, c).value = null;
+  }
+  weapons.forEach((w: any, idx: number) => {
+    const r = 15 + idx;
+    if (idx >= 2) {
+      cloneRowBandStyle(sheet, 16, r, 9, 17);
+      sheet.getCell(r, 13).value = { formula: `K${r}+E13+L${r}` };
+      sheet.getCell(r, 14).value = { formula: `VLOOKUP(M${r},step表!$A$2:$B$41,2,FALSE)` };
+    }
+    sheet.getCell(r, 10).value = w.name || '';
+    sheet.getCell(r, 11).value = Number(w.dmgStep) || 0;
+    sheet.getCell(r, 12).value = 0;
+  });
+
+  // 写入装备
+  const gearDataStart = 18 + wExtra;
+  for (let i = 0; i < 7; i++) {
+    for (const c of [10, 11, 12]) sheet.getCell(gearDataStart + i, c).value = null;
+  }
+  exportGear.forEach((g: any, idx: number) => {
+    const r = gearDataStart + idx;
+    if (idx >= 7) cloneRowBandStyle(sheet, gearDataStart + 6, r, 9, 17);
+    sheet.getCell(r, 10).value = g.name || '';
+    sheet.getCell(r, 11).value = g.rank || '';
+    sheet.getCell(r, 12).value = g.effect || '';
+  });
+
+  // 写入脉路物品
+  const tiDataStart = 26 + wExtra + gExtra;
+  for (let i = 0; i < 3; i++) {
+    for (const c of [10, 11, 12]) sheet.getCell(tiDataStart + i, c).value = null;
+  }
+  threadItems.forEach((ti: any, idx: number) => {
+    const r = tiDataStart + idx;
+    if (idx >= 3) cloneRowBandStyle(sheet, tiDataStart + 2, r, 9, 17);
+    sheet.getCell(r, 10).value = ti.name || '';
+    sheet.getCell(r, 11).value = ti.type || '';
+    sheet.getCell(r, 12).value = ti.effect || '';
+  });
+
+  // 写入角色立绘（若存在 Data URL 图片则嵌入 I{29+midShift}:K{37+midShift}）
+  const portraitMatch =
+    typeof pl.portraitUrl === 'string'
+      ? pl.portraitUrl.match(/^data:image\/(png|jpe?g|gif);base64,(.+)$/i)
+      : null;
+  if (portraitMatch) {
+    const ext = (portraitMatch[1].toLowerCase() === 'jpg' ? 'jpeg' : portraitMatch[1].toLowerCase()) as
+      | 'png'
+      | 'jpeg'
+      | 'gif';
+    const imgId = workbook.addImage({ base64: portraitMatch[2], extension: ext });
+    sheet.addImage(imgId, {
+      tl: { col: 8.05, row: 28 + midShift + 0.05 },
+      br: { col: 10.95, row: 37 + midShift - 0.05 },
+      editAs: 'oneCell',
+    } as any);
+  }
+
+  // 写入传说点数、财富与人物背景
+  sheet.getCell(31 + midShift, 14).value = pl.legend?.total ?? '';
+  sheet.getCell(32 + midShift, 14).value = pl.legend?.current ?? '';
+  sheet.getCell(33 + midShift, 14).value = pl.legend?.status ?? '';
+  sheet.getCell(34 + midShift, 14).value = pl.legend?.renown ?? '';
+  sheet.getCell(35 + midShift, 14).value = pl.legend?.reputation ?? '';
+
+  sheet.getCell(39 + midShift, 14).value = Number(pl.wealth?.copper ?? 0);
+  sheet.getCell(40 + midShift, 14).value = Number(pl.wealth?.silver ?? 0);
+  sheet.getCell(41 + midShift, 14).value = Number(pl.wealth?.gold ?? 0);
+  sheet.getCell(42 + midShift, 14).value = pl.wealth?.other ?? '';
+
+  const bgCell = sheet.getCell(44 + midShift, 9);
+  bgCell.value = pl.background || '';
+  bgCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
+
+  // === 3. 右栏 (R:AA, cols 18..27) — 严格保留 V28:W43 及下移后技能公式 ===
+  const orderedSpells = getOrderedSpellsForExport(pl);
+  const spExtra = Math.max(0, orderedSpells.length - 22);
+  if (spExtra > 0) shiftColumnBlockDown(sheet, 18, 27, 26, spExtra);
+
+  for (let r = 4; r <= 25; r++) {
+    for (const c of [18, 19, 20, 21, 22, 23, 24, 25]) sheet.getCell(r, c).value = null;
+  }
+  orderedSpells.forEach((sp: any, idx: number) => {
+    const r = 4 + idx;
+    if (r >= 25) cloneRowBandStyle(sheet, 24, r, 18, 25);
+    sheet.getCell(r, 19).value = sp.nameCn || sp.nameEn || '未命名法术';
+    sheet.getCell(r, 20).value = Number(sp.circle) || 1;
+    sheet.getCell(r, 21).value = Number(sp.threads) || 0;
+    sheet.getCell(r, 22).value = Number(sp.weavingBase) || 5;
+    sheet.getCell(r, 23).value = sp.castingType === 'fixed' ? Number(sp.castingDn) || 6 : 'TMD';
+    sheet.getCell(r, 24).value = sp.duration || '-';
+    sheet.getCell(r, 25).value = sp.effectFormula || 'WIL';
+  });
+
+  const skills = pl.skills || [];
+  const skStart = 28 + spExtra;
+  for (let i = 0; i < 16; i++) {
+    for (const c of [18, 19, 20, 21, 24, 25]) sheet.getCell(skStart + i, c).value = null;
+  }
+  skills.forEach((sk: any, idx: number) => {
+    const r = skStart + idx;
+    if (idx >= 16) {
+      cloneRowBandStyle(sheet, skStart + 15, r, 18, 25);
+      sheet.getCell(r, 22).value = { formula: `VLOOKUP(U${r},Sheet2!$A$2:$C$7,3,FALSE)+T${r}` };
+      sheet.getCell(r, 23).value = { formula: `VLOOKUP(V${r},step表!$A$2:$B$41,2,FALSE)` };
+    }
+    sheet.getCell(r, 18).value = sk.category || '通用技能';
+    sheet.getCell(r, 19).value = sk.name || '';
+    sheet.getCell(r, 20).value = Number(sk.rank) || 1;
+    sheet.getCell(r, 21).value = sk.attr || 'PER';
+    sheet.getCell(r, 24).value = sk.isAttack ? '攻击' : '';
+    sheet.getCell(r, 25).value = Number(sk.strain) || 0;
+  });
+
+  const out = await workbook.xlsx.writeBuffer();
+  return out instanceof ArrayBuffer ? out : new Uint8Array(out).slice().buffer;
 }
 
 /**
@@ -68,6 +456,13 @@ export function serializeCharacterToTxt(pl: any): string {
   lines.push(`种族：${d.race.name}`);
   lines.push(`门类：${d.prog.disc.name}`);
   lines.push(`环数：${pl.circle}`);
+  if (pl.gender) lines.push(`性别：${pl.gender}`);
+  if (pl.age) lines.push(`年龄：${pl.age}`);
+  if (pl.eyeColor) lines.push(`瞳色：${pl.eyeColor}`);
+  if (pl.hairColor) lines.push(`发色：${pl.hairColor}`);
+  if (pl.skinColor) lines.push(`肤色：${pl.skinColor}`);
+  if (pl.height) lines.push(`身高：${pl.height}`);
+  if (pl.weight) lines.push(`体重：${pl.weight}`);
   lines.push('');
 
   lines.push('属性');
@@ -190,242 +585,6 @@ export function serializeCharacterToTxt(pl: any): string {
   return `${lines.join('\n')}\n\n【背景】\n${String(pl.background || '')}`;
 }
 
-/**
- * 生成严格对齐 ED4Engine.parseExcelWorkbook 锚点与列结构的纯数值 Excel 工作簿
- */
-export function buildCharacterWorkbook(pl: any): XLSX.WorkBook {
-  const d = getPlDerivedView(pl);
-  const ws: XLSX.WorkSheet = {};
-  let maxR = 1;
-  let maxC = 1;
-
-  const setCell = (r: number, c: number, val: string | number) => {
-    if (val === undefined || val === null || val === '') return;
-    const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
-    ws[addr] = typeof val === 'number' ? { t: 'n', v: val } : { t: 's', v: String(val) };
-    if (r > maxR) maxR = r;
-    if (c > maxC) maxC = c;
-  };
-
-  // 1. 基础信息 (r=2..4, c=1..4)
-  setCell(2, 1, '角色名');
-  setCell(2, 2, pl.name || '');
-  setCell(3, 1, '种族');
-  setCell(3, 2, d.race.name);
-  setCell(4, 1, '门类');
-  setCell(4, 2, d.prog.disc.name);
-  setCell(4, 3, '环数');
-  setCell(4, 4, Number(pl.circle) || 1);
-
-  // 2. 属性区 (r=8..14, c=1..4)
-  setCell(8, 1, '属性');
-  setCell(8, 2, '数值');
-  setCell(8, 3, '总值');
-  setCell(8, 4, '步数');
-  Object.entries(ED4Engine.ATTR_NAMES).forEach(([k, cn], idx) => {
-    const r = 9 + idx;
-    const basePlusMod = (d.race.base[k] || 10) + ((pl.attrMods && pl.attrMods[k]) || 0);
-    setCell(r, 1, cn);
-    setCell(r, 2, basePlusMod);
-    setCell(r, 3, d.attrs[k]);
-    setCell(r, 4, d.steps[k]);
-  });
-
-  // 3. 先攻与业力 (r=16..19, c=1..5)
-  const initPen = (Number(pl.armor?.initPen) || 0) + (Number(pl.shield?.initPen) || 0);
-  const initBonus = Number(pl.initBonus) || 0;
-  const initAdj = initBonus - initPen;
-
-  setCell(16, 1, '先攻');
-  setCell(17, 1, '基础');
-  setCell(17, 2, d.steps.DEX);
-  setCell(18, 1, '护甲调整');
-  setCell(18, 2, initAdj);
-  setCell(19, 1, '先攻步数');
-  setCell(19, 2, d.initStep);
-
-  setCell(16, 4, '业力');
-  setCell(17, 4, '可用');
-  setCell(17, 5, pl.karmaCurrent ?? d.karmaMax);
-  setCell(18, 4, '上限');
-  setCell(18, 5, d.karmaMax);
-  setCell(19, 4, '业力骰');
-  setCell(19, 5, `D${pl.karmaDie || 6}`);
-
-  // 4. 天赋区 (r=24.., c=1..6)
-  setCell(24, 1, '天赋');
-  setCell(25, 1, '名称');
-  setCell(25, 2, '等级');
-  setCell(25, 3, '属性');
-  setCell(25, 4, '属性步');
-  setCell(25, 5, '总步数');
-  setCell(25, 6, '负荷');
-  (pl.talents || []).forEach((t: any, idx: number) => {
-    const r = 26 + idx;
-    const attrStep = d.steps[t.attr] || 1;
-    const rank = Number(t.rank) || 1;
-    setCell(r, 1, t.name);
-    setCell(r, 2, rank);
-    setCell(r, 3, ED4Engine.ATTR_NAMES[t.attr] || '敏捷');
-    setCell(r, 4, attrStep);
-    setCell(r, 5, attrStep + rank);
-    setCell(r, 6, Number(t.strain) || 0);
-  });
-
-  // 5. 健康区 (r=2..4, c=8..11)
-  setCell(2, 8, '当前伤害');
-  setCell(2, 9, Number(pl.currentDamage) || 0);
-  setCell(3, 8, '血魔法伤害');
-  setCell(3, 9, Number(pl.bloodDamage) || 0);
-  setCell(4, 8, '负伤');
-  setCell(4, 9, Number(pl.wounds) || 0);
-  setCell(2, 10, '意识丧失');
-  setCell(2, 11, d.effUncon);
-  setCell(3, 10, '死亡');
-  setCell(3, 11, d.effDeath);
-  setCell(4, 10, '负伤阈值');
-  setCell(4, 11, d.woundThreshold);
-
-  // 6. 衍生防御面板镜像 (r=6..8, c=8..11)
-  setCell(6, 8, '物理防御');
-  setCell(6, 9, d.pd);
-  setCell(7, 8, '秘法防御');
-  setCell(7, 9, d.md);
-  setCell(8, 8, '社交防御');
-  setCell(8, 9, d.sd);
-  setCell(6, 10, '物理护甲');
-  setCell(6, 11, d.pa);
-  setCell(7, 10, '秘法护甲');
-  setCell(7, 11, d.ma);
-
-  // 7. 武器区 (锚点 r=10, c=8..11)
-  const weapons = pl.weapons || [];
-  setCell(10, 8, '武器');
-  setCell(10, 9, '名称');
-  setCell(10, 10, '伤害步数');
-  setCell(10, 11, '基础伤害');
-  weapons.forEach((w: any, idx: number) => {
-    const r = 11 + idx;
-    const baseDmg = Number(w.dmgStep) || 0;
-    setCell(r, 9, w.name);
-    setCell(r, 10, d.steps.STR + baseDmg);
-    setCell(r, 11, baseDmg);
-  });
-
-  // 8. 装备区 (锚点 r>=14, c=8..11)
-  const exportGear = buildExportGearList(pl);
-  const gearStart = Math.max(14, 11 + weapons.length);
-  setCell(gearStart, 8, '装备');
-  setCell(gearStart, 9, '名称');
-  setCell(gearStart, 10, '等级');
-  setCell(gearStart, 11, '效果');
-  exportGear.forEach((g: any, idx: number) => {
-    const r = gearStart + 1 + idx;
-    setCell(r, 9, g.name);
-    setCell(r, 10, g.rank || '');
-    setCell(r, 11, g.effect || '');
-  });
-
-  // 9. 脉路物品区 (锚点 r>=16, c=8..11)
-  const threadItems = pl.threadItems || [];
-  const tiStart = Math.max(16, gearStart + 1 + exportGear.length);
-  setCell(tiStart, 8, '脉路物品');
-  setCell(tiStart, 9, '名称');
-  setCell(tiStart, 10, '类型');
-  setCell(tiStart, 11, '属性');
-  threadItems.forEach((ti: any, idx: number) => {
-    const r = tiStart + 1 + idx;
-    setCell(r, 9, ti.name);
-    setCell(r, 10, ti.type || '');
-    setCell(r, 11, ti.effect || '');
-  });
-
-  // 10. 传说点数与财富 (c=13..14, 动态排在脉路物品区下方避免触发 ed4_engine line 739 提前截断)
-  const lpStart = Math.min(36, Math.max(16, tiStart + Math.max(1, threadItems.length) + 2));
-  const wStart = lpStart + 7;
-
-  setCell(lpStart, 13, '传说点数');
-  setCell(lpStart + 1, 13, '总计');
-  setCell(lpStart + 1, 14, pl.legend?.total ?? '');
-  setCell(lpStart + 2, 13, '现有');
-  setCell(lpStart + 2, 14, pl.legend?.current ?? '');
-  setCell(lpStart + 3, 13, '传说状态');
-  setCell(lpStart + 3, 14, pl.legend?.status ?? '');
-  setCell(lpStart + 4, 13, '名望');
-  setCell(lpStart + 4, 14, pl.legend?.renown ?? '');
-  setCell(lpStart + 5, 13, '声誉');
-  setCell(lpStart + 5, 14, pl.legend?.reputation ?? '');
-
-  setCell(wStart, 13, '财富');
-  setCell(wStart + 1, 13, '铜币');
-  setCell(wStart + 1, 14, pl.wealth?.copper ?? 0);
-  setCell(wStart + 2, 13, '银币');
-  setCell(wStart + 2, 14, pl.wealth?.silver ?? 0);
-  setCell(wStart + 3, 13, '金币');
-  setCell(wStart + 3, 14, pl.wealth?.gold ?? 0);
-  setCell(wStart + 4, 13, '其他');
-  setCell(wStart + 4, 14, pl.wealth?.other ?? '');
-
-  // 11. 法术区 (锚点 r=2, c=16..23)
-  const orderedSpells = getOrderedSpellsForExport(pl);
-  setCell(2, 16, '法术');
-  setCell(3, 17, '名称');
-  setCell(3, 18, '环数');
-  setCell(3, 19, '脉路');
-  setCell(3, 20, '编织');
-  setCell(3, 21, '施法');
-  setCell(3, 22, '持续');
-  setCell(3, 23, '效果');
-  orderedSpells.forEach((sp: any, idx: number) => {
-    const r = 4 + idx;
-    setCell(r, 17, sp.nameCn || sp.nameEn || '未命名法术');
-    setCell(r, 18, Number(sp.circle) || 1);
-    setCell(r, 19, Number(sp.threads) || 0);
-    setCell(r, 20, Number(sp.weavingBase) || 5);
-    setCell(r, 21, sp.castingType === 'fixed' ? (Number(sp.castingDn) || 6) : 'TMD');
-    setCell(r, 22, sp.duration || '-');
-    setCell(r, 23, sp.effectFormula || 'WIL');
-  });
-
-  // 12. 技能区 (锚点 r>=10, c=16..20; col16='技能' 同时作为法术解析终止标记)
-  const skills = pl.skills || [];
-  const skStart = Math.max(10, 4 + orderedSpells.length + 1);
-  setCell(skStart, 16, '技能');
-  setCell(skStart, 17, '名称');
-  setCell(skStart, 18, '等级');
-  setCell(skStart, 19, '属性');
-  setCell(skStart, 20, '负荷');
-  skills.forEach((sk: any, idx: number) => {
-    const r = skStart + 1 + idx;
-    setCell(r, 16, sk.category || '通用技能');
-    setCell(r, 17, sk.name);
-    setCell(r, 18, Number(sk.rank) || 1);
-    setCell(r, 19, ED4Engine.ATTR_NAMES[sk.attr] || '感知');
-    setCell(r, 20, Number(sk.strain) || 0);
-  });
-
-  // 13. 人物背景 (写入 I44 单元格以对齐模板与无损回导)
-  setCell(44, 9, pl.background || '');
-
-  ws['!ref'] = XLSX.utils.encode_range({
-    s: { r: 0, c: 0 },
-    e: { r: Math.max(maxR - 1, 0), c: Math.max(maxC - 1, 0) },
-  });
-  ws['!cols'] = [
-    { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 3 },
-    { wch: 12 }, { wch: 18 }, { wch: 10 }, { wch: 24 },
-    { wch: 3 },
-    { wch: 12 }, { wch: 14 },
-    { wch: 3 },
-    { wch: 12 }, { wch: 18 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 14 }, { wch: 24 },
-  ];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '角色卡');
-  return wb;
-}
-
 export function getExportBaseName(pl: any): string {
   const safeName = String(pl?.name || '未命名角色').trim().replace(/[\\/:*?"<>|]/g, '_') || '未命名角色';
   const circle = Number(pl?.circle) || 1;
@@ -442,9 +601,8 @@ export function downloadTextFile(filename: string, content: string) {
   URL.revokeObjectURL(url);
 }
 
-export function downloadWorkbookFile(filename: string, wb: XLSX.WorkBook) {
-  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([out], {
+export function downloadExcelBuffer(filename: string, buffer: ArrayBuffer) {
+  const blob = new Blob([buffer], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const url = URL.createObjectURL(blob);

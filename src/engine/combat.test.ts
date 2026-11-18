@@ -10,8 +10,10 @@ import {
   sortInitiativeList,
   applyImportedCharacter,
 } from './combatHelpers.ts';
+import ExcelJS from 'exceljs';
 import {
-  buildCharacterWorkbook,
+  exportCharacterExcelBuffer,
+  extractPortraitFromXlsxBuffer,
   getExportBaseName,
   serializeCharacterToTxt,
 } from './characterExport.ts';
@@ -134,7 +136,7 @@ test('Damage resolution, wounds, and initiative sorting follow ED4 rules', () =>
   assert.equal(sorted[1].id, 'pl');
 });
 
-test('TXT and Excel export perform 100% lossless round-trip for default & customized caster characters', () => {
+test('TXT and Excel export perform lossless round-trip for default & customized caster characters', async () => {
   const st = createInitialState();
 
   // 1. Default character (兰达尔)
@@ -249,10 +251,9 @@ test('TXT and Excel export perform 100% lossless round-trip for default & custom
   assert.equal(fromTxt.legend.total, '3500');
   assert.equal(Number(fromTxt.wealth.gold), 18);
 
-  // B) Excel (.xlsx) write -> read -> parse -> apply round-trip
-  const wb = buildCharacterWorkbook(customPl);
-  const xlsxBuf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const wbRead = XLSX.read(xlsxBuf, { type: 'array' });
+  // B) Excel (.xlsx) write -> read -> parse -> apply round-trip (all imported spells go into grimoire inMatrix=false)
+  const xlsxBuf = await exportCharacterExcelBuffer(customPl);
+  const wbRead = XLSX.read(new Uint8Array(xlsxBuf), { type: 'array' });
   const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(wbRead));
   const xlsxDerived = getPlDerivedView(fromXlsx);
 
@@ -278,15 +279,17 @@ test('TXT and Excel export perform 100% lossless round-trip for default & custom
   assert.equal(fromXlsx.skills[1].strain, 1);
   assert.equal(fromXlsx.talents[2].strain, 1);
   assert.equal(fromXlsx.spells.length, 4);
-  assert.equal(fromXlsx.spells.filter((s: any) => s.inMatrix).length, 3);
-  assert.equal(fromXlsx.spells[3].inMatrix, false);
+  assert.deepEqual(
+    fromXlsx.spells.map((s: any) => s.nameCn),
+    ['心灵匕首', '法师护甲', '自定义奥术冲击', '猫眼']
+  );
+  assert.equal(fromXlsx.spells.every((s: any) => s.inMatrix === false), true);
   assert.equal(fromXlsx.legend.renown, '奥术学者');
   assert.equal(fromXlsx.wealth.other, '秘法水晶x2');
 
   // C) Double round-trip idempotence (Excel -> Import -> Excel -> Import)
-  const wb2 = buildCharacterWorkbook(fromXlsx);
-  const xlsxBuf2 = XLSX.write(wb2, { bookType: 'xlsx', type: 'array' });
-  const fromXlsx2 = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(xlsxBuf2, { type: 'array' })));
+  const xlsxBuf2 = await exportCharacterExcelBuffer(fromXlsx);
+  const fromXlsx2 = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(xlsxBuf2), { type: 'array' })));
   const xlsxDerived2 = getPlDerivedView(fromXlsx2);
   assert.deepEqual(xlsxDerived2.attrs, xlsxDerived.attrs);
   assert.equal(xlsxDerived2.pa, xlsxDerived.pa);
@@ -352,7 +355,7 @@ test('Supabase Realtime sync helpers handle graceful offline fallback, arbitrary
   assert.equal(logs2.length, 2);
 });
 
-test('Character background supports TXT tags, Excel label/L44 merged fallback, and lossless round-trip export', () => {
+test('Character background supports TXT tags, Excel label/I44 merged fallback, and lossless round-trip export', async () => {
   const st = createInitialState();
   assert.equal(st.pl.background, '');
 
@@ -384,10 +387,10 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
   assert.equal(ED4Engine.parseTxtSheet(inlineColonTxt).background, '单行起点\n后续第二行');
 
   // 2. Excel export -> I44 lossless round-trip
-  const wbExport = buildCharacterWorkbook(richPl);
-  assert.equal(wbExport.Sheets['角色卡']?.I44?.v, bgStory);
-  const wbBytes = XLSX.write(wbExport, { bookType: 'xlsx', type: 'array' });
-  const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(wbBytes, { type: 'array' })));
+  const wbBytes = await exportCharacterExcelBuffer(richPl);
+  const readExported = XLSX.read(new Uint8Array(wbBytes), { type: 'array' });
+  assert.equal(readExported.Sheets['Sheet1']?.I44?.v, bgStory);
+  const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(readExported));
   assert.equal(fromXlsx.background, bgStory);
 
   // 3. Excel I44 merged-cell fallback (merge starts at H44:J48, covering I44 without header label)
@@ -455,5 +458,151 @@ test('Character background supports TXT tags, Excel label/L44 merged fallback, a
   XLSX.utils.book_append_sheet(multiSheetWb, { I44: { t: 's', v: '第二页I44背景' }, '!ref': 'A1:I44' }, '附加');
   assert.equal(ED4Engine.parseExcelWorkbook(multiSheetWb).background, '第二页I44背景');
 });
+
+test('ExcelJS template export preserves formulas, shifts column bands independently on overflow, embeds portrait, and honors cached buffer', async () => {
+  const st = createInitialState();
+  const samplePngBase64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAEklEQVR42mP8z8BQz0AEwMhAAQAyAAQBwQ5pGgAAAABJRU5ErkJggg==';
+  const portraitDataUrl = `data:image/png;base64,${samplePngBase64}`;
+
+  const overflowPl = {
+    ...st.pl,
+    name: '多栏溢出测试者',
+    raceId: 'elf',
+    disciplineId: 'wizard',
+    circle: 6,
+    gender: '女',
+    age: '142',
+    eyeColor: '银灰',
+    hairColor: '月白',
+    skinColor: '苍白',
+    height: '176cm',
+    weight: '58kg',
+    portraitUrl: portraitDataUrl,
+    background: '来自星界边缘的学者。\n精通古代秘法与符文锻造。',
+    armor: { name: '', pa: 0, ma: 0, initPen: 0 },
+    shield: { name: '', pd: 0, md: 0, initPen: 0 },
+    weapons: [
+      { id: 'w1', name: '武器1', dmgStep: 4 },
+      { id: 'w2', name: '武器2', dmgStep: 5 },
+      { id: 'w3', name: '武器3', dmgStep: 6 },
+      { id: 'w4', name: '武器4', dmgStep: 7 },
+    ],
+    gear: Array.from({ length: 9 }, (_, i) => ({
+      name: `装备${i + 1}`,
+      rank: `${i + 1}`,
+      effect: i === 0 ? '物理护甲+1' : '',
+      equipped: true,
+    })),
+    threadItems: Array.from({ length: 5 }, (_, i) => ({
+      name: `脉路物品${i + 1}`,
+      type: '护符',
+      effect: i === 0 ? '秘法防御+1' : '',
+      equipped: true,
+    })),
+    talents: Array.from({ length: 12 }, (_, i) => ({
+      id: `t_${i}`,
+      name: `天赋${i + 1}`,
+      attr: 'PER',
+      rank: i + 1,
+      strain: i % 2,
+      isAttack: false,
+    })),
+    spells: Array.from({ length: 25 }, (_, i) => ({
+      ...ED4Engine.SPELLS_DB[i % ED4Engine.SPELLS_DB.length],
+      instanceId: `sp_ov_${i}`,
+      inMatrix: i < 4,
+      wovenThreads: 0,
+    })),
+    skills: Array.from({ length: 18 }, (_, i) => ({
+      id: `sk_${i}`,
+      category: '通用技能',
+      name: `技能${i + 1}`,
+      rank: (i % 5) + 1,
+      attr: 'DEX',
+      strain: 0,
+      isAttack: false,
+    })),
+  };
+
+  const outBuf = await exportCharacterExcelBuffer(overflowPl);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(outBuf);
+
+  assert.deepEqual(
+    wb.worksheets.map((s) => s.name),
+    ['Sheet1', 'Sheet2', '属性表', 'step表', '秘法护甲表']
+  );
+
+  const sheet = wb.worksheets[0];
+
+  // Protected formula cells must still hold formulas
+  for (const addr of [
+    'D12', 'E12', 'F12', 'D17', 'E17', 'F17',
+    'J6', 'J7', 'J8', 'J10', 'L10', 'J12',
+    'B20', 'B22', 'B23', 'C26', 'D29', 'E22',
+    'M15', 'N15', 'M16', 'N16', 'F34', 'G34', 'F43', 'G43',
+  ]) {
+    const val = sheet.getCell(addr).value as any;
+    assert.ok(val && typeof val === 'object' && typeof val.formula === 'string', `Formula lost at ${addr}`);
+  }
+
+  // Weapon overflow rows 17..18 have injected formulas
+  assert.equal((sheet.getCell('M17').value as any)?.formula, 'K17+E13+L17');
+  assert.equal((sheet.getCell('N18').value as any)?.formula, 'VLOOKUP(M18,step表!$A$2:$B$41,2,FALSE)');
+
+  // Talent overflow rows 44..45 have injected formulas, while Left column A:G was NOT shifted by middle/right overflow
+  assert.equal(sheet.getCell('A34').value, '天赋1');
+  assert.equal(sheet.getCell('A45').value, '天赋12');
+  assert.equal((sheet.getCell('F44').value as any)?.formula, 'VLOOKUP(C44,Sheet2!$A$10:$B$16,2,FALSE)+B44');
+  assert.equal((sheet.getCell('G45').value as any)?.formula, 'VLOOKUP(F45,step表!$A$2:$B$41,2,FALSE)');
+
+  // Middle column shifted progressively: 装备 at 17+wExtra(2)=19, 脉路物品 at 25+wExtra(2)+gExtra(2)=29, 背景 at 44+midShift(6)=50
+  assert.equal(sheet.getCell('I19').value, '装备');
+  assert.equal(sheet.getCell('I29').value, '脉路物品');
+  assert.equal(sheet.getCell('I50').value, overflowPl.background);
+
+  // Right column shifted by spExtra = 25 - 22 = 3; skill header at R30, skills at 31..48
+  assert.equal(sheet.getCell('T29').value, '8点可分配');
+  assert.equal(sheet.getCell('R30').value, '技能');
+  assert.equal(sheet.getCell('S31').value, '技能1');
+  assert.equal(sheet.getCell('S48').value, '技能18');
+  assert.equal((sheet.getCell('V31').value as any)?.formula, 'VLOOKUP(U31,Sheet2!$A$2:$C$7,3,FALSE)+T31');
+  assert.equal((sheet.getCell('W31').value as any)?.formula, 'VLOOKUP(V31,step表!$A$2:$B$41,2,FALSE)');
+  assert.equal((sheet.getCell('V47').value as any)?.formula, 'VLOOKUP(U47,Sheet2!$A$2:$C$7,3,FALSE)+T47');
+  assert.equal((sheet.getCell('W48').value as any)?.formula, 'VLOOKUP(V48,step表!$A$2:$B$41,2,FALSE)');
+
+  // Portrait round-trip extraction
+  const extractedPortrait = await extractPortraitFromXlsxBuffer(outBuf);
+  assert.ok(extractedPortrait.startsWith('data:image/png;base64,'));
+
+  // Dynamic importer round-trips all overflow items + appearance fields
+  const parsedOverflow = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(outBuf), { type: 'array' }));
+  assert.equal(parsedOverflow.gender, '女');
+  assert.equal(parsedOverflow.age, '142');
+  assert.equal(parsedOverflow.eyeColor, '银灰');
+  assert.equal(parsedOverflow.hairColor, '月白');
+  assert.equal(parsedOverflow.skinColor, '苍白');
+  assert.equal(parsedOverflow.height, '176cm');
+  assert.equal(parsedOverflow.weight, '58kg');
+  assert.equal(parsedOverflow.weapons.length, 4);
+  assert.equal(parsedOverflow.gear.length, 9);
+  assert.equal(parsedOverflow.threadItems.length, 5);
+  assert.equal(parsedOverflow.talents.length, 12);
+  assert.equal(parsedOverflow.spells.length, 25);
+  assert.equal(parsedOverflow.skills.length, 18);
+  assert.equal(parsedOverflow.background, overflowPl.background);
+
+  // Cached user template buffer overrides built-in Base64 template
+  const customTplWb = new ExcelJS.Workbook();
+  await customTplWb.xlsx.load(outBuf);
+  customTplWb.worksheets[0].getCell('A1').value = 'CUSTOM_CACHED_MARKER';
+  const customTplBuf = await customTplWb.xlsx.writeBuffer();
+  const cachedOutBuf = await exportCharacterExcelBuffer(st.pl, customTplBuf as ArrayBuffer);
+  const cachedCheckWb = new ExcelJS.Workbook();
+  await cachedCheckWb.xlsx.load(cachedOutBuf);
+  assert.equal(cachedCheckWb.worksheets[0].getCell('A1').value, 'CUSTOM_CACHED_MARKER');
+});
+
 
 

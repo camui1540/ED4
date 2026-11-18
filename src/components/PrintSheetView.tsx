@@ -96,133 +96,173 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
 
   return (
     <div className={`print-sheet hidden print:block ${c.page}`}>
-      {/* 顶部角色档案抬头 */}
-      <header className={`break-inside-avoid mb-3 border-b-2 pb-2 ${c.headerBorder}`}>
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="flex items-baseline gap-3">
-            <h1 className={`font-display text-2xl font-bold tracking-tight ${c.title}`}>
-              {pl.name || '未命名角色'}
-            </h1>
-            <span className={`font-display text-sm font-semibold ${c.body}`}>
-              {d.race.name} · {prog.disc.name}
-            </span>
-            <span className={`font-serif rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
-              {pl.circle}环
-            </span>
+      {/* A4 第一页：角色抬头 + 档案/立绘/外观 + 核心属性/衍生数值 + 健康/护甲 + 人物背景 */}
+      <div className="print-page-one break-after-page">
+        <header className={`break-inside-avoid mb-2.5 border-b-2 pb-2 ${c.headerBorder}`}>
+          <div className="flex items-baseline justify-between gap-4">
+            <div className="flex items-baseline gap-3">
+              <h1 className={`font-display text-2xl font-bold tracking-tight ${c.title}`}>
+                {pl.name || '未命名角色'}
+              </h1>
+              <span className={`font-display text-sm font-semibold ${c.body}`}>
+                {d.race.name} · {prog.disc.name}
+              </span>
+              <span className={`font-serif rounded border px-1.5 py-0.5 text-[11px] font-semibold ${c.badge}`}>
+                {pl.circle}环
+              </span>
+            </div>
+            <div className={`font-mono text-xs font-semibold ${c.muted}`}>
+              Earthdawn 4E 角色档案 · 业力骰 D{pl.karmaDie || 6}
+            </div>
           </div>
-          <div className={`font-mono text-xs font-semibold ${c.muted}`}>
-            Earthdawn 4E 角色档案 · 业力骰 D{pl.karmaDie || 6}
+          <div className={`mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${c.muted}`}>
+            <span>移速 <b className="font-mono">{d.moveDisplay ?? d.race.move}</b> 码</span>
+            <span>负重 <b className="font-mono">{d.carry}</b> 磅</span>
+            <span>种族特性：{d.race.traits}</span>
+            {bonusTags.map((b) => (
+              <span key={b} className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.badge}`}>
+                {b}
+              </span>
+            ))}
           </div>
-        </div>
-        <div className={`mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${c.muted}`}>
-          <span>移速 <b className="font-mono">{d.race.move}</b> 码</span>
-          <span>负重 <b className="font-mono">{d.carry}</b> 磅</span>
-          <span>种族特性：{d.race.traits}</span>
-          {bonusTags.map((b) => (
-            <span key={b} className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${c.badge}`}>
-              {b}
-            </span>
-          ))}
-        </div>
-      </header>
+        </header>
 
-      {/* 六维属性 + 衍生防御 */}
-      <section className="break-inside-avoid mb-3">
-        <h2 className={`font-serif mb-1.5 border-b pb-0.5 text-xs font-bold uppercase tracking-wider ${c.subLine} ${c.heading}`}>
-          核心属性与衍生战斗数值
-        </h2>
-        <div className="mb-2 grid grid-cols-6 gap-1.5">
-          {Object.entries(ED4Engine.ATTR_NAMES).map(([k, label]) => {
-            const stp = d.steps[k];
-            const dice = ED4Engine.getStepDice(stp).label;
-            return (
-              <div key={k} className={`break-inside-avoid rounded border p-1.5 text-center ${c.card}`}>
+        {/* 角色档案、立绘与外貌特征 */}
+        <section className={`break-inside-avoid mb-2.5 flex gap-3 rounded border p-2 ${c.card}`}>
+          <div className={`flex h-28 w-21 shrink-0 items-center justify-center overflow-hidden rounded border ${c.subCard}`}>
+            {pl.portraitUrl ? (
+              <img src={pl.portraitUrl} alt={pl.name || '角色立绘'} className="h-full w-full object-cover" />
+            ) : (
+              <span className={`text-[10px] ${c.subtle}`}>角色图像</span>
+            )}
+          </div>
+          <div className="flex flex-1 flex-col justify-between">
+            <div className={`mb-1 border-b pb-0.5 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
+              个人档案与外貌特征
+            </div>
+            <div className={`grid grid-cols-4 gap-x-3 gap-y-1.5 text-[11px] ${c.body}`}>
+              <div>性别：<b className={c.title}>{pl.gender || '-'}</b></div>
+              <div>年龄：<b className={`font-mono ${c.title}`}>{pl.age || '-'}</b></div>
+              <div>身高：<b className={`font-mono ${c.title}`}>{pl.height || '-'}</b></div>
+              <div>体重：<b className={`font-mono ${c.title}`}>{pl.weight || '-'}</b></div>
+              <div>瞳色：<b className={c.title}>{pl.eyeColor || '-'}</b></div>
+              <div>发色：<b className={c.title}>{pl.hairColor || '-'}</b></div>
+              <div className="col-span-2">肤色：<b className={c.title}>{pl.skinColor || '-'}</b></div>
+            </div>
+            <div className={`mt-1 border-t pt-1 text-[10px] ${c.rowBorder} ${c.muted}`}>
+              传说总计 <b className="font-mono">{pl.legend?.total || 0}</b> · 现有 <b className="font-mono">{pl.legend?.current || 0}</b> · 名望：<b>{pl.legend?.renown || '-'}</b> · 财富：金币 <b className="font-mono">{pl.wealth?.gold ?? 0}</b> / 银币 <b className="font-mono">{pl.wealth?.silver ?? 0}</b> / 铜币 <b className="font-mono">{pl.wealth?.copper ?? 0}</b>
+            </div>
+          </div>
+        </section>
+
+        {/* 六维属性 + 衍生防御 */}
+        <section className="break-inside-avoid mb-2.5">
+          <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold uppercase tracking-wider ${c.subLine} ${c.heading}`}>
+            核心属性与衍生战斗数值
+          </h2>
+          <div className="mb-1.5 grid grid-cols-6 gap-1.5">
+            {Object.entries(ED4Engine.ATTR_NAMES).map(([k, label]) => {
+              const stp = d.steps[k];
+              const dice = ED4Engine.getStepDice(stp).label;
+              return (
+                <div key={k} className={`break-inside-avoid rounded border p-1 text-center ${c.card}`}>
+                  <div className={`text-[11px] font-semibold ${c.body}`}>{label}</div>
+                  <div className={`font-mono text-lg font-bold leading-tight ${c.title}`}>{d.attrs[k]}</div>
+                  <div className={`font-mono text-[10px] font-bold ${c.heading}`}>Step {stp}</div>
+                  <div className={`font-mono text-[9px] ${c.subtle}`}>{dice}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="grid grid-cols-6 gap-1.5">
+            <div className={`break-inside-avoid rounded border p-1 text-center ${c.card}`}>
+              <div className={`text-[11px] font-semibold ${c.body}`}>先攻</div>
+              <div className={`font-mono text-base font-bold ${c.title}`}>Step {initEffStep}</div>
+              <div className={`font-mono text-[9px] ${c.subtle}`}>{initDice}</div>
+            </div>
+            {[
+              ['物理防御', d.pd],
+              ['秘法防御', d.md],
+              ['社交防御', d.sd],
+              ['物理护甲', d.pa],
+              ['秘法护甲', d.ma],
+            ].map(([label, val]) => (
+              <div key={String(label)} className={`break-inside-avoid flex flex-col justify-center rounded border p-1 text-center ${c.card}`}>
                 <div className={`text-[11px] font-semibold ${c.body}`}>{label}</div>
-                <div className={`font-mono text-xl font-bold leading-tight ${c.title}`}>{d.attrs[k]}</div>
-                <div className={`font-mono text-[11px] font-bold ${c.heading}`}>Step {stp}</div>
-                <div className={`font-mono text-[10px] ${c.subtle}`}>{dice}</div>
+                <div className={`font-mono text-lg font-bold leading-tight ${c.title}`}>{val}</div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </section>
 
-        <div className="grid grid-cols-6 gap-1.5">
-          <div className={`break-inside-avoid rounded border p-1.5 text-center ${c.card}`}>
-            <div className={`text-[11px] font-semibold ${c.body}`}>先攻</div>
-            <div className={`font-mono text-base font-bold ${c.title}`}>Step {initEffStep}</div>
-            <div className={`font-mono text-[10px] ${c.subtle}`}>{initDice}</div>
-          </div>
-          {[
-            ['物理防御', d.pd],
-            ['秘法防御', d.md],
-            ['社交防御', d.sd],
-            ['物理护甲', d.pa],
-            ['秘法护甲', d.ma],
-          ].map(([label, val]) => (
-            <div key={String(label)} className={`break-inside-avoid flex flex-col justify-center rounded border p-1.5 text-center ${c.card}`}>
-              <div className={`text-[11px] font-semibold ${c.body}`}>{label}</div>
-              <div className={`font-mono text-xl font-bold leading-tight ${c.title}`}>{val}</div>
+        {/* 健康轨、资源与当前实时状态 */}
+        <section className="break-inside-avoid mb-2.5 grid grid-cols-2 gap-2.5">
+          <div className={`rounded border p-2 ${c.card}`}>
+            <div className={`mb-1 flex items-center justify-between border-b pb-1 ${c.rowBorder}`}>
+              <span className={`font-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
+              <span className={`font-mono text-[11px] ${c.muted}`}>
+                动作修正 {actionMod >= 0 ? `+${actionMod}` : actionMod} Step
+              </span>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
+              <div className={`rounded border p-1 ${c.subCard}`}>
+                <div className={c.muted}>当前伤害</div>
+                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.currentDamage}</div>
+              </div>
+              <div className={`rounded border p-1 ${c.subCard}`}>
+                <div className={c.muted}>血魔法伤害</div>
+                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.bloodDamage}</div>
+              </div>
+              <div className={`rounded border p-1 ${c.subCard}`}>
+                <div className={c.muted}>负伤</div>
+                <div className={`font-mono text-base font-bold ${c.title}`}>{pl.wounds}</div>
+              </div>
+            </div>
+            <div className={`mt-1 grid grid-cols-3 gap-1 text-[10px] ${c.body}`}>
+              <div>意识丧失：<b className="font-mono">{d.effUncon}</b></div>
+              <div>死亡：<b className="font-mono">{d.effDeath}</b></div>
+              <div>负伤阈值：<b className="font-mono">{d.woundThreshold}</b></div>
+              <div>可用业力：<b className="font-mono">{pl.karmaCurrent}/{d.karmaMax}</b> (D{pl.karmaDie})</div>
+              <div className="col-span-2">
+                回复：<b className="font-mono">{pl.recoveryCurrent}/{d.recoveryMax}</b> · Step <b className="font-mono">{recStep}</b> ({recDice})
+              </div>
+            </div>
+          </div>
 
-      {/* 健康轨、资源与当前实时状态 */}
-      <section className="break-inside-avoid mb-3 grid grid-cols-2 gap-3">
-        <div className={`rounded border p-2 ${c.card}`}>
-          <div className={`mb-1.5 flex items-center justify-between border-b pb-1 ${c.rowBorder}`}>
-            <span className={`font-serif text-xs font-bold ${c.heading}`}>实时健康轨与资源</span>
-            <span className={`font-mono text-[11px] ${c.muted}`}>
-              动作修正 {actionMod >= 0 ? `+${actionMod}` : actionMod} Step
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
-            <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={c.muted}>当前伤害</div>
-              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.currentDamage}</div>
+          <div className={`rounded border p-2 ${c.card}`}>
+            <div className={`mb-1 border-b pb-1 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
+              防具盾牌与当前激活状态
             </div>
-            <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={c.muted}>血魔法伤害</div>
-              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.bloodDamage}</div>
-            </div>
-            <div className={`rounded border p-1 ${c.subCard}`}>
-              <div className={c.muted}>负伤</div>
-              <div className={`font-mono text-base font-bold ${c.title}`}>{pl.wounds}</div>
+            <div className={`space-y-1 text-[10px] ${c.body}`}>
+              <div>
+                <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
+              </div>
+              <div>
+                <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
+              </div>
+              <div>
+                <b>当前战斗选项</b>：
+                {activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态'}
+              </div>
+              <div>
+                <b>当前异常状态</b>：
+                {activeStatuses.length > 0 ? activeStatuses.join('、') : '正常'}
+              </div>
             </div>
           </div>
-          <div className={`mt-1.5 grid grid-cols-3 gap-1 text-[11px] ${c.body}`}>
-            <div>意识丧失：<b className="font-mono">{d.effUncon}</b></div>
-            <div>死亡：<b className="font-mono">{d.effDeath}</b></div>
-            <div>负伤阈值：<b className="font-mono">{d.woundThreshold}</b></div>
-            <div>可用业力：<b className="font-mono">{pl.karmaCurrent}/{d.karmaMax}</b> (D{pl.karmaDie})</div>
-            <div className="col-span-2">
-              回复次数：<b className="font-mono">{pl.recoveryCurrent}/{d.recoveryMax}</b> · 回复 Step <b className="font-mono">{recStep}</b> ({recDice})
-            </div>
-          </div>
-        </div>
+        </section>
 
-        <div className={`rounded border p-2 ${c.card}`}>
-          <div className={`mb-1.5 border-b pb-1 font-serif text-xs font-bold ${c.rowBorder} ${c.heading}`}>
-            防具盾牌与当前激活状态
+        {/* 人物背景（固定排在 A4 第一页末尾） */}
+        <section className={`rounded border p-2 ${c.card}`}>
+          <h2 className={`font-serif break-inside-avoid mb-1 border-b pb-0.5 text-xs font-bold ${c.subLine} ${c.heading}`}>
+            人物背景
+          </h2>
+          <div className={`font-pixel whitespace-pre-wrap break-words text-[10px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
+            {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
           </div>
-          <div className={`space-y-1 text-[11px] ${c.body}`}>
-            <div>
-              <b>护甲面板</b>：{pl.armor?.name || '基础护甲'}（物甲 <b className="font-mono">{pl.armor?.pa || 0}</b> · 秘甲 <b className="font-mono">{pl.armor?.ma || 0}</b> · 先攻减值 <b className="font-mono">{pl.armor?.initPen || 0}</b>）
-            </div>
-            <div>
-              <b>盾牌面板</b>：{pl.shield?.name || '盾牌'}（物防 <b className="font-mono">+{pl.shield?.pd || 0}</b> · 秘防 <b className="font-mono">+{pl.shield?.md || 0}</b> · 额外先攻修正 <b className="font-mono">{pl.initBonus || 0}</b>）
-            </div>
-            <div>
-              <b>当前战斗选项</b>：
-              {activeOptions.length > 0 ? activeOptions.join('、') : '常规姿态（无特殊战斗选项）'}
-            </div>
-            <div>
-              <b>当前异常状态</b>：
-              {activeStatuses.length > 0 ? activeStatuses.join('、') : '正常（无异常状态）'}
-            </div>
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
 
       {/* 天赋与技能（表行防分页腰斩） */}
       <section className="mb-3 grid grid-cols-2 gap-3">
@@ -429,15 +469,6 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
         </div>
       </section>
 
-      {/* 人物背景（独立宽栏，长文本自动换行且不被截断） */}
-      <section className={`mt-3 rounded border p-2.5 ${c.card}`}>
-        <h2 className={`font-serif break-inside-avoid mb-1.5 border-b pb-1 text-xs font-bold ${c.subLine} ${c.heading}`}>
-          人物背景
-        </h2>
-        <div className={`font-pixel whitespace-pre-wrap break-words text-[11px] leading-relaxed ${pl.background?.trim() ? c.title : c.subtle}`}>
-          {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
-        </div>
-      </section>
     </div>
   );
 }

@@ -592,9 +592,15 @@ function matchRaceId(raw) {
     
     function parseExcelWorkbook(wb) {
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z80');
-      const maxR = Math.min(80, range.e.r + 1);
-      const maxC = Math.min(28, range.e.c + 1);
+      const refRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z80');
+      let maxR = Math.max(80, refRange.e.r + 1);
+      let maxC = Math.max(28, refRange.e.c + 1);
+      for (const k of Object.keys(ws)) {
+        if (k.startsWith('!')) continue;
+        const pos = XLSX.utils.decode_cell(k);
+        if (pos.r + 1 > maxR) maxR = pos.r + 1;
+        if (pos.c + 1 > maxC) maxC = pos.c + 1;
+      }
 
       const cellStr = (r, c) => {
         const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
@@ -649,26 +655,43 @@ function matchRaceId(raw) {
       const findCell = (exactText, rMin = 1, rMax = maxR, cMin = 1, cMax = maxC) => {
         for (let r = rMin; r <= rMax; r++) {
           for (let c = cMin; c <= cMax; c++) {
-            if (cellStr(r, c) === exactText) return { r, c };
+            if (cellStr(r, c).replace(/[：:]$/, '').trim() === exactText) return { r, c };
           }
         }
         return null;
       };
-
-      const findRightVal = (label, rMax = 10, cMax = 6) => {
-        const anc = findCell(label, 1, rMax, 1, cMax);
-        return anc ? cellStr(anc.r, anc.c + 1) : '';
+      const findAnchor = (texts, cMin, cMax, rMin = 1, rMax = maxR) => {
+        const list = Array.isArray(texts) ? texts : [texts];
+        for (let r = rMin; r <= rMax; r++) {
+          for (let c = cMin; c <= cMax; c++) {
+            const v = cellStr(r, c).replace(/[：:]$/, '').trim();
+            if (list.includes(v)) return { r, c, text: v };
+          }
+        }
+        return null;
       };
-      const findRightNum = (label, rMax = 10, cMax = 6) => {
-        const anc = findCell(label, 1, rMax, 1, cMax);
+      const findRightText = (label, rMax = 20, cMin = 1, cMax = 7) => {
+        const anc = findCell(label, 1, rMax, cMin, cMax);
+        return anc ? readMergedText(anc.r, anc.c + 1) : '';
+      };
+      const findRightNum = (label, rMax = 20, cMin = 1, cMax = 7) => {
+        const anc = findCell(label, 1, rMax, cMin, cMax);
         return anc ? cellNum(anc.r, anc.c + 1) : undefined;
       };
 
       const data = {
-        name: findRightVal('角色名') || cellStr(2, 2),
-        raceId: matchRaceId(findRightVal('种族') || cellStr(3, 2)),
-        disciplineId: matchDisciplineId(findRightVal('门类') || cellStr(4, 2)),
+        name: findRightText('角色名') || readMergedText(2, 2),
+        raceId: matchRaceId(findRightText('种族') || readMergedText(3, 2)),
+        disciplineId: matchDisciplineId(findRightText('门类') || cellStr(4, 2)),
         circle: findRightNum('环数') || cellNum(4, 4),
+        gender: findRightText('性别'),
+        age: findRightText('年龄'),
+        eyeColor: findRightText('瞳色'),
+        hairColor: findRightText('发色'),
+        skinColor: findRightText('肤色'),
+        height: findRightText('身高'),
+        weight: findRightText('体重'),
+        portraitUrl: '',
         background: '',
         attrs: {},
         talents: [],
@@ -679,28 +702,31 @@ function matchRaceId(raw) {
         threadItems: []
       };
 
-      // 1. 动态解析属性区
-      const attrAnchor = findCell('属性', 8, 20, 1, 3);
+      // === 左栏 (A:G, cols 1..7) ===
+      const attrAnchor = findCell('属性', 1, maxR, 1, 7);
       if (attrAnchor) {
         const hr = attrAnchor.r;
-        let valCol = 2, totalCol = -1;
-        for (let c = attrAnchor.c + 1; c <= attrAnchor.c + 6; c++) {
+        let valCol = attrAnchor.c + 1, adjCol = -1, totalCol = -1;
+        for (let c = attrAnchor.c + 1; c <= 7; c++) {
           const h = cellStr(hr, c);
           if (h === '总值') totalCol = c;
+          else if (h === '调整') adjCol = c;
           else if (h === '数值') valCol = c;
         }
-        const targetCol = totalCol > 0 ? totalCol : valCol;
         for (let r = hr + 1; r <= hr + 6; r++) {
           const label = cellStr(r, attrAnchor.c);
-          const v = cellNum(r, targetCol);
+          let v = totalCol > 0 ? cellNum(r, totalCol) : undefined;
+          if (v === undefined) {
+            const baseV = cellNum(r, valCol);
+            if (baseV !== undefined) v = baseV + (adjCol > 0 ? (cellNum(r, adjCol) || 0) : 0);
+          }
           if (label && v !== undefined) {
             data.attrs[parseAttrKey(label)] = v;
           }
         }
       }
 
-      // 2. 先攻调整 / 业力 / 健康
-      const initAnchor = findCell('先攻', 15, 28, 1, 3);
+      const initAnchor = findCell('先攻', 1, maxR, 1, 7);
       if (initAnchor) {
         for (let r = initAnchor.r + 1; r <= initAnchor.r + 4; r++) {
           const lbl = cellStr(r, initAnchor.c);
@@ -710,7 +736,7 @@ function matchRaceId(raw) {
           }
         }
       }
-      const karmaAnchor = findCell('业力', 15, 28, 3, 6);
+      const karmaAnchor = findCell('业力', 1, maxR, 1, 7);
       if (karmaAnchor) {
         for (let r = karmaAnchor.r + 1; r <= karmaAnchor.r + 3; r++) {
           if (cellStr(r, karmaAnchor.c) === '可用') {
@@ -718,23 +744,15 @@ function matchRaceId(raw) {
           }
         }
       }
-      const dmgCur = findCell('当前伤害', 1, 15, 8, 12);
-      if (dmgCur) data.currentDamage = cellNum(dmgCur.r, dmgCur.c + 1);
-      const dmgBlood = findCell('血魔法伤害', 1, 15, 8, 12);
-      if (dmgBlood) data.bloodDamage = cellNum(dmgBlood.r, dmgBlood.c + 1);
-      const dmgWound = findCell('负伤', 1, 15, 8, 12);
-      if (dmgWound) data.wounds = cellNum(dmgWound.r, dmgWound.c + 1);
 
-      // 3. 动态解析天赋区（解决插行错位 & 表头误导问题）
-      const talAnchor = findCell('天赋', 24, 45, 1, 3);
+      const talAnchor = findCell('天赋', 1, maxR, 1, 7);
       if (talAnchor) {
         let hr = talAnchor.r;
-        // 寻找紧随其后的表头行（含“名称”）
         for (let r = talAnchor.r; r <= talAnchor.r + 2; r++) {
           if (cellStr(r, 1) === '名称' || cellStr(r, 2) === '名称') { hr = r; break; }
         }
         let nameCol = 1, rankCol = 2, attrCol = 3, strainCol = -1;
-        for (let c = 1; c <= 10; c++) {
+        for (let c = 1; c <= 7; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
@@ -743,8 +761,8 @@ function matchRaceId(raw) {
         }
         for (let r = hr + 1; r <= maxR; r++) {
           const tName = cellStr(r, nameCol).replace(/\s+/g, ' ').trim();
-          if (!tName || tName === 'Value' || tName === '属性') break;
-          if (tName === '天赋' || tName === '名称') continue;
+          if (!tName || tName === '天赋' || tName === '名称' || tName === 'Value') continue;
+          if (tName === '属性' || tName === '先攻' || tName === '防御') break;
           const rank = cellNum(r, rankCol);
           if (rank === undefined && !cellStr(r, attrCol)) continue;
           const attr = parseAttrKey(cellStr(r, attrCol));
@@ -754,40 +772,54 @@ function matchRaceId(raw) {
         }
       }
 
-      // 4. 动态解析武器区
-      const wpnAnchor = findCell('武器', 10, 25, 8, 12);
+      // === 中栏 (I:Q, cols 9..17；兼容老测试表 H=8) ===
+      const midMinC = findAnchor(['武器', '装备', '当前伤害'], 9, 17) ? 9 : 8;
+      const dmgCur = findCell('当前伤害', 1, 30, midMinC, 17);
+      if (dmgCur) data.currentDamage = cellNum(dmgCur.r, dmgCur.c + 1);
+      const dmgBlood = findCell('血魔法伤害', 1, 30, midMinC, 17);
+      if (dmgBlood) data.bloodDamage = cellNum(dmgBlood.r, dmgBlood.c + 1);
+      const dmgWound = findCell('负伤', 1, 30, midMinC, 17);
+      if (dmgWound) data.wounds = cellNum(dmgWound.r, dmgWound.c + 1);
+
+      const wpnAnchor = findCell('武器', 1, maxR, midMinC, 17);
+      const gearAnchor = findCell('装备', wpnAnchor ? wpnAnchor.r + 1 : 1, maxR, midMinC, 17);
+      const tiAnchor = findCell('脉路物品', gearAnchor ? gearAnchor.r + 1 : 1, maxR, midMinC, 17);
+      const portraitAnchor = findCell('角色图像', tiAnchor ? tiAnchor.r + 1 : 1, maxR, midMinC, 17);
+      const lpAnchor = findCell('传说点数', 1, maxR, midMinC, 17);
+      const wAnchor = findCell('财富', 1, maxR, midMinC, 17);
+
       if (wpnAnchor) {
         const hr = wpnAnchor.r;
-        let nameCol = wpnAnchor.c + 1, dmgCol = wpnAnchor.c + 3;
-        for (let c = wpnAnchor.c; c <= wpnAnchor.c + 7; c++) {
+        let nameCol = wpnAnchor.c + 1, dmgCol = wpnAnchor.c + 2;
+        for (let c = wpnAnchor.c; c <= 17; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '基础伤害' || h === '伤害') dmgCol = c;
         }
-        for (let r = hr + 1; r <= hr + 10; r++) {
+        const stopR = gearAnchor ? gearAnchor.r - 1 : maxR;
+        for (let r = hr + 1; r <= stopR; r++) {
           const leftFlag = cellStr(r, wpnAnchor.c);
           if (leftFlag === '装备' || leftFlag === '脉路物品') break;
           const cnName = cellStr(r, nameCol);
           const enName = (leftFlag && leftFlag !== '武器') ? leftFlag : '';
           const wName = cnName || enName;
           if (!wName) continue;
-          const dmgStep = cellNum(r, dmgCol) || 4;
+          const dmgStep = cellNum(r, dmgCol) ?? 4;
           data.weapons.push({ id: `w_imp_${r}`, name: wName, dmgStep });
         }
       }
 
-      // 5. 动态解析装备区（精确停止在“脉路物品”前）
-      const gearAnchor = findCell('装备', 14, 35, 8, 12);
       if (gearAnchor) {
         const hr = gearAnchor.r;
         let nameCol = gearAnchor.c + 1, rankCol = gearAnchor.c + 2, effCol = gearAnchor.c + 3;
-        for (let c = gearAnchor.c; c <= gearAnchor.c + 6; c++) {
+        for (let c = gearAnchor.c; c <= 17; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
           else if (h === '效果') effCol = c;
         }
-        for (let r = hr + 1; r <= hr + 20; r++) {
+        const stopR = tiAnchor ? tiAnchor.r - 1 : maxR;
+        for (let r = hr + 1; r <= stopR; r++) {
           const leftFlag = cellStr(r, gearAnchor.c);
           if (leftFlag === '脉路物品' || leftFlag === '角色图像' || leftFlag === '传说点数') break;
           const cnName = cellStr(r, nameCol);
@@ -798,20 +830,20 @@ function matchRaceId(raw) {
         }
       }
 
-      // 6. 动态解析脉路物品区（锚定“脉路物品”行，绝不误收普通装备）
-      const tiAnchor = findCell('脉路物品', 16, 45, 8, 12);
       if (tiAnchor) {
         const hr = tiAnchor.r;
         let nameCol = tiAnchor.c + 1, typeCol = tiAnchor.c + 2, effCol = tiAnchor.c + 3;
-        for (let c = tiAnchor.c; c <= tiAnchor.c + 6; c++) {
+        for (let c = tiAnchor.c; c <= 17; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '类型') typeCol = c;
           else if (h === '属性' || h === '效果') effCol = c;
         }
-        for (let r = hr + 1; r <= hr + 12; r++) {
+        const stopCandidates = [portraitAnchor?.r, lpAnchor?.r, wAnchor?.r].filter(Boolean);
+        const stopR = stopCandidates.length > 0 ? Math.min(...stopCandidates) - 1 : maxR;
+        for (let r = hr + 1; r <= stopR; r++) {
           const leftFlag = cellStr(r, tiAnchor.c);
-          if (leftFlag === '角色图像' || leftFlag === '传说点数' || leftFlag === '财富' || cellStr(r, tiAnchor.c + 4) === '传说点数' || cellStr(r, 13) === '传说点数' || cellStr(r, 13) === '财富') break;
+          if (leftFlag === '角色图像' || leftFlag === '传说点数' || leftFlag === '财富') break;
           const cnName = cellStr(r, nameCol);
           const enName = (leftFlag && leftFlag !== '脉路物品') ? leftFlag : '';
           const tiName = cnName && enName ? `${cnName} (${enName})` : (cnName || enName);
@@ -820,8 +852,88 @@ function matchRaceId(raw) {
         }
       }
 
-      // 7. 动态解析法术区（兼容表头偏移、中英文法术名及多行法术）
-      const spAnchor = findCell('法术', 1, 15, 14, 22);
+      if (lpAnchor) {
+        const readLp = (lbl) => {
+          const c = findCell(lbl, lpAnchor.r, lpAnchor.r + 8, lpAnchor.c, 17);
+          return c ? cellStr(c.r, c.c + 1) : '';
+        };
+        data.legend = {
+          total: readLp('总计'),
+          current: readLp('现有'),
+          status: readLp('传说状态'),
+          renown: readLp('名望'),
+          reputation: readLp('声誉')
+        };
+      }
+      let wealthOtherRow = wAnchor ? wAnchor.r + 4 : 42;
+      if (wAnchor) {
+        const readW = (lbl) => {
+          const c = findCell(lbl, wAnchor.r, wAnchor.r + 8, wAnchor.c - 1, 17);
+          if (lbl === '其他' && c) wealthOtherRow = c.r;
+          return c ? (cellStr(c.r, c.c + 1) || 0) : 0;
+        };
+        data.wealth = {
+          copper: readW('铜币'),
+          silver: readW('银币'),
+          gold: readW('金币'),
+          other: readW('其他') || ''
+        };
+      }
+
+      // 人物背景（1. 显式“背景/人物背景”标签；2. 中栏财富/其他下方长文本；3. I44 合并兜底）
+      let bgAnchor = null;
+      for (let r = 1; r <= maxR && !bgAnchor; r++) {
+        for (let c = 1; c <= maxC; c++) {
+          const lbl = cellStr(r, c).replace(/[：:]$/, '').trim();
+          if (lbl === '背景' || lbl === '人物背景') {
+            bgAnchor = { r, c };
+            break;
+          }
+        }
+      }
+      if (bgAnchor) {
+        const m = findMerge(bgAnchor.r, bgAnchor.c);
+        const rightCol = m ? m.e.c + 2 : bgAnchor.c + 1;
+        const belowRow = m ? m.e.r + 2 : bgAnchor.r + 1;
+        data.background = readMergedText(bgAnchor.r, rightCol) || readMergedText(belowRow, bgAnchor.c);
+      }
+      if (!data.background && wAnchor) {
+        const seen = new Set();
+        const belowTexts = [];
+        for (let r = wealthOtherRow + 1; r <= maxR; r++) {
+          for (let c = 9; c <= 17; c++) {
+            const m = findMerge(r, c);
+            const key = m ? `${m.s.r}:${m.s.c}` : `${r}:${c}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const txt = readMergedText(r, c);
+            if (txt) belowTexts.push(txt);
+          }
+        }
+        if (belowTexts.length > 0) {
+          belowTexts.sort((a, b) => b.length - a.length);
+          data.background = belowTexts[0];
+        }
+      }
+      if (!data.background) {
+        data.background = readMergedText(44, 9);
+      }
+      if (!data.background) {
+        for (const sName of wb.SheetNames) {
+          const hit = readSheetMergedText(wb.Sheets[sName], 44, 9);
+          if (hit) {
+            data.background = hit;
+            break;
+          }
+        }
+      }
+
+      // === 右栏 (R:Z, cols 18..26；兼容老测试表 P:Q=16..17) ===
+      const rightMinC = findAnchor(['法术', '技能'], 18, 27) ? 18 : 16;
+      const spAnchor = findCell('法术', 1, maxR, rightMinC, 27);
+      const allocAnchor = findCell('8点可分配', spAnchor ? spAnchor.r + 1 : 1, maxR, rightMinC, 27);
+      const skAnchor = findCell('技能', 1, maxR, rightMinC, 27);
+
       if (spAnchor) {
         let hr = spAnchor.r;
         for (let r = spAnchor.r; r <= spAnchor.r + 1; r++) {
@@ -838,7 +950,9 @@ function matchRaceId(raw) {
           else if (h === '持续') durCol = c;
           else if (h === '效果') effCol = c;
         }
-        for (let r = hr + 1; r <= maxR; r++) {
+        const stopCandidates = [allocAnchor?.r, skAnchor?.r].filter(Boolean);
+        const stopR = stopCandidates.length > 0 ? Math.min(...stopCandidates) - 1 : maxR;
+        for (let r = hr + 1; r <= stopR; r++) {
           const flag = cellStr(r, spAnchor.c);
           if (flag === '技能' || flag === '通用技能') break;
           const rawSName = cellStr(r, nameCol);
@@ -847,7 +961,7 @@ function matchRaceId(raw) {
           if (!sName || sName === '名称') continue;
           const dbMatch = findSpellInDb(sName);
           if (dbMatch) {
-            data.spells.push({ ...dbMatch, instanceId: `sp_imp_${r}`, wovenThreads: 0, matchedDb: true });
+            data.spells.push({ ...dbMatch, instanceId: `sp_imp_${r}`, wovenThreads: 0, inMatrix: false, matchedDb: true });
           } else {
             const wText = cellStr(r, weavCol);
             const wBase = Number((wText.match(/\d+/) || [5])[0]);
@@ -875,18 +989,17 @@ function matchRaceId(raw) {
               extraThreads: [],
               extraEffectStepPerThread: 0,
               wovenThreads: 0,
+              inMatrix: false,
               matchedDb: false
             });
           }
         }
       }
 
-      // 8. 动态解析技能区（支持分类、等级、关键属性与负荷）
-      const skAnchor = findCell('技能', 10, 40, 16, 20);
       if (skAnchor) {
         const hr = skAnchor.r;
         let catCol = skAnchor.c, nameCol = skAnchor.c + 1, rankCol = skAnchor.c + 2, attrCol = skAnchor.c + 3, strainCol = -1;
-        for (let c = skAnchor.c; c <= skAnchor.c + 8; c++) {
+        for (let c = skAnchor.c; c <= 26; c++) {
           const h = cellStr(hr, c);
           if (h === '名称') nameCol = c;
           else if (h === '等级') rankCol = c;
@@ -895,7 +1008,7 @@ function matchRaceId(raw) {
         }
         for (let r = hr + 1; r <= maxR; r++) {
           const skName = cellStr(r, nameCol);
-          if (!skName) continue;
+          if (!skName || skName === '名称') continue;
           const cat = cellStr(r, catCol) || '通用技能';
           const rank = cellNum(r, rankCol) || 1;
           const attr = parseAttrKey(cellStr(r, attrCol));
@@ -911,64 +1024,6 @@ function matchRaceId(raw) {
           });
         }
       }
-
-      // 9. 解析传说点数与财富
-      const lpAnchor = findCell('传说点数', 15, 45, 10, 18);
-      if (lpAnchor) {
-        data.legend = {
-          total: findRightVal('总计', 45, 16) || '',
-          current: findRightVal('现有', 45, 16) || '',
-          status: findRightVal('传说状态', 45, 16) || '',
-          renown: findRightVal('名望', 45, 16) || '',
-          reputation: findRightVal('声誉', 45, 16) || ''
-        };
-      }
-      const wAnchor = findCell('财富', 20, 50, 3, 18);
-      if (wAnchor) {
-        const readNext = (lbl) => {
-          const c = findCell(lbl, wAnchor.r, wAnchor.r + 8, wAnchor.c - 1, wAnchor.c + 2);
-          return c ? (cellStr(c.r, c.c + 1) || 0) : 0;
-        };
-        data.wealth = {
-          copper: readNext('铜币'),
-          silver: readNext('银币'),
-          gold: readNext('金币'),
-          other: readNext('其他') || ''
-        };
-      }
-      // 10. 解析人物背景（优先匹配“背景”/“人物背景”标签，未命中或为空时自动回退读取 I44）
-      let bgAnchor = null;
-      const bgSearchR = Math.max(maxR, 60);
-      const bgSearchC = Math.max(maxC, 20);
-      for (let r = 1; r <= bgSearchR && !bgAnchor; r++) {
-        for (let c = 1; c <= bgSearchC; c++) {
-          const lbl = cellStr(r, c).replace(/[：:]$/, '').trim();
-          if (lbl === '背景' || lbl === '人物背景') {
-            bgAnchor = { r, c };
-            break;
-          }
-        }
-      }
-      if (bgAnchor) {
-        const m = findMerge(bgAnchor.r, bgAnchor.c);
-        const rightCol = m ? m.e.c + 2 : bgAnchor.c + 1;
-        const belowRow = m ? m.e.r + 2 : bgAnchor.r + 1;
-        data.background = readMergedText(bgAnchor.r, rightCol) || readMergedText(belowRow, bgAnchor.c);
-      }
-      if (!data.background) {
-        data.background = readMergedText(44, 9);
-      }
-      if (!data.background) {
-        for (const sName of wb.SheetNames) {
-          const hit = readSheetMergedText(wb.Sheets[sName], 44, 9);
-          if (hit) {
-            data.background = hit;
-            break;
-          }
-        }
-      }
-
-      data.spells.forEach((sp, idx) => { sp.inMatrix = idx < 3; });
 
       return data;
     }
@@ -989,6 +1044,14 @@ function matchRaceId(raw) {
         raceId: matchRaceId(grabField('种族')),
         disciplineId: matchDisciplineId(grabField('门类')),
         circle: Number((grabField('环数').match(/\d+/) || [1])[0]),
+        gender: grabField('性别'),
+        age: grabField('年龄'),
+        eyeColor: grabField('瞳色'),
+        hairColor: grabField('发色'),
+        skinColor: grabField('肤色'),
+        height: grabField('身高'),
+        weight: grabField('体重'),
+        portraitUrl: '',
         background: '',
         attrs: {},
         talents: [],
@@ -1117,14 +1180,15 @@ function matchRaceId(raw) {
       return data;
     }
 
-    
-
     function normalizeImportedCharacter(basePl, data) {
       const pl = JSON.parse(JSON.stringify(basePl));
       if (data.name) pl.name = data.name;
       if (data.raceId) pl.raceId = data.raceId;
       if (data.disciplineId) pl.disciplineId = data.disciplineId;
       if (data.circle && !isNaN(data.circle)) pl.circle = Math.max(1, Math.min(15, Number(data.circle)));
+      for (const field of ['gender', 'age', 'eyeColor', 'hairColor', 'skinColor', 'height', 'weight', 'portraitUrl']) {
+        if (data[field] !== undefined) pl[field] = String(data[field] || '');
+      }
       if (data.gear) pl.gear = data.gear.map(g => ({ ...g, equipped: g.equipped !== false }));
       if (data.threadItems) pl.threadItems = data.threadItems.map(ti => ({ ...ti, equipped: ti.equipped !== false }));
 

@@ -298,4 +298,8 @@
     padding: 12mm 14mm;
     box-sizing: border-box;
   }
+  .break-after-page {
+    break-after: page;
+    page-break-after: always;
+  }
 }

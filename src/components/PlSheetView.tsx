@@ -92,8 +92,10 @@ export function PlSheetView(props: PlSheetViewProps) {
   } = props;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const portraitInputRef = useRef<HTMLInputElement>(null);
 
   // 本地复选与表单临时状态
+  const [profileOpen, setProfileOpen] = useState(false);
   const [talentKarmaMap, setTalentKarmaMap] = useState<Record<string, boolean>>({});
   const [spellKarmaMap, setSpellKarmaMap] = useState<Record<string, boolean>>({});
   const [spellTmdMap, setSpellTmdMap] = useState<Record<string, string>>({});
@@ -1644,17 +1646,122 @@ export function PlSheetView(props: PlSheetViewProps) {
         </div>
       </section>
 
-      {/* 人物背景 */}
+      {/* 角色档案、立绘与背景（默认折叠，双栏排版） */}
       <section className={sectionCls}>
-        <div className="mb-2 font-serif text-sm font-semibold text-card-foreground">人物背景</div>
-        <textarea
-          aria-label="人物背景"
-          rows={5}
-          value={pl.background || ''}
-          onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
-          placeholder="填写角色出身、经历、外貌特征与羁绊..."
-          className="field-sizing-content font-pixel min-h-28 max-h-96 w-full resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
-        />
+        <button
+          type="button"
+          aria-expanded={profileOpen}
+          onClick={() => setProfileOpen((v) => !v)}
+          className="flex w-full items-center justify-between gap-2 text-left cursor-pointer"
+        >
+          <span className="font-serif text-sm font-semibold text-card-foreground">角色档案、立绘与背景</span>
+          <span className="text-[11px] text-muted-foreground">
+            {pl.portraitUrl ? '已设立绘' : '未设立绘'}
+            {pl.background?.trim() ? ' · 已填背景' : ''} · {profileOpen ? '收起 ▲' : '展开 ▼'}
+          </span>
+        </button>
+
+        {profileOpen && (
+          <div className="mt-3 grid grid-cols-1 gap-4 border-t border-border pt-3 xl:grid-cols-2">
+            {/* 左栏：立绘与个人信息 */}
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex shrink-0 flex-col items-center gap-1.5">
+                <div className="flex h-36 w-28 items-center justify-center overflow-hidden rounded border border-border bg-background/70">
+                  {pl.portraitUrl ? (
+                    <img src={pl.portraitUrl} alt={pl.name || '角色立绘'} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">角色图像</span>
+                  )}
+                </div>
+                <input
+                  ref={portraitInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      const rawUrl = String(reader.result || '');
+                      if (!rawUrl) return;
+                      const img = new Image();
+                      img.onload = () => {
+                        const maxEdge = 480;
+                        const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.max(1, Math.round(img.width * scale));
+                        canvas.height = Math.max(1, Math.round(img.height * scale));
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                          const isPng = file.type === 'image/png';
+                          const compressed = canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', 0.85);
+                          onUpdatePl((p) => ({ ...p, portraitUrl: compressed }));
+                        } else {
+                          onUpdatePl((p) => ({ ...p, portraitUrl: rawUrl }));
+                        }
+                      };
+                      img.onerror = () => onUpdatePl((p) => ({ ...p, portraitUrl: rawUrl }));
+                      img.src = rawUrl;
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = '';
+                  }}
+                />
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => portraitInputRef.current?.click()} className={btnSmCls}>
+                    上传立绘
+                  </button>
+                  {pl.portraitUrl && (
+                    <button
+                      type="button"
+                      onClick={() => onUpdatePl((p) => ({ ...p, portraitUrl: '' }))}
+                      className={btnSmCls}
+                    >
+                      清除
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid flex-1 grid-cols-2 gap-2">
+                {[
+                  ['gender', '性别'],
+                  ['age', '年龄'],
+                  ['eyeColor', '瞳色'],
+                  ['hairColor', '发色'],
+                  ['skinColor', '肤色'],
+                  ['height', '身高'],
+                  ['weight', '体重'],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex flex-col gap-0.5 text-[11px] text-muted-foreground">
+                    <span>{label}</span>
+                    <input
+                      type="text"
+                      value={pl[key] || ''}
+                      onChange={(e) => onUpdatePl((p) => ({ ...p, [key]: e.target.value }))}
+                      className={inputCls}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* 右栏：人物背景 */}
+            <div className="flex flex-col">
+              <div className="mb-1 text-[11px] text-muted-foreground">人物背景</div>
+              <textarea
+                aria-label="人物背景"
+                rows={6}
+                value={pl.background || ''}
+                onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
+                placeholder="填写角色出身、经历与羁绊..."
+                className="field-sizing-content font-pixel min-h-36 max-h-96 w-full flex-1 resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+              />
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

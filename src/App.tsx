@@ -35,9 +35,10 @@ import {
 } from './engine/spellRules';
 import { PrintSheetView, type PdfPrintMode } from './components/PrintSheetView';
 import {
-  buildCharacterWorkbook,
+  downloadExcelBuffer,
   downloadTextFile,
-  downloadWorkbookFile,
+  exportCharacterExcelBuffer,
+  extractPortraitFromXlsxBuffer,
   getExportBaseName,
   serializeCharacterToTxt,
 } from './engine/characterExport';
@@ -112,6 +113,7 @@ export default function App() {
   const knownLogIdsRef = useRef<Set<string>>(new Set());
   const isApplyingRemoteStateRef = useRef(false);
   const lastSyncedRoomJsonRef = useRef('');
+  const importedXlsxBufferRef = useRef<ArrayBuffer | null>(null);
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('ed4_sidebar_width'));
@@ -1109,13 +1111,19 @@ export default function App() {
   const handleImportFile = (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const result = e.target?.result;
       if (!result) return;
-      const data =
-        ext === 'txt'
-          ? ED4Engine.parseTxtSheet(String(result))
-          : ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(result as ArrayBuffer), { type: 'array' }));
+      let data: any;
+      if (ext === 'txt') {
+        data = ED4Engine.parseTxtSheet(String(result));
+      } else {
+        const buf = result as ArrayBuffer;
+        importedXlsxBufferRef.current = buf.slice(0);
+        data = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(buf), { type: 'array' }));
+        const portraitUrl = await extractPortraitFromXlsxBuffer(buf);
+        if (portraitUrl) data.portraitUrl = portraitUrl;
+      }
 
       setState((prev) => {
         const nextPl = applyImportedCharacter(prev.pl, data);
@@ -1444,11 +1452,15 @@ export default function App() {
     return false;
   };
 
-  const handleExportExcel = () => {
-    const wb = buildCharacterWorkbook(state.pl);
-    const fileName = `${getExportBaseName(state.pl)}.xlsx`;
-    downloadWorkbookFile(fileName, wb);
-    pushLog(`已导出角色卡 Excel：${fileName}`, '', 'hit');
+  const handleExportExcel = async () => {
+    try {
+      const buf = await exportCharacterExcelBuffer(state.pl, importedXlsxBufferRef.current);
+      const fileName = `${getExportBaseName(state.pl)}.xlsx`;
+      downloadExcelBuffer(fileName, buf);
+      pushLog(`已导出角色卡 Excel：${fileName}`, '', 'hit');
+    } catch (err: any) {
+      pushLog(`导出 Excel 失败：${err?.message || '模板加载异常'}`, '', 'fail');
+    }
   };
 
   const handleExportPdf = () => {
