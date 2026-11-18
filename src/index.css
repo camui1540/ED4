@@ -280,16 +280,16 @@
 @media print {
   @page {
     size: A4;
-    margin: 12mm 14mm;
+    margin: 0;
   }
   @page ed4-theme-light {
     size: A4;
-    margin: 12mm 14mm;
+    margin: 0;
     background-color: oklch(0.9550 0.0080 82);
   }
   @page ed4-theme-dark {
     size: A4;
-    margin: 12mm 14mm;
+    margin: 0;
     background-color: oklch(0.1550 0.0140 245);
   }
   * {
@@ -330,7 +330,10 @@
   .print-sheet thead {
     display: table-header-group;
   }
-  .print-sheet tr {
+  .print-sheet tfoot {
+    display: table-footer-group;
+  }
+  .print-sheet table table tr {
     break-inside: avoid;
   }
   .break-after-page {

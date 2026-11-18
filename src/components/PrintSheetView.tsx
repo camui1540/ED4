@@ -98,8 +98,21 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
 
   return (
     <div className={`print-sheet hidden print:block ${c.page}`}>
-      {/* A4 第一页：角色抬头 + 档案/立绘/外观 + 核心属性/衍生数值 + 健康/护甲 + 人物背景 */}
-      <div className="print-page-one break-after-page">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr>
+            <td className="h-[12mm] p-0" aria-hidden="true" />
+          </tr>
+        </thead>
+        <tfoot>
+          <tr>
+            <td className="h-[12mm] p-0" aria-hidden="true" />
+          </tr>
+        </tfoot>
+        {/* A4 第一页：角色抬头 + 档案/立绘/外观 + 核心属性/衍生数值 + 健康/护甲 + 人物背景 */}
+        <tbody className="print-page-one break-after-page">
+          <tr>
+            <td className="px-[14mm] py-0 align-top">
         <header className={`break-inside-avoid mb-2.5 border-b-2 pb-2 ${c.headerBorder}`}>
           <div className="flex items-baseline justify-between gap-4">
             <div className="flex items-baseline gap-3">
@@ -129,14 +142,14 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </header>
 
-        {/* 独立角色立绘（~6cm高，带主题阴影） + 个人档案与防具状态 */}
+        {/* 独立角色立绘（5cm-9cm 自适应高，兼容横图/竖图） + 个人档案与防具状态 */}
         <section className="break-inside-avoid mb-2.5 flex items-stretch gap-3.5">
           {pl.portraitUrl && (
             <div className="flex shrink-0 items-center justify-center">
               <img
                 src={pl.portraitUrl}
                 alt={pl.name || '角色立绘'}
-                className={`h-[6cm] w-auto max-w-[5.6cm] rounded-[var(--radius)] border object-cover ${c.portraitFrame}`}
+                className={`h-auto w-auto min-h-[5cm] max-h-[9cm] max-w-[8.8cm] rounded-[var(--radius)] border object-cover ${c.portraitFrame}`}
               />
             </div>
           )}
@@ -269,8 +282,13 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             {pl.background?.trim() ? pl.background : '暂无人物背景记录'}
           </div>
         </section>
-      </div>
+            </td>
+          </tr>
+        </tbody>
 
+        <tbody>
+          <tr>
+            <td className="px-[14mm] py-0 align-top">
       {/* 天赋与技能（表行防分页腰斩） */}
       <section className="mb-3 grid grid-cols-2 gap-3">
         <div>
@@ -364,9 +382,13 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </div>
       </section>
+            </td>
+          </tr>
 
-      {/* 法术矩阵与法术书 */}
-      {(pl.spells || []).length > 0 && (
+          {/* 法术矩阵与法术书 */}
+          {(pl.spells || []).length > 0 && (
+            <tr>
+              <td className="px-[14mm] py-0 align-top">
         <section className="mb-3">
           <div className={`mb-1.5 flex items-center justify-between border-b pb-0.5 ${c.sectionBorder}`}>
             <h2 className={`font-serif text-xs font-bold ${c.heading}`}>
@@ -420,9 +442,13 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
             </div>
           )}
         </section>
-      )}
+              </td>
+            </tr>
+          )}
 
-      {/* 装备、脉路物品与传说财富 */}
+          {/* 装备、脉路物品与传说财富 */}
+          <tr>
+            <td className="px-[14mm] py-0 align-top">
       <section className="grid grid-cols-2 gap-3">
         <div className="break-inside-avoid">
           <h2 className={`font-serif mb-1 border-b pb-0.5 text-xs font-bold ${c.sectionBorder} ${c.heading}`}>
@@ -475,6 +501,10 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
           </div>
         </div>
       </section>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
     </div>
   );
