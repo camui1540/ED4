@@ -545,19 +545,44 @@ function matchRaceId(raw) {
 
     
     function parseExcelWorkbook(wb) {
+      const colStrToIdx = (colStr) => {
+        let n = 0;
+        for (let i = 0; i < colStr.length; i++) n = n * 26 + (colStr.charCodeAt(i) - 64);
+        return n - 1;
+      };
+      const idxToColStr = (c) => {
+        let s = '';
+        let n = c + 1;
+        while (n > 0) {
+          const r = (n - 1) % 26;
+          s = String.fromCharCode(65 + r) + s;
+          n = Math.floor((n - 1) / 26);
+        }
+        return s;
+      };
+      const decodeCell = (addr) => {
+        const m = String(addr).match(/^([A-Z]+)(\d+)$/i);
+        return m ? { r: Number(m[2]) - 1, c: colStrToIdx(m[1].toUpperCase()) } : { r: 0, c: 0 };
+      };
+      const encodeCell = ({ r, c }) => `${idxToColStr(c)}${r + 1}`;
+      const decodeRange = (ref) => {
+        const [a, b] = String(ref || 'A1').split(':');
+        return { s: decodeCell(a), e: decodeCell(b || a) };
+      };
+
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const refRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:Z80');
+      const refRange = decodeRange(ws['!ref'] || 'A1:Z80');
       let maxR = Math.max(80, refRange.e.r + 1);
       let maxC = Math.max(28, refRange.e.c + 1);
       for (const k of Object.keys(ws)) {
         if (k.startsWith('!')) continue;
-        const pos = XLSX.utils.decode_cell(k);
+        const pos = decodeCell(k);
         if (pos.r + 1 > maxR) maxR = pos.r + 1;
         if (pos.c + 1 > maxC) maxC = pos.c + 1;
       }
 
       const cellStr = (r, c) => {
-        const addr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
+        const addr = encodeCell({ r: r - 1, c: c - 1 });
         const cell = ws[addr];
         if (!cell || cell.v === undefined || cell.v === null) return '';
         const s = String(cell.v).trim();
@@ -592,11 +617,11 @@ function matchRaceId(raw) {
         const sMerges = Array.isArray(sheet['!merges']) ? sheet['!merges'] : [];
         const m = findMerge(r, c, sMerges);
         if (m) {
-          const topAddr = XLSX.utils.encode_cell({ r: m.s.r, c: m.s.c });
+          const topAddr = encodeCell({ r: m.s.r, c: m.s.c });
           const topText = extractCellText(sheet[topAddr]);
           if (topText) return topText;
         }
-        const directAddr = XLSX.utils.encode_cell({ r: r - 1, c: c - 1 });
+        const directAddr = encodeCell({ r: r - 1, c: c - 1 });
         return extractCellText(sheet[directAddr]);
       };
       const readMergedText = (r, c) => readSheetMergedText(ws, r, c);

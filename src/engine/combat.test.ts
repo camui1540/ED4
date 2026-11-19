@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as XLSX from 'xlsx';
 import ED4Engine from './ed4_engine.js';
 import {
   createInitialState,
@@ -15,21 +14,26 @@ import {
   exportCharacterExcelBuffer,
   extractPortraitFromXlsxBuffer,
   getExportBaseName,
+  readExcelBufferToWorkbook,
   serializeCharacterToTxt,
 } from './characterExport.ts';
 import {
+  CLOUD_ROOM_LOG_LIMIT,
   buildBlindRollPayload,
   buildCharacterSyncPayload,
   buildLogInsertPayload,
   buildRoomInviteUrl,
   buildRoomStatePayload,
   extractRoomCodeFromUrl,
+  filterCharactersByPresence,
   generateRoomCode,
+  hasLivePresenceInState,
   isSupabaseConfigured,
   mapBlindRollToLog,
   mapRemoteLogRow,
   mergeCharacterList,
   mergeIncomingLogs,
+  selectOverflowLogIds,
 } from './supabaseSync.ts';
 
 test('Step 1-40+ mapping and attribute step conversion match ED4 rules', () => {
@@ -256,7 +260,7 @@ test('TXT and Excel export perform lossless round-trip for default & customized 
 
   // B) Excel (.xlsx) write -> read -> parse -> apply round-trip (all imported spells go into grimoire inMatrix=false)
   const xlsxBuf = await exportCharacterExcelBuffer(customPl);
-  const wbRead = XLSX.read(new Uint8Array(xlsxBuf), { type: 'array' });
+  const wbRead = await readExcelBufferToWorkbook(xlsxBuf);
   const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(wbRead));
   const xlsxDerived = getPlDerivedView(fromXlsx);
 
@@ -292,7 +296,7 @@ test('TXT and Excel export perform lossless round-trip for default & customized 
 
   // C) Double round-trip idempotence (Excel -> Import -> Excel -> Import)
   const xlsxBuf2 = await exportCharacterExcelBuffer(fromXlsx);
-  const fromXlsx2 = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(xlsxBuf2), { type: 'array' })));
+  const fromXlsx2 = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(xlsxBuf2)));
   const xlsxDerived2 = getPlDerivedView(fromXlsx2);
   assert.deepEqual(xlsxDerived2.attrs, xlsxDerived.attrs);
   assert.equal(xlsxDerived2.pa, xlsxDerived.pa);
@@ -391,34 +395,40 @@ test('Character background supports TXT tags, Excel label/I44 merged fallback, a
 
   // 2. Excel export -> I44 lossless round-trip
   const wbBytes = await exportCharacterExcelBuffer(richPl);
-  const readExported = XLSX.read(new Uint8Array(wbBytes), { type: 'array' });
+  const readExported = await readExcelBufferToWorkbook(wbBytes);
   assert.equal(readExported.Sheets['Sheet1']?.I44?.v, bgStory);
   const fromXlsx = applyImportedCharacter(st.pl, ED4Engine.parseExcelWorkbook(readExported));
   assert.equal(fromXlsx.background, bgStory);
 
   // 3. Excel I44 merged-cell fallback (merge starts at H44:J48, covering I44 without header label)
-  const mergedWs: XLSX.WorkSheet = {
-    A2: { t: 's', v: '角色名' },
-    B2: { t: 's', v: '卡林' },
-    H44: { t: 's', v: '合并单元格多行\n背景故事' },
-    '!merges': [{ s: { r: 43, c: 7 }, e: { r: 47, c: 9 } }],
-    '!ref': 'A1:J48',
+  const mergedWb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        A2: { t: 's', v: '角色名' },
+        B2: { t: 's', v: '卡林' },
+        H44: { t: 's', v: '合并单元格多行\n背景故事' },
+        '!merges': [{ s: { r: 43, c: 7 }, e: { r: 47, c: 9 } }],
+        '!ref': 'A1:J48',
+      },
+    },
   };
-  const mergedWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(mergedWb, mergedWs, 'Sheet1');
   assert.equal(ED4Engine.parseExcelWorkbook(mergedWb).background, '合并单元格多行\n背景故事');
 
   // 4. Excel explicit "人物背景" label (below cell)
-  const labeledWs: XLSX.WorkSheet = {
-    A2: { t: 's', v: '角色名' },
-    B2: { t: 's', v: '艾拉' },
-    A50: { t: 's', v: '人物背景' },
-    A51: { t: 's', v: '标签下方文本' },
-    I44: { t: 's', v: '不应优先使用的I44' },
-    '!ref': 'A1:I52',
+  const labeledWb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        A2: { t: 's', v: '角色名' },
+        B2: { t: 's', v: '艾拉' },
+        A50: { t: 's', v: '人物背景' },
+        A51: { t: 's', v: '标签下方文本' },
+        I44: { t: 's', v: '不应优先使用的I44' },
+        '!ref': 'A1:I52',
+      },
+    },
   };
-  const labeledWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(labeledWb, labeledWs, 'Sheet1');
   assert.equal(ED4Engine.parseExcelWorkbook(labeledWb).background, '标签下方文本');
 
   // 5. Supabase payload carries background
@@ -432,33 +442,49 @@ test('Character background supports TXT tags, Excel label/I44 merged fallback, a
   assert.equal(syncRow.background, bgStory);
 
   // 6. Excel I44 with zero "背景" text anywhere (including _x000D_, stale !ref, cell.w-only, stray empty label, multi-sheet)
-  const plainI44Wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(plainI44Wb, {
-    A2: { t: 's', v: '角色名' },
-    B2: { t: 's', v: '无标题行者' },
-    I44: { t: 's', v: '纯I44第一行_x000D_\n纯I44第二行' },
-    '!ref': 'A1:D10',
-  }, 'Sheet1');
+  const plainI44Wb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        A2: { t: 's', v: '角色名' },
+        B2: { t: 's', v: '无标题行者' },
+        I44: { t: 's', v: '纯I44第一行_x000D_\n纯I44第二行' },
+        '!ref': 'A1:D10',
+      },
+    },
+  };
   assert.equal(ED4Engine.parseExcelWorkbook(plainI44Wb).background, '纯I44第一行\n纯I44第二行');
 
-  const wOnlyWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wOnlyWb, {
-    I44: { t: 's', v: '', w: '来自w字段的背景' },
-    '!ref': 'A1:I44',
-  }, 'Sheet1');
+  const wOnlyWb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        I44: { t: 's', v: '', w: '来自w字段的背景' },
+        '!ref': 'A1:I44',
+      },
+    },
+  };
   assert.equal(ED4Engine.parseExcelWorkbook(wOnlyWb).background, '来自w字段的背景');
 
-  const emptyAnchorFallbackWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(emptyAnchorFallbackWb, {
-    A10: { t: 's', v: '背景' },
-    I44: { t: 's', v: '空标签时兜底I44内容' },
-    '!ref': 'A1:I44',
-  }, 'Sheet1');
+  const emptyAnchorFallbackWb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        A10: { t: 's', v: '背景' },
+        I44: { t: 's', v: '空标签时兜底I44内容' },
+        '!ref': 'A1:I44',
+      },
+    },
+  };
   assert.equal(ED4Engine.parseExcelWorkbook(emptyAnchorFallbackWb).background, '空标签时兜底I44内容');
 
-  const multiSheetWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(multiSheetWb, { A2: { t: 's', v: '角色名' }, B2: { t: 's', v: '跨表角色' }, '!ref': 'A1:B2' }, '主表');
-  XLSX.utils.book_append_sheet(multiSheetWb, { I44: { t: 's', v: '第二页I44背景' }, '!ref': 'A1:I44' }, '附加');
+  const multiSheetWb = {
+    SheetNames: ['主表', '附加'],
+    Sheets: {
+      主表: { A2: { t: 's', v: '角色名' }, B2: { t: 's', v: '跨表角色' }, '!ref': 'A1:B2' },
+      附加: { I44: { t: 's', v: '第二页I44背景' }, '!ref': 'A1:I44' },
+    },
+  };
   assert.equal(ED4Engine.parseExcelWorkbook(multiSheetWb).background, '第二页I44背景');
 });
 
@@ -580,7 +606,7 @@ test('ExcelJS template export preserves formulas, shifts column bands independen
   assert.ok(extractedPortrait.startsWith('data:image/png;base64,'));
 
   // Dynamic importer round-trips all overflow items + appearance fields
-  const parsedOverflow = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(outBuf), { type: 'array' }));
+  const parsedOverflow = ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(outBuf));
   assert.equal(parsedOverflow.gender, '女');
   assert.equal(parsedOverflow.age, '142');
   assert.equal(parsedOverflow.eyeColor, '银灰');
@@ -691,7 +717,7 @@ test('Talent/Skill action & strain rules, Excel dataValidation sync, and upgrade
   assert.deepEqual(ws.getCell('U48').dataValidation?.formulae, ['"DEX,STR,TOU,PER,WIL,CHA"']);
 
   // Import back from Excel preserves action & strain
-  const importedFromXlsx = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(xlsxBuf), { type: 'array' }));
+  const importedFromXlsx = ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(xlsxBuf));
   assert.equal(importedFromXlsx.talents[0].action, '自由');
   assert.equal(importedFromXlsx.talents[0].strain, 1);
   assert.equal(importedFromXlsx.talents[1].action, '标准');
@@ -750,35 +776,35 @@ test('Talent/Skill action & strain rules, Excel dataValidation sync, and upgrade
   assert.equal(parsedLegacy.skills[1].action, '');
 
   // 5. Excel import regression: when Action col is filled ('自由'/'攻击') or Strain col is blank / 0 / '负荷1', rules auto-fill strain
-  const legacyXlsxWb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(
-    legacyXlsxWb,
-    {
-      A2: { t: 's', v: '角色名' },
-      B2: { t: 's', v: '测试员' },
-      A32: { t: 's', v: '天赋' },
-      A33: { t: 's', v: '名称' },
-      B33: { t: 's', v: '等级' },
-      C33: { t: 's', v: '属性' },
-      D33: { t: 's', v: '动作' },
-      E33: { t: 's', v: '负荷' },
-      A34: { t: 's', v: '闪避Avoid Blow' },
-      B34: { t: 'n', v: 2 },
-      C34: { t: 's', v: 'RANK+DEX' },
-      D34: { t: 's', v: '自由' }, // action already filled, strain blank!
-      A35: { t: 's', v: '杂耍防御Acrobatic Defense' },
-      B35: { t: 'n', v: 1 },
-      C35: { t: 's', v: 'RANK+DEX' },
-      D35: { t: 's', v: '自由' },
-      E35: { t: 'n', v: 0 }, // legacy 0 placeholder!
-      A36: { t: 's', v: '捕风者Wind Catcher' },
-      B36: { t: 'n', v: 1 },
-      C36: { t: 's', v: 'RANK+PER' },
-      E36: { t: 's', v: '负荷1' },
-      '!ref': 'A1:G40',
+  const legacyXlsxWb = {
+    SheetNames: ['Sheet1'],
+    Sheets: {
+      Sheet1: {
+        A2: { t: 's', v: '角色名' },
+        B2: { t: 's', v: '测试员' },
+        A32: { t: 's', v: '天赋' },
+        A33: { t: 's', v: '名称' },
+        B33: { t: 's', v: '等级' },
+        C33: { t: 's', v: '属性' },
+        D33: { t: 's', v: '动作' },
+        E33: { t: 's', v: '负荷' },
+        A34: { t: 's', v: '闪避Avoid Blow' },
+        B34: { t: 'n', v: 2 },
+        C34: { t: 's', v: 'RANK+DEX' },
+        D34: { t: 's', v: '自由' }, // action already filled, strain blank!
+        A35: { t: 's', v: '杂耍防御Acrobatic Defense' },
+        B35: { t: 'n', v: 1 },
+        C35: { t: 's', v: 'RANK+DEX' },
+        D35: { t: 's', v: '自由' },
+        E35: { t: 'n', v: 0 }, // legacy 0 placeholder!
+        A36: { t: 's', v: '捕风者Wind Catcher' },
+        B36: { t: 'n', v: 1 },
+        C36: { t: 's', v: 'RANK+PER' },
+        E36: { t: 's', v: '负荷1' },
+        '!ref': 'A1:G40',
+      },
     },
-    'Sheet1'
-  );
+  };
   const parsedLegacyXlsx = ED4Engine.parseExcelWorkbook(legacyXlsxWb);
   assert.equal(parsedLegacyXlsx.talents[0].action, '自由');
   assert.equal(parsedLegacyXlsx.talents[0].strain, 1);
@@ -876,3 +902,40 @@ test('GM blind roll sender-side desensitization strips dice details and renders 
   assert.equal(mappedRemote.detail, '');
   assert.equal(mappedRemote.type, 'BLIND_ROLL');
 });
+
+test('Zero-heartbeat Presence room reclaim, ghost filtering, cloud 30-log overflow, and uncapped local log merge', () => {
+  // Empty Presence means no open browser pages -> room is reclaimable
+  assert.equal(hasLivePresenceInState({}), false);
+  assert.equal(hasLivePresenceInState({ c_dead: [] }), false);
+  assert.equal(hasLivePresenceInState({ c_gm: [{ clientId: 'c_gm' }] }), true);
+  assert.equal(hasLivePresenceInState({ c_self: [{ clientId: 'c_self' }] }, 'c_self'), false);
+
+  // Presence sync keeps self + online peers and drops closed-tab ghost rows
+  const st = createInitialState();
+  const selfRow = buildCharacterSyncPayload({ roomCode: '114514', clientId: 'c_self', nickname: '我', role: 'pl', pl: st.pl });
+  const peerRow = buildCharacterSyncPayload({ roomCode: '114514', clientId: 'c_gm', nickname: 'GM', role: 'gm', pl: st.pl });
+  const ghostRow = buildCharacterSyncPayload({ roomCode: '114514', clientId: 'c_ghost', nickname: '掉线者', role: 'pl', pl: st.pl });
+  const filtered = filterCharactersByPresence([selfRow, peerRow, ghostRow], new Set(['c_gm']), 'c_self');
+  assert.deepEqual(
+    filtered.map((c) => c.client_id),
+    ['c_self', 'c_gm']
+  );
+
+  // Cloud log overflow keeps newest 30 and selects oldest beyond 30
+  assert.equal(CLOUD_ROOM_LOG_LIMIT, 30);
+  const thirtyRows = Array.from({ length: 30 }, (_, i) => ({ id: `l_${i}` }));
+  assert.deepEqual(selectOverflowLogIds(thirtyRows), []);
+
+  const thirtyFiveRows = Array.from({ length: 35 }, (_, i) => ({ id: `l_${i}` }));
+  assert.deepEqual(selectOverflowLogIds(thirtyFiveRows), ['l_30', 'l_31', 'l_32', 'l_33', 'l_34']);
+
+  // Local browser log merge does NOT truncate past 80 by default and deduplicates by id
+  const existingLocal = Array.from({ length: 95 }, (_, i) => ({ id: `local_${i}`, text: `条目 ${i}` }));
+  const merged = mergeIncomingLogs(existingLocal, [
+    { id: 'cloud_new', text: '云端新战报' },
+    { id: 'local_0', text: '重复条目' },
+  ]);
+  assert.equal(merged.length, 96);
+  assert.equal(merged[0].id, 'cloud_new');
+});
+

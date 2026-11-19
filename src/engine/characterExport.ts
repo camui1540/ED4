@@ -321,6 +321,60 @@ export async function extractPortraitFromXlsxBuffer(buffer: ArrayBuffer): Promis
   }
 }
 
+function unwrapExcelJsCellValue(val: unknown): string | number | boolean | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val !== 'object') return val as string | number | boolean;
+  const obj = val as Record<string, any>;
+  if (Array.isArray(obj.richText)) return obj.richText.map((r: any) => r.text || '').join('');
+  if ('result' in obj && obj.result !== undefined) {
+    return typeof obj.result === 'object' && obj.result && 'error' in obj.result ? '' : obj.result;
+  }
+  if (typeof obj.text === 'string') return obj.text;
+  if (val instanceof Date) return val.toISOString();
+  return null;
+}
+
+/**
+ * 使用 exceljs 读取 .xlsx 字节流并转为 parseExcelWorkbook 兼容的扁平工作簿结构。
+ */
+export async function readExcelBufferToWorkbook(buffer: ArrayBuffer) {
+  const normBuf = await normalizeXlsxForExcelJs(buffer);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(normBuf);
+
+  const SheetNames: string[] = [];
+  const Sheets: Record<string, any> = {};
+
+  for (const sheet of wb.worksheets) {
+    SheetNames.push(sheet.name);
+    const wsObj: Record<string, any> = {};
+    const rawMerges: string[] = Array.isArray((sheet.model as any).merges) ? (sheet.model as any).merges : [];
+    wsObj['!merges'] = rawMerges.map((mStr) => {
+      const { s, e } = parseA1Range(mStr);
+      return { s: { r: s.row - 1, c: s.col - 1 }, e: { r: e.row - 1, c: e.col - 1 } };
+    });
+
+    const maxR = Math.max(sheet.rowCount || 1, 1);
+    const maxC = Math.max(sheet.columnCount || 1, 1);
+    wsObj['!ref'] = `A1:${colNumberToLetter(maxC)}${maxR}`;
+
+    sheet.eachRow({ includeEmpty: false }, (row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (cell.isMerged && cell.master && cell.master.address !== cell.address) return;
+        const v = unwrapExcelJsCellValue(cell.value);
+        const w = typeof cell.text === 'string' ? cell.text : '';
+        if (v !== null || w) {
+          wsObj[cell.address] = { v, ...(w ? { w } : {}) };
+        }
+      });
+    });
+
+    Sheets[sheet.name] = wsObj;
+  }
+
+  return { SheetNames, Sheets };
+}
+
 /**
  * 基于无损 Base64 模板（或本次会话导入缓存的原始 .xlsx）通过 exceljs 注入数据与分栏动态扩展，导出 .xlsx 字节流。
  */

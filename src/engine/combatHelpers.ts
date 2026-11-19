@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import ED4Engine from './ed4_engine.js';
 import {
   computeActiveBuffModifiers,
@@ -7,9 +6,6 @@ import {
   type ActiveBuffModifiers,
   type PendingSpellCast,
 } from './spellRules';
-
-// 为 ed4_engine.js 中的 parseExcelWorkbook 提供全局 XLSX
-(globalThis as any).XLSX = XLSX;
 
 // 创建初始应用状态（扁平对象）
 export function createInitialState() {

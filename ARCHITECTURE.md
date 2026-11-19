@@ -1,11 +1,11 @@
 # Earthdawn 4E 架构快照
 
 ## 1. 技术栈与外部接入点
-- **栈**：React 19 + Vite 8 + TS 7 + Tailwind v4（OKLCH 暗/明主题、`@media print` A4）+ `lucide-react` + `exceljs`/`xlsx`/`jszip` + `@supabase/supabase-js`。
+- **栈**：React 19 + Vite 8 + TS 7 + Tailwind v4（OKLCH 暗/明主题、`@media print` A4）+ `lucide-react` + `exceljs`/`jszip` + `@supabase/supabase-js`。
 - **字体回退**：展示 `SuCaiJiShi-SheHuiTi`/`Source Han Serif CN for Display`→`Georgia,serif`；正文 `Sarasa Gothic/UI SC`→`system-ui,sans-serif`；像素 `Cubic 11`；等宽 `JetBrains Mono`→`ui-monospace,monospace`。打印前 `prewarmPrintFonts` 预热。
-- **Supabase**（`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`，缺省降级单机）：表 `rooms`/`room_logs`/`room_characters`。战局频道 `ed4-room-${code}` 监听三表 `postgres_changes`；音乐频道 `trpg-bgm-${code}` 使用 Presence(`sync`/`join`) + Broadcast(`bgm`/`bgm_fade`/`sync_req`, `self:false`)。
+- **Supabase**（`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`，缺省降级单机）：表 `rooms`/`room_logs`/`room_characters`。战局频道 `ed4-room-${code}` 以 Broadcast(`ROOM_STATE`/`ROOM_LOG`/`BLIND_ROLL`/`CHAR_SYNC`/`CHAR_LEAVE`/`SYNC_REQ`, `self:false`) + Presence(`join`/`leave`) 为主通道，同时保留三表 `postgres_changes` 兜底；音乐频道 `trpg-bgm-${code}` 使用 Presence(`sync`/`join`) + Broadcast(`bgm`/`bgm_fade`/`sync_req`, `self:false`)。
 - **R2 音频**：`bgmPlaylist` 校验 `http(s)://`|`/` 直链；`bgmAudioEngine` 用 `Audio(crossOrigin='anonymous')` 接 WebAudio `MediaElementSource→BiquadFilter(lowpass 20k/800Hz)→Gain(0.75s/6s淡变)→destination`。
-- **存储 Key**（无 IndexedDB）：`localStorage`=`ed4_pl_sheet`、`ed4_theme`、`ed4_sidebar_width`、`ed4_bgm_playlist_v1`；`sessionStorage`=`ed4_client_id`。
+- **存储 Key**（无 IndexedDB）：`localStorage`=`ed4_pl_sheet`、`ed4_combat_logs`、`ed4_theme`、`ed4_sidebar_width`、`ed4_bgm_playlist_v1`；`sessionStorage`=`ed4_client_id`。
 
 ## 2. 文件职责地图
 - `index.html`/`src/main.tsx`/`src/index.css`：入口、防闪烁主题脚本、字体与打印样式。
@@ -14,9 +14,9 @@
 - `src/engine/ed4_spells_data.js`：216 条法术库（`SPELLS_DB`）。
 - `src/engine/spellRules.ts`：脉路上限/TMD/效果/Buff（`emptyBuffModifiers`, `enrichSpellWithDb`, `hydrateSpellsWithDb`, `getCircleExtraThreadCap`, `isVersatilityWeaving`, `getExtraThreadRuleInfo`, `resolveWeavingRollOutcome`, `resolveCastingDn`, `parseBaseSpellEffectStep`, `computeSpellDurationPlan`, `computeSpellEffectPlan`, `getBuffTargetKind`, `buildActiveBuffEntry`, `computeActiveBuffModifiers`, `isRangedWeaponName`, `getWeaponBuffEffects`）。
 - `src/engine/combatHelpers.ts`：初始状态/衍生视图/受创（`createInitialState`, `getPlDerivedView`, `getEffectiveActionMod`, `getMonsterEffectiveDef`, `sortInitiativeList`, `createMonsterInstance`, `applyDamageToMonsterPure`, `applyDamageToPlPure`, `applyImportedCharacter`, `formatTime`）。
-- `src/engine/characterExport.ts`(+`src/templates/ed4TemplateBase64.ts`)：模板注入导出与立绘提取（`shiftColumnBlockDown`, `extractPortraitFromXlsxBuffer`, `exportCharacterExcelBuffer`, `serializeCharacterToTxt`, `getExportBaseName`, `ED4_TEMPLATE_BASE64`）。
+- `src/engine/characterExport.ts`(+`src/templates/ed4TemplateBase64.ts`)：模板注入读取/导出与立绘提取（`shiftColumnBlockDown`, `extractPortraitFromXlsxBuffer`, `readExcelBufferToWorkbook`, `exportCharacterExcelBuffer`, `serializeCharacterToTxt`, `getExportBaseName`, `ED4_TEMPLATE_BASE64`）。
 - `src/engine/browserUtils.ts`：浏览器剪贴板与文件下载工具（`copyText`, `downloadBlob`）。
-- `src/engine/supabaseSync.ts`：联机 CRUD/订阅/合并/暗骰脱敏（`isSupabaseConfigured`, `supabase`, `getSessionClientId`, `generateRoomCode`, `extractRoomCodeFromUrl`, `buildRoomInviteUrl`, `serializeRoomCore`, `buildRoomStatePayload`, `buildCharacterSyncPayload`, `buildLogInsertPayload`, `buildBlindRollPayload`, `mapBlindRollToLog`, `mapRemoteLogRow`, `mergeCharacterList`, `mergeIncomingLogs`, `createRoomInSupabase`, `joinRoomInSupabase`, `pushRoomStateToSupabase`, `pushCharacterToSupabase`, `removeCharacterFromSupabase`, `pushLogsToSupabase`, `subscribeRoomRealtime`）。
+- `src/engine/supabaseSync.ts`：联机 CRUD/双通道订阅/零心跳 Presence 探测回收/云端30条裁剪/暗骰脱敏（`isSupabaseConfigured`, `supabase`, `CLOUD_ROOM_LOG_LIMIT`, `getSessionClientId`, `generateRoomCode`, `extractRoomCodeFromUrl`, `buildRoomInviteUrl`, `serializeRoomCore`, `buildRoomStatePayload`, `buildCharacterSyncPayload`, `buildLogInsertPayload`, `buildBlindRollPayload`, `mapBlindRollToLog`, `mapRemoteLogRow`, `mergeCharacterList`, `extractOnlineClientIds`, `hasLivePresenceInState`, `filterCharactersByPresence`, `selectOverflowLogIds`, `mergeIncomingLogs`, `probeRoomHasLivePresence`, `createRoomInSupabase`, `joinRoomInSupabase`, `pushRoomStateToSupabase`, `pushCharacterToSupabase`, `deleteRoomIfEmpty`, `removeCharacterFromSupabase`, `sendLeaveBeacon`, `pruneCloudRoomLogs`, `pushLogsToSupabase`, `subscribeRoomRealtime`）。
 - `src/engine/bgmAudioEngine.ts` / `bgmPlaylist.ts`：扁平音轨引擎（`BGM_AUDIO_CONFIG`, `createBgmAudio`, `setBgmPlayMode`, `setBgmLongFade`, `setBgmTrack`, `playBgm`, `pauseBgm`, `toggleBgmMuffled`, `seekBgmByRatio`, `getBgmCurrentTime`, `destroyBgmAudio`, `unlockBrowserAudio`）与歌单工具（`isValidAudioUrl`, `add/remove/getNextTrack*`, `serialize/parseImportedPlaylistJson`, `load/savePlaylistFromStorage`, `formatBgmTime`, `shouldTriggerTailFade`）。
 - `src/components/uiShared.ts` + `src/components/*`：共享样式常量与门类加值标签（`inputCls`, `noSpinInputCls`, `btnCls`, `btnPrimaryCls`, `btnSmCls`, `sectionCls`, `getDisciplineBonusTags`）；页面视图 `PlSheetView`, `GmMonsterView`, `RightSidebar`, `BgmPlayer`, `SpellEffectModal`, `PrintSheetView`, `StepTableView`, `Modals`（`SpellJsonModal`/`ManualModal`/`ExportModal`/`RoomModal`）。
 
@@ -40,7 +40,7 @@
 - **Step 与爆骰**：`calcPlDerived`→`getPlDerivedView`(合入 Buff)→`getEffectiveActionMod`(动作检定用，伤害隔离)→`getStepDice` 拆骰组→`rollStepTest` 调 `rollExplodingDie` 累加并判全1大失败与 `floor((total-dn)/5)` 额外成功。
 - **法术应用**：`handleWeaveSpell`(依 `getExtraThreadRuleInfo` 限脉路)→`handleCastSpell`(`resolveCastingDn` 掷施法，写 `pendingSpellCasts` 并归零 `wovenThreads`)→`SpellEffectModal`→`handleConfirmSpellEffect`(`computeSpellEffectPlan`→Buff 经 `buildActiveBuffEntry` 入 `activeBuffs`，伤害经 `applyDamageToMonsterPure` 结算)。
 - **R2 音乐同步**：GM 操作→`BgmAudioEngine` 播放并 Broadcast `bgm`/`bgm_fade`(含 `updatedAt`/`position`)→PL 补偿延迟同步播放与低通闷音；新进房发 `sync_req` 触发重播；尾段 ≤6s 经 `shouldTriggerTailFade` 自动淡出切曲。
-- **Supabase 战报流**：本地 `makeLog`→`useEffect` 按 `knownLogIdsRef` 分流：普通战报批量 `pushLogsToSupabase`，GM 暗骰仅发 `BLIND_ROLL` 脱敏广播（不入库明细）→远端经 `onLogInsert`/`onBlindRoll` 合入；角色卡 300ms 防抖同步 `room_characters`；战局 80ms 防抖推 `rooms.state`（`isApplyingRemoteStateRef` 防回环）。
+- **Supabase 战报与空房流**：本地战报持久化至 `ed4_combat_logs`（不清缓存不截断）；新增战报按 `knownLogIdsRef` 分流：GM 暗骰仅发 `BLIND_ROLL` 脱敏广播，普通战报同步发 `ROOM_LOG` 广播并写 `room_logs` 后由 `pruneCloudRoomLogs` 裁剪仅保留最新 30 条；角色卡 300ms 防抖广播 `CHAR_SYNC` 并写 `room_characters`（无定时心跳）；战局 80ms 防抖广播 `ROOM_STATE` 并写 `rooms.state`（`isApplyingRemoteStateRef` 防回环）；主动退出调 `deleteRoomIfEmpty` 释放空房，关闭页通过 `pagehide` 发 `sendLeaveBeacon` 且由 Presence 自动下线；建房遇同名房号时通过 `probeRoomHasLivePresence` 静默探测是否仍有在线页面，若无人在线直接清理残留成员并重置房间复用房号。
 
 ## 5. 扁平化铁律合规审计（历史技术债清单）
 1. ~~**扁平化** `bgmAudioEngine.ts:class BgmAudioEngine`：类封装状态，改顶层纯对象+顶层函数。~~（已清理）

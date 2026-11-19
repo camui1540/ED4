@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { Moon, Sun, Wifi, WifiOff } from 'lucide-react';
 import ED4Engine from './engine/ed4_engine.js';
 import {
@@ -38,6 +37,7 @@ import {
   exportCharacterExcelBuffer,
   extractPortraitFromXlsxBuffer,
   getExportBaseName,
+  readExcelBufferToWorkbook,
   serializeCharacterToTxt,
 } from './engine/characterExport';
 import { copyText, downloadBlob } from './engine/browserUtils';
@@ -49,6 +49,7 @@ import {
   buildRoomStatePayload,
   createRoomInSupabase,
   extractRoomCodeFromUrl,
+  filterCharactersByPresence,
   getSessionClientId,
   isSupabaseConfigured,
   joinRoomInSupabase,
@@ -60,44 +61,58 @@ import {
   pushLogsToSupabase,
   pushRoomStateToSupabase,
   removeCharacterFromSupabase,
+  sendLeaveBeacon,
   serializeRoomCore,
   subscribeRoomRealtime,
-  type BlindRollBroadcastPayload,
   type RoomCharacterRow,
+  type RoomRealtimeHandle,
   type RoomRole,
   type RoomSession,
 } from './engine/supabaseSync';
 
+const NOOP_ROOM_CHANNEL: RoomRealtimeHandle = {
+  unsubscribe: () => {},
+  broadcastRoomState: () => {},
+  broadcastLog: () => {},
+  broadcastBlindRoll: () => {},
+  broadcastCharSync: () => {},
+  broadcastCharLeave: () => {},
+};
+
 export default function App() {
   const [state, setState] = useState(() => {
     const init = createInitialState();
+    let nextPl = init.pl;
+    let nextLogs = init.logs;
     try {
       const raw = localStorage.getItem('ed4_pl_sheet');
       if (raw) {
         const savedPl = JSON.parse(raw);
         if (savedPl && typeof savedPl === 'object') {
-          return {
-            ...init,
-            pl: {
-              ...init.pl,
-              ...savedPl,
-              armor: { ...init.pl.armor, ...(savedPl.armor || {}) },
-              shield: { ...init.pl.shield, ...(savedPl.shield || {}) },
-              options: { ...init.pl.options, ...(savedPl.options || {}) },
-              statuses: { ...init.pl.statuses, ...(savedPl.statuses || {}) },
-              legend: { ...init.pl.legend, ...(savedPl.legend || {}) },
-              wealth: { ...init.pl.wealth, ...(savedPl.wealth || {}) },
-              spells: hydrateSpellsWithDb(savedPl.spells || []),
-              activeBuffs: Array.isArray(savedPl.activeBuffs) ? savedPl.activeBuffs : [],
-              background: savedPl.background ?? '',
-            },
+          nextPl = {
+            ...init.pl,
+            ...savedPl,
+            armor: { ...init.pl.armor, ...(savedPl.armor || {}) },
+            shield: { ...init.pl.shield, ...(savedPl.shield || {}) },
+            options: { ...init.pl.options, ...(savedPl.options || {}) },
+            statuses: { ...init.pl.statuses, ...(savedPl.statuses || {}) },
+            legend: { ...init.pl.legend, ...(savedPl.legend || {}) },
+            wealth: { ...init.pl.wealth, ...(savedPl.wealth || {}) },
+            spells: hydrateSpellsWithDb(savedPl.spells || []),
+            activeBuffs: Array.isArray(savedPl.activeBuffs) ? savedPl.activeBuffs : [],
+            background: savedPl.background ?? '',
           };
         }
+      }
+      const rawLogs = localStorage.getItem('ed4_combat_logs');
+      if (rawLogs) {
+        const savedLogs = JSON.parse(rawLogs);
+        if (Array.isArray(savedLogs)) nextLogs = savedLogs;
       }
     } catch {
       // 忽略本地存储读取异常
     }
-    return init;
+    return { ...init, pl: nextPl, logs: nextLogs };
   });
   const [spellJsonOpen, setSpellJsonOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -115,11 +130,15 @@ export default function App() {
   }));
   const [roomCharacters, setRoomCharacters] = useState<RoomCharacterRow[]>([]);
   const [gmSecretRoll, setGmSecretRoll] = useState(false);
-  const knownLogIdsRef = useRef<Set<string>>(new Set());
+  const knownLogIdsRef = useRef<Set<string>>(new Set(state.logs.map((l) => String(l.id))));
   const isApplyingRemoteStateRef = useRef(false);
   const lastSyncedRoomJsonRef = useRef('');
   const importedXlsxBufferRef = useRef<ArrayBuffer | null>(null);
-  const broadcastBlindRollRef = useRef<(payload: BlindRollBroadcastPayload) => void>(() => {});
+  const roomChannelRef = useRef<RoomRealtimeHandle>(NOOP_ROOM_CHANNEL);
+  const latestStateRef = useRef(state);
+  latestStateRef.current = state;
+  const latestSessionRef = useRef(roomSession);
+  latestSessionRef.current = roomSession;
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('ed4_sidebar_width'));
@@ -156,11 +175,30 @@ export default function App() {
     }
   }, [state.pl]);
 
-  // 订阅 Supabase Realtime（rooms / room_logs / room_characters / BLIND_ROLL）
+  useEffect(() => {
+    try {
+      localStorage.setItem('ed4_combat_logs', JSON.stringify(state.logs));
+    } catch {
+      // 忽略本地存储配额异常
+    }
+  }, [state.logs]);
+
+  // 订阅 Supabase Realtime（Broadcast + Presence 主通道，Postgres Changes 兜底，含心跳与关页释放）
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode) return;
 
-    const { unsubscribe, broadcastBlindRoll } = subscribeRoomRealtime(roomSession.roomCode, {
+    const buildCurrentCharRow = () => {
+      const sess = latestSessionRef.current;
+      return buildCharacterSyncPayload({
+        roomCode: roomSession.roomCode,
+        clientId: roomSession.clientId,
+        nickname: sess.nickname,
+        role: sess.role || 'pl',
+        pl: latestStateRef.current.pl,
+      });
+    };
+
+    const handle = subscribeRoomRealtime(roomSession.roomCode, roomSession.clientId, {
       onRoomState: (nextState) => {
         if (!nextState || nextState.updatedBy === roomSession.clientId) return;
         const incomingCore = serializeRoomCore(nextState);
@@ -193,7 +231,7 @@ export default function App() {
         const logId = String(row.id);
         if (knownLogIdsRef.current.has(logId)) return;
         knownLogIdsRef.current.add(logId);
-        const mapped = mapRemoteLogRow(row, roomSession.role, state.gmBlind);
+        const mapped = mapRemoteLogRow(row, latestSessionRef.current.role, latestStateRef.current.gmBlind);
         setState((prev) => ({
           ...prev,
           logs: mergeIncomingLogs(prev.logs, [mapped]),
@@ -211,16 +249,35 @@ export default function App() {
       onCharacterChange: (eventType, newRow, oldRow) => {
         setRoomCharacters((prev) => mergeCharacterList(prev, eventType, newRow, oldRow));
       },
+      onPresenceSync: (onlineClientIds) => {
+        setRoomCharacters((prev) => filterCharactersByPresence(prev, onlineClientIds, roomSession.clientId));
+      },
+      onSyncRequest: () => {
+        handle.broadcastCharSync(buildCurrentCharRow());
+        if (latestSessionRef.current.role === 'gm') {
+          handle.broadcastRoomState(buildRoomStatePayload(latestStateRef.current, roomSession.clientId));
+        }
+      },
+      onSubscribed: () => {
+        handle.broadcastCharSync(buildCurrentCharRow());
+      },
     });
-    broadcastBlindRollRef.current = broadcastBlindRoll;
+    roomChannelRef.current = handle;
+
+    const onPageHide = () => {
+      handle.broadcastCharLeave(roomSession.clientId);
+      sendLeaveBeacon(roomSession.roomCode, roomSession.clientId);
+    };
+    window.addEventListener('pagehide', onPageHide);
 
     return () => {
-      broadcastBlindRollRef.current = () => {};
-      unsubscribe();
+      window.removeEventListener('pagehide', onPageHide);
+      roomChannelRef.current = NOOP_ROOM_CHANNEL;
+      handle.unsubscribe();
     };
-  }, [roomSession.connected, roomSession.roomCode, roomSession.clientId, roomSession.role, state.gmBlind]);
+  }, [roomSession.connected, roomSession.roomCode, roomSession.clientId]);
 
-  // 本地新增战报同步：暗骰仅发送极简脱敏广播，普通战报推送 room_logs
+  // 本地新增战报同步：暗骰仅发送极简脱敏广播，普通战报即时广播并写入 room_logs（云端保留最新 30 条）
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode || !roomSession.role) return;
     const unsent = state.logs.filter((l) => !knownLogIdsRef.current.has(String(l.id)));
@@ -229,7 +286,7 @@ export default function App() {
     const blindLogs = unsent.filter((l) => l.isBlindRoll);
     const normalLogs = unsent.filter((l) => !l.isBlindRoll);
     blindLogs.forEach((log) => {
-      broadcastBlindRollRef.current(buildBlindRollPayload(log, 'GM'));
+      roomChannelRef.current.broadcastBlindRoll(buildBlindRollPayload(log, 'GM'));
     });
     if (normalLogs.length > 0) {
       const senderName =
@@ -243,6 +300,7 @@ export default function App() {
           log,
         })
       );
+      rows.forEach((row) => roomChannelRef.current.broadcastLog(row));
       pushLogsToSupabase(rows);
     }
   }, [
@@ -255,7 +313,7 @@ export default function App() {
     state.pl.name,
   ]);
 
-  // PL 角色卡伤害/负伤/脉路/装备状态防抖同步至 room_characters
+  // PL 角色卡伤害/负伤/脉路/装备状态防抖同步至 Broadcast 与 room_characters
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode || !roomSession.role) return;
     const timer = window.setTimeout(() => {
@@ -266,6 +324,8 @@ export default function App() {
         role: roomSession.role!,
         pl: state.pl,
       });
+      setRoomCharacters((prev) => mergeCharacterList(prev, 'UPDATE', payload));
+      roomChannelRef.current.broadcastCharSync(payload);
       pushCharacterToSupabase(payload);
     }, 300);
     return () => window.clearTimeout(timer);
@@ -278,7 +338,7 @@ export default function App() {
     roomSession.clientId,
   ]);
 
-  // 共享房间战斗状态（回合、先攻、怪物、反应、脱敏）同步至 rooms.state
+  // 共享房间战斗状态（回合、先攻、怪物、反应、脱敏）同步至 Broadcast 与 rooms.state
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode) return;
     const coreJson = serializeRoomCore(state);
@@ -290,7 +350,9 @@ export default function App() {
     if (coreJson === lastSyncedRoomJsonRef.current) return;
     lastSyncedRoomJsonRef.current = coreJson;
     const timer = window.setTimeout(() => {
-      pushRoomStateToSupabase(roomSession.roomCode, buildRoomStatePayload(state, roomSession.clientId));
+      const payload = buildRoomStatePayload(state, roomSession.clientId);
+      roomChannelRef.current.broadcastRoomState(payload);
+      pushRoomStateToSupabase(roomSession.roomCode, payload);
     }, 80);
     return () => window.clearTimeout(timer);
   }, [
@@ -345,7 +407,7 @@ export default function App() {
   const pushLog = (text: string, detail = '', type = '', blindText = '', isBlindRoll = false) => {
     setState((prev) => ({
       ...prev,
-      logs: [makeLog(text, detail, type, blindText, prev.gmBlind, isBlindRoll), ...prev.logs].slice(0, 60),
+      logs: [makeLog(text, detail, type, blindText, prev.gmBlind, isBlindRoll), ...prev.logs],
     }));
   };
 
@@ -368,7 +430,7 @@ export default function App() {
         '',
         prev.gmBlind
       );
-      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
     });
   };
 
@@ -387,7 +449,7 @@ export default function App() {
         '',
         prev.gmBlind
       );
-      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
     });
   };
 
@@ -456,7 +518,7 @@ export default function App() {
       );
       const nextInit = idx >= 0 ? prev.initiativeList.map((x, i) => (i === idx ? entry : x)) : [...prev.initiativeList, entry];
       const log = makeLog(`${prev.pl.name} 投掷先攻 (Step ${step}) → ${res.total}`, res.trace, 'warn', '', prev.gmBlind);
-      return { ...prev, initiativeList: sortInitiativeList(nextInit), logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, initiativeList: sortInitiativeList(nextInit), logs: [log, ...prev.logs] };
     });
   };
 
@@ -472,7 +534,7 @@ export default function App() {
 
       if (type === 'recovery') {
         if (pl.recoveryCurrent <= 0) {
-          return { ...prev, logs: [makeLog(`${pl.name} 今日回复次数已耗尽`, '', 'fail', '', prev.gmBlind), ...prev.logs].slice(0, 60) };
+          return { ...prev, logs: [makeLog(`${pl.name} 今日回复次数已耗尽`, '', 'fail', '', prev.gmBlind), ...prev.logs] };
         }
         pl.recoveryCurrent -= 1;
         const step = Math.max(1, d.steps.TOU - pl.wounds);
@@ -480,7 +542,7 @@ export default function App() {
         const healed = Math.max(1, res.total);
         pl.currentDamage = Math.max(0, pl.currentDamage - healed);
         const log = makeLog(`${pl.name} 回复检定 (Step ${step}) → 恢复 ${healed} 点 (剩余 ${pl.recoveryCurrent})`, res.trace, 'hit', '', prev.gmBlind);
-        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl, logs: [log, ...prev.logs] };
       }
 
       if (type === 'knockdown') {
@@ -488,7 +550,7 @@ export default function App() {
         const step = Math.max(1, d.steps.STR + (wb ? wb.rank : 0) + getEffectiveActionMod(pl));
         const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: pl.karmaDie });
         const log = makeLog(`${pl.name} 击倒检定${wb ? `（负伤平衡 ${wb.rank} 级）` : ''} (Step ${step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
-        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, logs: [log, ...prev.logs] };
       }
 
       if (type === 'jumpup') {
@@ -504,7 +566,7 @@ export default function App() {
           '',
           prev.gmBlind
         );
-        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl, logs: [log, ...prev.logs] };
       }
 
       const map: Record<string, { label: string; step: number }> = {
@@ -516,7 +578,7 @@ export default function App() {
       const step = Math.max(1, item.step + getEffectiveActionMod(pl));
       const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: pl.karmaDie });
       const log = makeLog(`${pl.name} ${item.label} (Step ${step}) → ${res.total}`, res.trace, '', '', prev.gmBlind);
-      return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, logs: [log, ...prev.logs] };
     });
   };
 
@@ -525,7 +587,7 @@ export default function App() {
     setState((prev) => {
       const d = getPlDerivedView(prev.pl);
       const log = makeLog(`${prev.pl.name} 完成业力仪式，业力恢复至 ${d.karmaMax}`, '', 'hit', '', prev.gmBlind);
-      return { ...prev, pl: { ...prev.pl, karmaCurrent: d.karmaMax }, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, pl: { ...prev.pl, karmaCurrent: d.karmaMax }, logs: [log, ...prev.logs] };
     });
   };
 
@@ -535,7 +597,7 @@ export default function App() {
       if (pl.currentDamage > 0 || pl.wounds <= 0 || pl.recoveryCurrent <= 0) return prev;
       const nextPl = { ...pl, recoveryCurrent: pl.recoveryCurrent - 1, wounds: pl.wounds - 1 };
       const log = makeLog(`${pl.name} 整夜休整消除 1 处负伤（剩余 ${nextPl.wounds}）`, '', 'hit', '', prev.gmBlind);
-      return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
     });
   };
 
@@ -566,7 +628,7 @@ export default function App() {
       const t = list.find((x: any) => x.id === itemId);
       if (!t) return prev;
       if (pl.statuses.surprised) {
-        return { ...prev, logs: [makeLog(`${pl.name} 处于惊愕状态，本轮无法执行检定`, '', 'fail', '', prev.gmBlind), ...prev.logs].slice(0, 60) };
+        return { ...prev, logs: [makeLog(`${pl.name} 处于惊愕状态，本轮无法执行检定`, '', 'fail', '', prev.gmBlind), ...prev.logs] };
       }
 
       const d = getPlDerivedView(pl);
@@ -606,7 +668,7 @@ export default function App() {
           '',
           prev.gmBlind
         );
-        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl, logs: [log, ...prev.logs] };
       }
 
       if (!res.isSuccess) {
@@ -617,7 +679,7 @@ export default function App() {
           `${pl.name} 使用${tag}【${t.name}】攻击目标 → 未命中 (${res.total})${strainText}`,
           prev.gmBlind
         );
-        return { ...prev, pl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl, logs: [log, ...prev.logs] };
       }
 
       const weapon = pl.weapons[0] || { name: '徒手', dmgStep: 0 };
@@ -654,7 +716,7 @@ export default function App() {
         pl,
         lastExtraDamageBonus: res.extraSuccesses * 2,
         pendingReaction: nextPending,
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -709,7 +771,7 @@ export default function App() {
             ...prev,
             lastExtraDamageBonus: 0,
             monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
-            logs: [log, ...prev.logs].slice(0, 60),
+            logs: [log, ...prev.logs],
           };
         }
       }
@@ -726,7 +788,7 @@ export default function App() {
         '',
         prev.gmBlind
       );
-      return { ...prev, lastExtraDamageBonus: 0, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, lastExtraDamageBonus: 0, logs: [log, ...prev.logs] };
     });
   };
 
@@ -781,7 +843,7 @@ export default function App() {
           ...pl,
           spells: pl.spells.map((s: any) => (s.instanceId === instanceId ? { ...s, wovenThreads: nextWoven } : s)),
         },
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -804,7 +866,7 @@ export default function App() {
             prev.gmBlind
           ),
           ...prev.logs,
-        ].slice(0, 60),
+        ],
       }));
       return;
     }
@@ -855,7 +917,7 @@ export default function App() {
           ...prev,
           pl: { ...pl, spells: nextSpells },
           pendingSpellCasts: nextPendingMap,
-          logs: [log, ...prev.logs].slice(0, 60),
+          logs: [log, ...prev.logs],
         };
       }
 
@@ -872,7 +934,7 @@ export default function App() {
           ...prev,
           pl: { ...pl, spells: nextSpells },
           pendingSpellCasts: nextPendingMap,
-          logs: [log, ...prev.logs].slice(0, 60),
+          logs: [log, ...prev.logs],
         };
       }
 
@@ -919,7 +981,7 @@ export default function App() {
         ...prev,
         pl: { ...pl, spells: nextSpells },
         pendingSpellCasts: nextPendingMap,
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
 
@@ -1032,7 +1094,7 @@ export default function App() {
           ...prev,
           pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
           pendingSpellCasts: nextPendingMap,
-          logs: [log, ...prev.logs].slice(0, 60),
+          logs: [log, ...prev.logs],
         };
       }
 
@@ -1065,7 +1127,7 @@ export default function App() {
               pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
               pendingSpellCasts: nextPendingMap,
               monsters: nextMonsters,
-              logs: [...newLogs, ...prev.logs].slice(0, 60),
+              logs: [...newLogs, ...prev.logs],
             };
           }
         } else if (prev.targetValue.startsWith('m:')) {
@@ -1085,7 +1147,7 @@ export default function App() {
               pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
               pendingSpellCasts: nextPendingMap,
               monsters: prev.monsters.map((x) => (x.instanceId === targetId ? outcome.monster : x)),
-              logs: [log, ...prev.logs].slice(0, 60),
+              logs: [log, ...prev.logs],
             };
           }
         }
@@ -1102,7 +1164,7 @@ export default function App() {
         ...prev,
         pl: { ...pl, spells: nextSpells, activeBuffs: nextActiveBuffs },
         pendingSpellCasts: nextPendingMap,
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
     setSpellEffectModal(null);
@@ -1122,7 +1184,7 @@ export default function App() {
       } else {
         const buf = result as ArrayBuffer;
         importedXlsxBufferRef.current = buf.slice(0);
-        data = ED4Engine.parseExcelWorkbook(XLSX.read(new Uint8Array(buf), { type: 'array' }));
+        data = ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(buf));
         const portraitUrl = await extractPortraitFromXlsxBuffer(buf);
         if (portraitUrl) data.portraitUrl = portraitUrl;
       }
@@ -1138,7 +1200,7 @@ export default function App() {
           '',
           prev.gmBlind
         );
-        return { ...prev, pl: nextPl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
       });
     };
     if (ext === 'txt') reader.readAsText(file, 'utf-8');
@@ -1153,7 +1215,7 @@ export default function App() {
       const existing = prev.monsters.filter((m) => m.templateId === templateId).length;
       const added = Array.from({ length: count }, (_, i) => createMonsterInstance(tpl, existing, count, i));
       const log = makeLog(`已将 ${count} 名【${tpl.name}】加入战斗`, '', '', '', prev.gmBlind);
-      return { ...prev, monsters: [...prev.monsters, ...added], logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, monsters: [...prev.monsters, ...added], logs: [log, ...prev.logs] };
     });
   };
 
@@ -1172,7 +1234,7 @@ export default function App() {
       const res = ED4Engine.rollStepTest(atkStep, { dn: targetPd, isAction: true, karmaDie: prev.pl.karmaDie });
       if (!res.isSuccess) {
         const log = makeLog(`${m.name} 攻击 ${targetName} → 未命中 (${res.total} vs ${targetPd})`, res.trace, '', '', prev.gmBlind, isBlind);
-        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, logs: [log, ...prev.logs] };
       }
       if (isBlind) {
         const log = makeLog(
@@ -1183,7 +1245,7 @@ export default function App() {
           prev.gmBlind,
           true
         );
-        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, logs: [log, ...prev.logs] };
       }
       const nextPending = {
         attackerId: m.instanceId,
@@ -1209,7 +1271,7 @@ export default function App() {
         '',
         prev.gmBlind
       );
-      return { ...prev, pendingReaction: nextPending, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, pendingReaction: nextPending, logs: [log, ...prev.logs] };
     });
   };
 
@@ -1221,7 +1283,7 @@ export default function App() {
         monsters: [],
         initiativeList: prev.initiativeList.filter((i) => i.type !== 'gm'),
         pendingReaction: null,
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -1245,7 +1307,7 @@ export default function App() {
           addedLogs.unshift(
             makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1负荷）闪避成功 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'hit', '', prev.gmBlind)
           );
-          return { ...prev, pl: nextPl, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
+          return { ...prev, pl: nextPl, pendingReaction: null, logs: [...addedLogs, ...prev.logs] };
         }
         addedLogs.unshift(
           makeLog(`${nextPl.name} 发动【${t ? t.name : '回避打击'}】（1负荷）闪避失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
@@ -1274,7 +1336,7 @@ export default function App() {
               addedLogs.unshift(makeLog(out.log.text, out.log.detail, out.log.type, out.log.blindText, prev.gmBlind));
             }
           }
-          return { ...prev, pl: nextPl, monsters: nextMonsters, pendingReaction: null, logs: [...addedLogs, ...prev.logs].slice(0, 60) };
+          return { ...prev, pl: nextPl, monsters: nextMonsters, pendingReaction: null, logs: [...addedLogs, ...prev.logs] };
         }
         addedLogs.unshift(
           makeLog(`${nextPl.name} 发动【反击】（2负荷）失败 (${res.rollResult.total} vs ${pr.atkTotal})`, res.rollResult.trace, 'fail', '', prev.gmBlind)
@@ -1302,7 +1364,7 @@ export default function App() {
         pl: nextPl,
         monsters: nextMonsters,
         pendingReaction: null,
-        logs: [...addedLogs, ...prev.logs].slice(0, 60),
+        logs: [...addedLogs, ...prev.logs],
       };
     });
   };
@@ -1313,7 +1375,7 @@ export default function App() {
       if (target === 'pl') {
         const out = applyDamageToPlPure(prev.pl, rawDmg, armorType, false, false, '环境/直接伤害');
         const log = makeLog(out.log.text, out.log.detail, out.log.type, '', prev.gmBlind);
-        return { ...prev, pl: out.pl, logs: [log, ...prev.logs].slice(0, 60) };
+        return { ...prev, pl: out.pl, logs: [log, ...prev.logs] };
       }
       const m = prev.monsters.find((x) => x.instanceId === target);
       if (!m) return prev;
@@ -1322,7 +1384,7 @@ export default function App() {
       return {
         ...prev,
         monsters: prev.monsters.map((x) => (x.instanceId === target ? out.monster : x)),
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -1372,7 +1434,7 @@ export default function App() {
 
       const sorted = sortInitiativeList(list);
       const log = makeLog(`第 ${prev.round} 轮全员投先攻完成`, sorted.map((x) => `${x.name}:${x.initVal}`).join(' | '), 'warn', '', prev.gmBlind);
-      return { ...prev, initiativeList: sorted, turnIndex: 0, logs: [log, ...prev.logs].slice(0, 60) };
+      return { ...prev, initiativeList: sorted, turnIndex: 0, logs: [log, ...prev.logs] };
     });
   };
 
@@ -1389,7 +1451,7 @@ export default function App() {
           options: { aggressive: false, defensive: false, knockdown: false, stun: false, splitMove: false, tailAttack: false },
           statuses: { ...prev.pl.statuses, surprised: false, reserved: false },
         },
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -1408,7 +1470,7 @@ export default function App() {
           options: { aggressive: false, defensive: false, knockdown: false, stun: false, splitMove: false, tailAttack: false },
           statuses: { knockedDown: false, blindsided: false, surprised: false, harried: false, reserved: false },
         },
-        logs: [log, ...prev.logs].slice(0, 60),
+        logs: [log, ...prev.logs],
       };
     });
   };
@@ -1585,6 +1647,7 @@ export default function App() {
     const res = await joinRoomInSupabase(roomCode);
     if (!res.ok) return res.error;
 
+    state.logs.forEach((l) => knownLogIdsRef.current.add(String(l.id)));
     const mappedLogs = (res.logs || []).map((row: any) => {
       knownLogIdsRef.current.add(String(row.id));
       return mapRemoteLogRow(row, role, Boolean(res.roomState?.gmBlind));
@@ -1603,10 +1666,10 @@ export default function App() {
         monsters: Array.isArray(rs.monsters) ? rs.monsters : [],
         pendingReaction: rs.pendingReaction ?? null,
         gmBlind: Boolean(rs.gmBlind),
-        logs: mappedLogs,
+        logs: mergeIncomingLogs(prev.logs, mappedLogs),
       }));
     } else if (mappedLogs.length > 0) {
-      setState((prev) => ({ ...prev, logs: mappedLogs }));
+      setState((prev) => ({ ...prev, logs: mergeIncomingLogs(prev.logs, mappedLogs) }));
     }
 
     const nextSession: RoomSession = {
@@ -1636,6 +1699,7 @@ export default function App() {
     const prevCode = roomSession.roomCode;
     const prevNick = roomSession.nickname;
     if (prevCode) {
+      roomChannelRef.current.broadcastCharLeave(roomSession.clientId);
       await removeCharacterFromSupabase(prevCode, roomSession.clientId);
     }
     setRoomSession((prev) => ({ ...prev, connected: false, roomCode: '' }));
@@ -1795,7 +1859,7 @@ export default function App() {
                   ...p,
                   monsterTemplates: [...p.monsterTemplates, tpl],
                   showAddMonsterForm: false,
-                  logs: [makeLog(`已保存怪物模板【${tpl.name}】`, '', '', '', p.gmBlind), ...p.logs].slice(0, 60),
+                  logs: [makeLog(`已保存怪物模板【${tpl.name}】`, '', '', '', p.gmBlind), ...p.logs],
                 }))
               }
               onDeleteTemplate={(id) =>
