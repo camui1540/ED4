@@ -724,25 +724,3 @@ export function getExportBaseName(pl: any): string {
   const circle = Number(pl?.circle) || 1;
   return `${safeName}_ED4_${circle}环`;
 }
-
-export function downloadTextFile(filename: string, content: string) {
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export function downloadExcelBuffer(filename: string, buffer: ArrayBuffer) {
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}

@@ -14,7 +14,22 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { BgmAudioEngine, unlockBrowserAudio } from '../engine/bgmAudioEngine';
+import {
+  createBgmAudio,
+  destroyBgmAudio,
+  getBgmCurrentTime,
+  getBgmFadeSec,
+  pauseBgm,
+  playBgm,
+  seekBgmByRatio,
+  setBgmLongFade,
+  setBgmPlayMode,
+  setBgmTrack,
+  toggleBgmMuffled,
+  unlockBrowserAudio,
+  type BgmAudioState,
+} from '../engine/bgmAudioEngine';
+import { downloadBlob } from '../engine/browserUtils';
 import {
   addTrackToPlaylist,
   clampNumber,
@@ -29,14 +44,13 @@ import {
   type BgmTrack,
 } from '../engine/bgmPlaylist';
 import { supabase, type RoomSession } from '../engine/supabaseSync';
+import { inputCls } from './uiShared';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface BgmPlayerProps {
   roomSession: RoomSession;
 }
 
-const inputCls =
-  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
 const btnCls =
   'inline-flex h-7 items-center justify-center gap-1 rounded border border-border bg-secondary px-2 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50';
 const btnActiveCls =
@@ -71,7 +85,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
   const [floatPos, setFloatPos] = useState<{ left: number; top: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const engineRef = useRef<BgmAudioEngine | null>(null);
+  const engineRef = useRef<BgmAudioState | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const floatingCardRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -127,10 +141,10 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
 
   const handleEndedRef = useRef<() => void>(() => {});
 
-  const ensureEngine = useCallback((): BgmAudioEngine => {
+  const ensureEngine = useCallback((): BgmAudioState => {
     if (engineRef.current) return engineRef.current;
 
-    const eng = new BgmAudioEngine(
+    const eng = createBgmAudio(
       currentTrackRef.current?.url || '',
       {
         onStateChange: ({ isPlaying: playing, isMuffled: muffled }) => {
@@ -176,11 +190,11 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
       setAutoplayBlocked(false);
       setCurrentTrack(track);
       currentTrackRef.current = track;
-      eng.setPlayMode(playModeRef.current);
-      eng.setLongFade(isLongFadeRef.current);
-      eng.setTrack(track.url, track.title);
+      setBgmPlayMode(eng, playModeRef.current);
+      setBgmLongFade(eng, isLongFadeRef.current);
+      setBgmTrack(eng, track.url, track.title);
 
-      const ok = await eng.play(eng.getFadeSec(), options?.seekTime);
+      const ok = await playBgm(eng, getBgmFadeSec(eng), options?.seekTime);
       if (options?.broadcast && !isPlLockedRef.current) {
         broadcastBgmEvent({
           url: track.url,
@@ -197,16 +211,13 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
 
   handleEndedRef.current = () => {
     const eng = engineRef.current;
-    if (!eng) return;
-    if (isPlLockedRef.current) {
-      return;
-    }
+    if (!eng || isPlLockedRef.current) return;
 
     const mode = playModeRef.current;
     const activeTrack = currentTrackRef.current;
 
     if (mode === 'once') {
-      eng.pause(0);
+      pauseBgm(eng, 0);
       setIsPlaying(false);
       if (activeTrack) {
         broadcastBgmEvent({
@@ -216,7 +227,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
         });
       }
     } else if (mode === 'next') {
-      eng.pause(0);
+      pauseBgm(eng, 0);
       const nextTrack = getNextTrackInPlaylist(
         playlistRef.current,
         activeTrack?.url || eng.src
@@ -256,7 +267,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
             url: track.url,
             action: 'play',
             title: track.title,
-            currentTime: eng.getCurrentTime(),
+            currentTime: getBgmCurrentTime(eng),
             fade: isLongFadeRef.current,
           },
         });
@@ -282,7 +293,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
           const nextFade = Boolean(payload.fade);
           isLongFadeRef.current = nextFade;
           setIsLongFade(nextFade);
-          engineRef.current?.setLongFade(nextFade);
+          if (engineRef.current) setBgmLongFade(engineRef.current, nextFade);
         }
       })
       .on('broadcast', { event: 'bgm' }, ({ payload }) => {
@@ -292,7 +303,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
           const nextFade = Boolean(payload.fade);
           isLongFadeRef.current = nextFade;
           setIsLongFade(nextFade);
-          engineRef.current?.setLongFade(nextFade);
+          if (engineRef.current) setBgmLongFade(engineRef.current, nextFade);
         }
         if (payload.action === 'play' && payload.url) {
           const safeTitle = String(payload.title || '新曲目 (GM推送)');
@@ -302,8 +313,8 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
             { url: String(payload.url), title: safeTitle },
             { seekTime, broadcast: false }
           );
-        } else if (payload.action === 'pause') {
-          engineRef.current?.pause();
+        } else if (payload.action === 'pause' && engineRef.current) {
+          pauseBgm(engineRef.current);
         }
       })
       .subscribe((status) => {
@@ -320,7 +331,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
       setHasPeers(false);
       supabase?.removeChannel(bgmChannel);
       if (engineRef.current) {
-        engineRef.current.destroy();
+        destroyBgmAudio(engineRef.current);
         engineRef.current = null;
       }
       setIsPlaying(false);
@@ -343,7 +354,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
   useEffect(() => {
     return () => {
       if (engineRef.current) {
-        engineRef.current.destroy();
+        destroyBgmAudio(engineRef.current);
         engineRef.current = null;
       }
     };
@@ -444,7 +455,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
     }
 
     if (eng.isPlaying) {
-      eng.pause();
+      pauseBgm(eng);
       broadcastBgmEvent({
         url: active.url,
         action: 'pause',
@@ -454,8 +465,8 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
       if (!currentTrack || eng.src !== active.url) {
         await playTrackInternal(active, { seekTime: 0, broadcast: true });
       } else {
-        const curTime = eng.getCurrentTime();
-        await eng.play(eng.getFadeSec());
+        const curTime = getBgmCurrentTime(eng);
+        await playBgm(eng, getBgmFadeSec(eng));
         broadcastBgmEvent({
           url: active.url,
           action: 'play',
@@ -469,7 +480,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
 
   const handleToggleMuffled = () => {
     const eng = ensureEngine();
-    const muffled = eng.toggleMuffled();
+    const muffled = toggleBgmMuffled(eng);
     setIsMuffled(muffled);
   };
 
@@ -477,7 +488,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
     if (isPlLocked) return;
     setPlayMode(nextMode);
     playModeRef.current = nextMode;
-    engineRef.current?.setPlayMode(nextMode);
+    if (engineRef.current) setBgmPlayMode(engineRef.current, nextMode);
   };
 
   const handleToggleFade = () => {
@@ -485,7 +496,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
     const nextFade = !isLongFade;
     setIsLongFade(nextFade);
     isLongFadeRef.current = nextFade;
-    engineRef.current?.setLongFade(nextFade);
+    if (engineRef.current) setBgmLongFade(engineRef.current, nextFade);
     if (isConnected && channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
@@ -514,14 +525,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
   };
 
   const handleExportPlaylist = () => {
-    const json = serializePlaylistJson(playlist);
-    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ed4-bgm-playlist.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob('ed4-bgm-playlist.json', serializePlaylistJson(playlist), 'application/json;charset=utf-8');
     showNotice(`已导出 ${playlist.length} 首曲目`);
   };
 
@@ -549,7 +553,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
     const eng = engineRef.current;
     if (eng && currentTrackRef.current) {
       setAutoplayBlocked(false);
-      await eng.play(eng.getFadeSec());
+      await playBgm(eng, getBgmFadeSec(eng));
     }
   };
 
@@ -710,7 +714,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
             if (isPlLocked) return;
             const ratio = parseFloat(e.target.value) / 1000;
             setSeekPreviewRatio(ratio);
-            engineRef.current?.seekByRatio(ratio);
+            if (engineRef.current) seekBgmByRatio(engineRef.current, ratio);
           }}
           onPointerUp={() => setIsSeeking(false)}
           onPointerCancel={() => setIsSeeking(false)}

@@ -8,13 +8,35 @@ export const BGM_AUDIO_CONFIG = {
   FILTER_TRANSITION_TIME: 0.25,
 } as const;
 
-export interface AudioEngineCallbacks {
+export type AudioEngineCallbacks = {
   onStateChange: (state: { isPlaying: boolean; isMuffled: boolean }) => void;
   onTimeUpdate: (info: { currentTime: number; duration: number; progress: number }) => void;
   onEnded?: () => void;
   onError?: () => void;
   onAutoplayBlocked?: () => void;
-}
+};
+
+export type BgmAudioState = {
+  src: string;
+  title: string;
+  playMode: BgmPlayMode;
+  isLongFade: boolean;
+  callbacks: AudioEngineCallbacks;
+  audioCtx: AudioContext | null;
+  audioEl: HTMLAudioElement | null;
+  sourceNode: MediaElementAudioSourceNode | null;
+  filterNode: BiquadFilterNode | null;
+  gainNode: GainNode | null;
+  isInitialized: boolean;
+  isPlaying: boolean;
+  isMuffled: boolean;
+  isTailFading: boolean;
+  fadeTimerId: ReturnType<typeof setTimeout> | null;
+  boundTimeUpdate: (() => void) | null;
+  boundEnded: (() => void) | null;
+  boundError: (() => void) | null;
+  pendingSeekListener: (() => void) | null;
+};
 
 function rampParam(
   param: AudioParam,
@@ -32,331 +54,313 @@ function rampParam(
   }
 }
 
-/**
- * 保留油猴脚本 1.3.4 中的核心 Web Audio 引擎：
- * AudioContext + 800Hz BiquadFilterNode (Muffled 穿墙) + GainNode 0.75s / 6s 头尾淡入淡出
- */
-export class BgmAudioEngine {
-  src: string;
-  title: string;
-  playMode: BgmPlayMode;
-  isLongFade: boolean;
-  callbacks: AudioEngineCallbacks;
+export function createBgmAudio(
+  src: string,
+  callbacks: AudioEngineCallbacks,
+  title = '',
+  playMode: BgmPlayMode = 'loop',
+  isLongFade = false
+): BgmAudioState {
+  return {
+    src,
+    title,
+    playMode,
+    isLongFade,
+    callbacks,
+    audioCtx: null,
+    audioEl: null,
+    sourceNode: null,
+    filterNode: null,
+    gainNode: null,
+    isInitialized: false,
+    isPlaying: false,
+    isMuffled: false,
+    isTailFading: false,
+    fadeTimerId: null,
+    boundTimeUpdate: null,
+    boundEnded: null,
+    boundError: null,
+    pendingSeekListener: null,
+  };
+}
 
-  audioCtx: AudioContext | null = null;
-  audioEl: HTMLAudioElement | null = null;
-  sourceNode: MediaElementAudioSourceNode | null = null;
-  filterNode: BiquadFilterNode | null = null;
-  gainNode: GainNode | null = null;
+export function getBgmFadeSec(audio: BgmAudioState): number {
+  return audio.isLongFade
+    ? BGM_AUDIO_CONFIG.LONG_FADE_DURATION
+    : BGM_AUDIO_CONFIG.FADE_DURATION;
+}
 
-  isInitialized = false;
-  isPlaying = false;
-  isMuffled = false;
-  isTailFading = false;
-  fadeTimerId: ReturnType<typeof setTimeout> | null = null;
-  private boundTimeUpdate: (() => void) | null = null;
-  private boundEnded: (() => void) | null = null;
-  private boundError: (() => void) | null = null;
-  private pendingSeekListener: (() => void) | null = null;
+function initBgmAudioGraph(audio: BgmAudioState): void {
+  if (audio.isInitialized) return;
 
-  constructor(
-    src: string,
-    callbacks: AudioEngineCallbacks,
-    title = '',
-    playMode: BgmPlayMode = 'loop',
-    isLongFade = false
-  ) {
-    this.src = src;
-    this.title = title;
-    this.playMode = playMode;
-    this.isLongFade = isLongFade;
-    this.callbacks = callbacks;
-  }
+  const AudioCtx =
+    window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  audio.audioCtx = new AudioCtx();
 
-  getFadeSec(): number {
-    return this.isLongFade
-      ? BGM_AUDIO_CONFIG.LONG_FADE_DURATION
-      : BGM_AUDIO_CONFIG.FADE_DURATION;
-  }
+  audio.audioEl = new Audio();
+  audio.audioEl.crossOrigin = 'anonymous';
+  if (audio.src) audio.audioEl.src = audio.src;
+  audio.audioEl.loop = audio.playMode === 'loop';
+  audio.audioEl.preload = 'metadata';
 
-  initAudioGraph(): void {
-    if (this.isInitialized) return;
+  audio.boundEnded = () => {
+    audio.callbacks.onEnded?.();
+  };
+  audio.audioEl.addEventListener('ended', audio.boundEnded);
 
-    const AudioCtx =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    this.audioCtx = new AudioCtx();
+  audio.sourceNode = audio.audioCtx.createMediaElementSource(audio.audioEl);
+  audio.filterNode = audio.audioCtx.createBiquadFilter();
+  audio.filterNode.type = 'lowpass';
+  audio.filterNode.frequency.setValueAtTime(
+    audio.isMuffled ? BGM_AUDIO_CONFIG.FILTER_FREQ_MUFFLED : BGM_AUDIO_CONFIG.FILTER_FREQ_NORMAL,
+    audio.audioCtx.currentTime
+  );
+  audio.filterNode.Q.setValueAtTime(0.707, audio.audioCtx.currentTime);
 
-    this.audioEl = new Audio();
-    this.audioEl.crossOrigin = 'anonymous';
-    if (this.src) {
-      this.audioEl.src = this.src;
-    }
-    this.audioEl.loop = this.playMode === 'loop';
-    this.audioEl.preload = 'metadata';
+  audio.gainNode = audio.audioCtx.createGain();
+  audio.gainNode.gain.setValueAtTime(0.0001, audio.audioCtx.currentTime);
 
-    this.boundEnded = () => {
-      this.callbacks.onEnded?.();
-    };
-    this.audioEl.addEventListener('ended', this.boundEnded);
+  audio.sourceNode.connect(audio.filterNode);
+  audio.filterNode.connect(audio.gainNode);
+  audio.gainNode.connect(audio.audioCtx.destination);
 
-    this.sourceNode = this.audioCtx.createMediaElementSource(this.audioEl);
+  audio.boundTimeUpdate = () => {
+    const el = audio.audioEl!;
+    const currentTime = el.currentTime || 0;
+    const duration = el.duration || 0;
+    const remaining = duration - currentTime;
 
-    this.filterNode = this.audioCtx.createBiquadFilter();
-    this.filterNode.type = 'lowpass';
-    this.filterNode.frequency.setValueAtTime(
-      this.isMuffled ? BGM_AUDIO_CONFIG.FILTER_FREQ_MUFFLED : BGM_AUDIO_CONFIG.FILTER_FREQ_NORMAL,
-      this.audioCtx.currentTime
-    );
-    this.filterNode.Q.setValueAtTime(0.707, this.audioCtx.currentTime);
+    const tailDecision = shouldTriggerTailFade({
+      isLongFade: audio.isLongFade,
+      isPlaying: audio.isPlaying,
+      isTailFading: audio.isTailFading,
+      duration,
+      currentTime,
+      longFadeDuration: BGM_AUDIO_CONFIG.LONG_FADE_DURATION,
+    });
 
-    this.gainNode = this.audioCtx.createGain();
-    this.gainNode.gain.setValueAtTime(0.0001, this.audioCtx.currentTime);
-
-    this.sourceNode.connect(this.filterNode);
-    this.filterNode.connect(this.gainNode);
-    this.gainNode.connect(this.audioCtx.destination);
-
-    this.boundTimeUpdate = () => {
-      if (!this.audioEl || !this.gainNode || !this.audioCtx) return;
-      const currentTime = this.audioEl.currentTime || 0;
-      const duration = this.audioEl.duration || 0;
-      const remaining = duration - currentTime;
-
-      const tailDecision = shouldTriggerTailFade({
-        isLongFade: this.isLongFade,
-        isPlaying: this.isPlaying,
-        isTailFading: this.isTailFading,
-        duration,
-        currentTime,
-        longFadeDuration: BGM_AUDIO_CONFIG.LONG_FADE_DURATION,
-      });
-
-      if (tailDecision === 'start_tail_fade') {
-        this.isTailFading = true;
-        rampParam(this.gainNode.gain, 0.0001, remaining, this.audioCtx.currentTime);
-      } else if (tailDecision === 'cancel_tail_fade') {
-        this.isTailFading = false;
-        if (this.isPlaying) {
-          rampParam(this.gainNode.gain, 1.0, this.getFadeSec(), this.audioCtx.currentTime);
-        }
-      }
-
-      this.callbacks.onTimeUpdate({
-        currentTime,
-        duration,
-        progress: duration > 0 ? currentTime / duration : 0,
-      });
-    };
-
-    this.boundError = () => {
-      this.isPlaying = false;
-      this.callbacks.onStateChange({ isPlaying: false, isMuffled: this.isMuffled });
-      this.callbacks.onError?.();
-    };
-
-    this.audioEl.addEventListener('timeupdate', this.boundTimeUpdate);
-    this.audioEl.addEventListener('loadedmetadata', this.boundTimeUpdate);
-    this.audioEl.addEventListener('error', this.boundError);
-
-    this.isInitialized = true;
-  }
-
-  setPlayMode(mode: BgmPlayMode): void {
-    this.playMode = mode;
-    if (this.audioEl) {
-      this.audioEl.loop = mode === 'loop';
-    }
-  }
-
-  setLongFade(fade: boolean): void {
-    this.isLongFade = fade;
-  }
-
-  setTrack(url: string, title = ''): void {
-    const isSameUrl = this.src === url;
-    this.src = url;
-    this.title = title;
-    if (this.pendingSeekListener && this.audioEl) {
-      this.audioEl.removeEventListener('loadedmetadata', this.pendingSeekListener);
-      this.pendingSeekListener = null;
-    }
-    if (!isSameUrl && this.isInitialized && this.audioEl && this.gainNode && this.audioCtx) {
-      if (this.fadeTimerId) clearTimeout(this.fadeTimerId);
-      this.fadeTimerId = null;
-      this.isTailFading = false;
-      this.isPlaying = false;
-      this.audioEl.pause();
-      this.audioEl.crossOrigin = 'anonymous';
-      this.audioEl.src = url;
-      this.audioEl.loop = this.playMode === 'loop';
-      this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
-      this.gainNode.gain.setValueAtTime(0.0001, this.audioCtx.currentTime);
-      this.callbacks.onTimeUpdate({ currentTime: 0, duration: 0, progress: 0 });
-      this.callbacks.onStateChange({ isPlaying: false, isMuffled: this.isMuffled });
-    }
-  }
-
-  applySeek(currentTime?: number): void {
-    if (currentTime === undefined || !this.audioEl) return;
-    if (this.pendingSeekListener) {
-      this.audioEl.removeEventListener('loadedmetadata', this.pendingSeekListener);
-      this.pendingSeekListener = null;
-    }
-    const seek = () => {
-      if (!this.audioEl) return;
-      try {
-        this.audioEl.currentTime = Math.max(0, currentTime);
-      } catch {
-        // 忽略尚未就绪的 seek 异常
-      }
-    };
-    if (this.audioEl.readyState >= 1) {
-      seek();
-    } else {
-      this.pendingSeekListener = () => {
-        this.pendingSeekListener = null;
-        seek();
-      };
-      this.audioEl.addEventListener('loadedmetadata', this.pendingSeekListener, { once: true });
-    }
-  }
-
-  async play(fadeDuration = this.getFadeSec(), seekTime?: number): Promise<boolean> {
-    if (!this.src) return false;
-    this.initAudioGraph();
-    if (!this.audioCtx || !this.audioEl || !this.gainNode) return false;
-
-    if (this.audioCtx.state === 'suspended') {
-      try {
-        await this.audioCtx.resume();
-      } catch {
-        // 忽略尚未触发用户手势时的 resume 限制
+    if (tailDecision === 'start_tail_fade') {
+      audio.isTailFading = true;
+      rampParam(audio.gainNode!.gain, 0.0001, remaining, audio.audioCtx!.currentTime);
+    } else if (tailDecision === 'cancel_tail_fade') {
+      audio.isTailFading = false;
+      if (audio.isPlaying) {
+        rampParam(audio.gainNode!.gain, 1.0, getBgmFadeSec(audio), audio.audioCtx!.currentTime);
       }
     }
 
-    if (seekTime !== undefined) {
-      this.applySeek(seekTime);
-    }
+    audio.callbacks.onTimeUpdate({
+      currentTime,
+      duration,
+      progress: duration > 0 ? currentTime / duration : 0,
+    });
+  };
 
-    if (this.fadeTimerId) clearTimeout(this.fadeTimerId);
-    this.fadeTimerId = null;
-    this.isTailFading = false;
-    this.gainNode.gain.setValueAtTime(0.0001, this.audioCtx.currentTime);
-    rampParam(this.gainNode.gain, 1.0, fadeDuration, this.audioCtx.currentTime);
+  audio.boundError = () => {
+    audio.isPlaying = false;
+    audio.callbacks.onStateChange({ isPlaying: false, isMuffled: audio.isMuffled });
+    audio.callbacks.onError?.();
+  };
 
+  audio.audioEl.addEventListener('timeupdate', audio.boundTimeUpdate);
+  audio.audioEl.addEventListener('loadedmetadata', audio.boundTimeUpdate);
+  audio.audioEl.addEventListener('error', audio.boundError);
+  audio.isInitialized = true;
+}
+
+export function setBgmPlayMode(audio: BgmAudioState, mode: BgmPlayMode): void {
+  audio.playMode = mode;
+  if (audio.audioEl) audio.audioEl.loop = mode === 'loop';
+}
+
+export function setBgmLongFade(audio: BgmAudioState, fade: boolean): void {
+  audio.isLongFade = fade;
+}
+
+export function setBgmTrack(audio: BgmAudioState, url: string, title = ''): void {
+  const isSameUrl = audio.src === url;
+  audio.src = url;
+  audio.title = title;
+  if (audio.pendingSeekListener && audio.audioEl) {
+    audio.audioEl.removeEventListener('loadedmetadata', audio.pendingSeekListener);
+    audio.pendingSeekListener = null;
+  }
+  if (!isSameUrl && audio.isInitialized && audio.audioEl && audio.gainNode && audio.audioCtx) {
+    if (audio.fadeTimerId) clearTimeout(audio.fadeTimerId);
+    audio.fadeTimerId = null;
+    audio.isTailFading = false;
+    audio.isPlaying = false;
+    audio.audioEl.pause();
+    audio.audioEl.crossOrigin = 'anonymous';
+    audio.audioEl.src = url;
+    audio.audioEl.loop = audio.playMode === 'loop';
+    audio.gainNode.gain.cancelScheduledValues(audio.audioCtx.currentTime);
+    audio.gainNode.gain.setValueAtTime(0.0001, audio.audioCtx.currentTime);
+    audio.callbacks.onTimeUpdate({ currentTime: 0, duration: 0, progress: 0 });
+    audio.callbacks.onStateChange({ isPlaying: false, isMuffled: audio.isMuffled });
+  }
+}
+
+function applyBgmSeek(audio: BgmAudioState, currentTime: number): void {
+  const el = audio.audioEl;
+  if (!el) return;
+  if (audio.pendingSeekListener) {
+    el.removeEventListener('loadedmetadata', audio.pendingSeekListener);
+    audio.pendingSeekListener = null;
+  }
+  const seek = () => {
     try {
-      await this.audioEl.play();
-      this.isPlaying = true;
-      this.callbacks.onStateChange({ isPlaying: true, isMuffled: this.isMuffled });
-      return true;
-    } catch (err: unknown) {
-      const name = err instanceof Error ? err.name : '';
-      this.isPlaying = false;
-      this.callbacks.onStateChange({ isPlaying: false, isMuffled: this.isMuffled });
-      if (name === 'NotAllowedError') {
-        this.callbacks.onAutoplayBlocked?.();
-      } else if (name !== 'AbortError') {
-        this.callbacks.onError?.();
-      }
-      return false;
-    }
-  }
-
-  pause(fadeDuration = this.getFadeSec()): void {
-    if (!this.isInitialized || !this.audioEl || !this.gainNode || !this.audioCtx) return;
-    if (!this.isPlaying && this.audioEl.paused) return;
-
-    if (this.fadeTimerId) clearTimeout(this.fadeTimerId);
-    this.fadeTimerId = null;
-    this.isPlaying = false;
-    this.isTailFading = false;
-    this.callbacks.onStateChange({ isPlaying: false, isMuffled: this.isMuffled });
-
-    if (fadeDuration <= 0) {
-      this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
-      this.gainNode.gain.setValueAtTime(0.0001, this.audioCtx.currentTime);
-      this.audioEl.pause();
-    } else {
-      rampParam(this.gainNode.gain, 0.0001, fadeDuration, this.audioCtx.currentTime);
-      this.fadeTimerId = setTimeout(() => {
-        this.audioEl?.pause();
-      }, fadeDuration * 1000);
-    }
-  }
-
-  toggleMuffled(): boolean {
-    this.isMuffled = !this.isMuffled;
-    if (this.isInitialized && this.filterNode && this.audioCtx) {
-      const target = this.isMuffled
-        ? BGM_AUDIO_CONFIG.FILTER_FREQ_MUFFLED
-        : BGM_AUDIO_CONFIG.FILTER_FREQ_NORMAL;
-      rampParam(
-        this.filterNode.frequency,
-        target,
-        BGM_AUDIO_CONFIG.FILTER_TRANSITION_TIME,
-        this.audioCtx.currentTime,
-        true
-      );
-    }
-    this.callbacks.onStateChange({ isPlaying: this.isPlaying, isMuffled: this.isMuffled });
-    return this.isMuffled;
-  }
-
-  seekByRatio(ratio: number): void {
-    if (!this.audioEl || !this.audioEl.duration) return;
-    this.audioEl.currentTime = clampNumber(ratio, 0, 1) * this.audioEl.duration;
-  }
-
-  getCurrentTime(): number {
-    return this.audioEl?.currentTime || 0;
-  }
-
-  destroy(): void {
-    if (this.fadeTimerId) {
-      clearTimeout(this.fadeTimerId);
-      this.fadeTimerId = null;
-    }
-    if (this.audioEl) {
-      if (this.boundTimeUpdate) {
-        this.audioEl.removeEventListener('timeupdate', this.boundTimeUpdate);
-        this.audioEl.removeEventListener('loadedmetadata', this.boundTimeUpdate);
-      }
-      if (this.boundEnded) {
-        this.audioEl.removeEventListener('ended', this.boundEnded);
-      }
-      if (this.boundError) {
-        this.audioEl.removeEventListener('error', this.boundError);
-      }
-      if (this.pendingSeekListener) {
-        this.audioEl.removeEventListener('loadedmetadata', this.pendingSeekListener);
-      }
-      this.audioEl.pause();
-      this.audioEl.removeAttribute('src');
-      this.audioEl.load();
-    }
-    try {
-      this.sourceNode?.disconnect();
-      this.filterNode?.disconnect();
-      this.gainNode?.disconnect();
+      el.currentTime = Math.max(0, currentTime);
     } catch {
-      // 忽略已断开节点的异常
+      // 忽略尚未就绪的 seek 异常
     }
-    if (this.audioCtx && this.audioCtx.state !== 'closed') {
-      this.audioCtx.close().catch(() => {});
-    }
-    this.sourceNode = null;
-    this.filterNode = null;
-    this.gainNode = null;
-    this.audioEl = null;
-    this.audioCtx = null;
-    this.boundTimeUpdate = null;
-    this.boundEnded = null;
-    this.boundError = null;
-    this.pendingSeekListener = null;
-    this.isInitialized = false;
-    this.isPlaying = false;
-    this.isTailFading = false;
+  };
+  if (el.readyState >= 1) {
+    seek();
+  } else {
+    audio.pendingSeekListener = () => {
+      audio.pendingSeekListener = null;
+      seek();
+    };
+    el.addEventListener('loadedmetadata', audio.pendingSeekListener, { once: true });
   }
+}
+
+export async function playBgm(
+  audio: BgmAudioState,
+  fadeDuration = getBgmFadeSec(audio),
+  seekTime?: number
+): Promise<boolean> {
+  if (!audio.src) return false;
+  initBgmAudioGraph(audio);
+  const ctx = audio.audioCtx!;
+  const el = audio.audioEl!;
+  const gain = audio.gainNode!;
+
+  if (ctx.state === 'suspended') {
+    try {
+      await ctx.resume();
+    } catch {
+      // 忽略尚未触发用户手势时的 resume 限制
+    }
+  }
+
+  if (seekTime !== undefined) applyBgmSeek(audio, seekTime);
+
+  if (audio.fadeTimerId) clearTimeout(audio.fadeTimerId);
+  audio.fadeTimerId = null;
+  audio.isTailFading = false;
+  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+  rampParam(gain.gain, 1.0, fadeDuration, ctx.currentTime);
+
+  try {
+    await el.play();
+    audio.isPlaying = true;
+    audio.callbacks.onStateChange({ isPlaying: true, isMuffled: audio.isMuffled });
+    return true;
+  } catch (err: unknown) {
+    const name = err instanceof Error ? err.name : '';
+    audio.isPlaying = false;
+    audio.callbacks.onStateChange({ isPlaying: false, isMuffled: audio.isMuffled });
+    if (name === 'NotAllowedError') {
+      audio.callbacks.onAutoplayBlocked?.();
+    } else if (name !== 'AbortError') {
+      audio.callbacks.onError?.();
+    }
+    return false;
+  }
+}
+
+export function pauseBgm(audio: BgmAudioState, fadeDuration = getBgmFadeSec(audio)): void {
+  if (!audio.isInitialized || !audio.audioEl || !audio.gainNode || !audio.audioCtx) return;
+  if (!audio.isPlaying && audio.audioEl.paused) return;
+
+  if (audio.fadeTimerId) clearTimeout(audio.fadeTimerId);
+  audio.fadeTimerId = null;
+  audio.isPlaying = false;
+  audio.isTailFading = false;
+  audio.callbacks.onStateChange({ isPlaying: false, isMuffled: audio.isMuffled });
+
+  if (fadeDuration <= 0) {
+    audio.gainNode.gain.cancelScheduledValues(audio.audioCtx.currentTime);
+    audio.gainNode.gain.setValueAtTime(0.0001, audio.audioCtx.currentTime);
+    audio.audioEl.pause();
+  } else {
+    rampParam(audio.gainNode.gain, 0.0001, fadeDuration, audio.audioCtx.currentTime);
+    audio.fadeTimerId = setTimeout(() => {
+      audio.audioEl?.pause();
+    }, fadeDuration * 1000);
+  }
+}
+
+export function toggleBgmMuffled(audio: BgmAudioState): boolean {
+  audio.isMuffled = !audio.isMuffled;
+  if (audio.isInitialized && audio.filterNode && audio.audioCtx) {
+    const target = audio.isMuffled
+      ? BGM_AUDIO_CONFIG.FILTER_FREQ_MUFFLED
+      : BGM_AUDIO_CONFIG.FILTER_FREQ_NORMAL;
+    rampParam(
+      audio.filterNode.frequency,
+      target,
+      BGM_AUDIO_CONFIG.FILTER_TRANSITION_TIME,
+      audio.audioCtx.currentTime,
+      true
+    );
+  }
+  audio.callbacks.onStateChange({ isPlaying: audio.isPlaying, isMuffled: audio.isMuffled });
+  return audio.isMuffled;
+}
+
+export function seekBgmByRatio(audio: BgmAudioState, ratio: number): void {
+  if (!audio.audioEl || !audio.audioEl.duration) return;
+  audio.audioEl.currentTime = clampNumber(ratio, 0, 1) * audio.audioEl.duration;
+}
+
+export function getBgmCurrentTime(audio: BgmAudioState): number {
+  return audio.audioEl?.currentTime || 0;
+}
+
+export function destroyBgmAudio(audio: BgmAudioState): void {
+  if (audio.fadeTimerId) {
+    clearTimeout(audio.fadeTimerId);
+    audio.fadeTimerId = null;
+  }
+  if (audio.audioEl) {
+    if (audio.boundTimeUpdate) {
+      audio.audioEl.removeEventListener('timeupdate', audio.boundTimeUpdate);
+      audio.audioEl.removeEventListener('loadedmetadata', audio.boundTimeUpdate);
+    }
+    if (audio.boundEnded) audio.audioEl.removeEventListener('ended', audio.boundEnded);
+    if (audio.boundError) audio.audioEl.removeEventListener('error', audio.boundError);
+    if (audio.pendingSeekListener) {
+      audio.audioEl.removeEventListener('loadedmetadata', audio.pendingSeekListener);
+    }
+    audio.audioEl.pause();
+    audio.audioEl.removeAttribute('src');
+    audio.audioEl.load();
+  }
+  try {
+    audio.sourceNode?.disconnect();
+    audio.filterNode?.disconnect();
+    audio.gainNode?.disconnect();
+  } catch {
+    // 忽略已断开节点的异常
+  }
+  if (audio.audioCtx && audio.audioCtx.state !== 'closed') {
+    audio.audioCtx.close().catch(() => {});
+  }
+  audio.sourceNode = null;
+  audio.filterNode = null;
+  audio.gainNode = null;
+  audio.audioEl = null;
+  audio.audioCtx = null;
+  audio.boundTimeUpdate = null;
+  audio.boundEnded = null;
+  audio.boundError = null;
+  audio.pendingSeekListener = null;
+  audio.isInitialized = false;
+  audio.isPlaying = false;
+  audio.isTailFading = false;
 }
 
 export function unlockBrowserAudio(): void {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { getPlDerivedView } from '../engine/combatHelpers';
 import type { RoomCharacterRow, RoomSession } from '../engine/supabaseSync';
 import { BgmPlayer } from './BgmPlayer';
+import { btnCls, btnPrimaryCls, inputCls } from './uiShared';
 
 interface RightSidebarProps {
   round: number;
@@ -10,10 +11,12 @@ interface RightSidebarProps {
   pl: any;
   monsters: any[];
   gmBlind: boolean;
+  gmSecretRoll: boolean;
   pendingReaction: any;
   logs: any[];
   roomSession?: RoomSession;
   roomCharacters?: RoomCharacterRow[];
+  onToggleGmSecretRoll: (checked: boolean) => void;
   onRollAllInitiative: () => void;
   onNextTurn: () => void;
   onNextRound: () => void;
@@ -23,13 +26,6 @@ interface RightSidebarProps {
   onRollFreeTest: (step: number, dn: string, karma: boolean) => void;
   onClearLogs: () => void;
 }
-
-const inputCls =
-  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
-const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer whitespace-nowrap';
-const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer whitespace-nowrap';
 
 function renderExplodingTrace(detail: string) {
   const parts = detail.split(/((?:业力)?D\d+\[[^\]]*!→[^\]]*\])/g);
@@ -63,10 +59,12 @@ export function RightSidebar(props: RightSidebarProps) {
     pl,
     monsters,
     gmBlind,
+    gmSecretRoll,
     pendingReaction,
     logs,
     roomSession,
     roomCharacters = [],
+    onToggleGmSecretRoll,
     onRollAllInitiative,
     onNextTurn,
     onNextRound,
@@ -340,6 +338,17 @@ export function RightSidebar(props: RightSidebarProps) {
             />
             业力
           </label>
+          {!isPlLocked && (
+            <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={gmSecretRoll}
+                onChange={(e) => onToggleGmSecretRoll(e.target.checked)}
+                className="accent-primary"
+              />
+              暗骰
+            </label>
+          )}
           <button type="button" onClick={() => onRollFreeTest(freeStep, freeDn, freeKarma)} className={btnPrimaryCls}>
             掷骰
           </button>
@@ -370,6 +379,11 @@ export function RightSidebar(props: RightSidebarProps) {
                         : 'text-foreground/90'
                     }`}
                   >
+                    {l.isBlindRoll && (
+                      <span className="mr-1 inline-block rounded border border-border bg-muted px-1 py-0 font-mono text-[10px] font-medium text-muted-foreground">
+                        [暗骰]
+                      </span>
+                    )}
                     {l.text}
                   </span>
                   <span className="shrink-0 font-mono text-[10px] text-muted-foreground tabular-nums">{l.time}</span>

@@ -7,8 +7,7 @@ declare const ED4Engine: {
   RACES: Record<string, any>;
   DISCIPLINES: Record<string, any>;
   SPELLS_DB: Array<any>;
-  SPELL_ALIASES: Record<string, string>;
-  LEGACY_SPELL_ID_MAP: Record<string, string>;
+  SPELL_LOOKUP_MAP: Map<string, any>;
   WEAVING_KEYWORDS: string[];
   ACTION_TYPES: readonly ['标准', '简单', '自由', '持续', '无'];
   TALENT_SKILL_RULES: Array<{ keys: string[]; action: '标准' | '简单' | '自由' | '持续' | '无'; strain: number }>;

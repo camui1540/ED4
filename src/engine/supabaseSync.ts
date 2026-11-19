@@ -1,7 +1,14 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
-import { getPlDerivedView } from './combatHelpers';
+import { formatTime, getPlDerivedView } from './combatHelpers';
 
 export type RoomRole = 'gm' | 'pl';
+
+export type BlindRollBroadcastPayload = {
+  id: string;
+  type: 'BLIND_ROLL';
+  sender: string;
+  timestamp: number;
+};
 
 export interface RoomSession {
   connected: boolean;
@@ -102,6 +109,18 @@ export function buildRoomInviteUrl(roomCode: string): string {
   return `${base}?room=${encodeURIComponent(clean)}`;
 }
 
+// 序列化房间共享核心战斗状态用于去重比对
+export function serializeRoomCore(source: any): string {
+  return JSON.stringify({
+    round: Number(source.round) || 1,
+    turnIndex: Number(source.turnIndex) || 0,
+    initiativeList: Array.isArray(source.initiativeList) ? source.initiativeList : [],
+    monsters: Array.isArray(source.monsters) ? source.monsters : [],
+    pendingReaction: source.pendingReaction ?? null,
+    gmBlind: Boolean(source.gmBlind),
+  });
+}
+
 // 构造写入 rooms.state 的共享战斗快照
 export function buildRoomStatePayload(state: any, clientId: string) {
   return {
@@ -172,7 +191,7 @@ export function buildCharacterSyncPayload(params: {
   };
 }
 
-// 构造写入 room_logs 的战报行
+// 构造写入 room_logs 的战报行（暗骰兜底脱敏，严禁写入点数明细）
 export function buildLogInsertPayload(params: {
   roomCode: string;
   clientId: string;
@@ -181,6 +200,20 @@ export function buildLogInsertPayload(params: {
   log: any;
 }) {
   const { roomCode, clientId, senderName, senderRole, log } = params;
+  if (log.isBlindRoll) {
+    return {
+      id: String(log.id),
+      room_code: roomCode,
+      sender_id: clientId,
+      sender_name: 'GM',
+      sender_role: 'gm' as RoomRole,
+      text: 'GM 进行了暗骰',
+      detail: '',
+      type: 'BLIND_ROLL',
+      blind_text: '',
+      time: String(log.time || ''),
+    };
+  }
   return {
     id: String(log.id),
     room_code: roomCode,
@@ -192,6 +225,53 @@ export function buildLogInsertPayload(params: {
     type: String(log.type || ''),
     blind_text: String(log.blindText || ''),
     time: String(log.time || ''),
+  };
+}
+
+// 发送端构造极简扁平暗骰广播消息（剥离所有点数、Step 与明细）
+export function buildBlindRollPayload(log: { id: string }, sender = 'GM'): BlindRollBroadcastPayload {
+  return {
+    id: String(log.id),
+    type: 'BLIND_ROLL',
+    sender,
+    timestamp: Date.now(),
+  };
+}
+
+// 玩家端将 BLIND_ROLL 广播转为极简战报行
+export function mapBlindRollToLog(payload: Partial<BlindRollBroadcastPayload> | null) {
+  const ts = typeof payload?.timestamp === 'number' ? payload.timestamp : Date.now();
+  return {
+    id: String(payload?.id || `blind_${ts}`),
+    time: formatTime(new Date(ts)),
+    text: 'GM 进行了暗骰',
+    detail: '',
+    type: 'BLIND_ROLL',
+  };
+}
+
+// 统一映射远端 room_logs 记录并按角色与脱敏开关过滤
+export function mapRemoteLogRow(row: any, role: RoomRole | null, gmBlind: boolean) {
+  if (row?.type === 'BLIND_ROLL') {
+    return {
+      id: String(row.id),
+      time: row.time || formatTime(),
+      text: 'GM 进行了暗骰',
+      detail: '',
+      type: 'BLIND_ROLL',
+    };
+  }
+  const masked = role === 'pl' && gmBlind && Boolean(row?.blind_text);
+  return {
+    id: String(row.id),
+    time: row.time || formatTime(),
+    text: masked
+      ? row.blind_text
+      : row.sender_name && !String(row.text || '').startsWith(row.sender_name)
+        ? `[${row.sender_name}] ${row.text}`
+        : row.text,
+    detail: masked ? '（GM脱敏模式已隐藏具体抗性与阈值）' : row.detail || '',
+    type: row.type || '',
   };
 }
 
@@ -315,17 +395,22 @@ export function subscribeRoomRealtime(
   handlers: {
     onRoomState: (nextState: any) => void;
     onLogInsert: (row: any) => void;
+    onBlindRoll?: (payload: BlindRollBroadcastPayload) => void;
     onCharacterChange: (
       eventType: 'INSERT' | 'UPDATE' | 'DELETE',
       newRow: RoomCharacterRow | null,
       oldRow: Partial<RoomCharacterRow> | null
     ) => void;
   }
-): () => void {
-  if (!supabase || !roomCode) return () => {};
+): { unsubscribe: () => void; broadcastBlindRoll: (payload: BlindRollBroadcastPayload) => void } {
+  if (!supabase || !roomCode) {
+    return { unsubscribe: () => {}, broadcastBlindRoll: () => {} };
+  }
 
   const channel: RealtimeChannel = supabase
-    .channel(`ed4-room-${roomCode}`)
+    .channel(`ed4-room-${roomCode}`, {
+      config: { broadcast: { self: false } },
+    })
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `code=eq.${roomCode}` },
@@ -342,6 +427,11 @@ export function subscribeRoomRealtime(
         if (payload.new) handlers.onLogInsert(payload.new);
       }
     )
+    .on('broadcast', { event: 'BLIND_ROLL' }, ({ payload }) => {
+      if (payload && payload.type === 'BLIND_ROLL') {
+        handlers.onBlindRoll?.(payload as BlindRollBroadcastPayload);
+      }
+    })
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'room_characters', filter: `room_code=eq.${roomCode}` },
@@ -355,70 +445,12 @@ export function subscribeRoomRealtime(
     )
     .subscribe();
 
-  return () => {
-    supabase?.removeChannel(channel);
+  return {
+    unsubscribe: () => {
+      supabase?.removeChannel(channel);
+    },
+    broadcastBlindRoll: (payload: BlindRollBroadcastPayload) => {
+      channel.send({ type: 'broadcast', event: 'BLIND_ROLL', payload });
+    },
   };
 }
-
-export const SUPABASE_SETUP_SQL = `create table if not exists public.rooms (
-  code text primary key,
-  state jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists public.room_logs (
-  id text primary key,
-  room_code text not null references public.rooms(code) on delete cascade,
-  sender_id text not null default '',
-  sender_name text not null default '',
-  sender_role text not null default 'pl',
-  text text not null default '',
-  detail text not null default '',
-  type text not null default '',
-  blind_text text not null default '',
-  time text not null default '',
-  created_at timestamptz not null default now()
-);
-
-create table if not exists public.room_characters (
-  id text primary key,
-  room_code text not null references public.rooms(code) on delete cascade,
-  client_id text not null,
-  nickname text not null default '',
-  role text not null default 'pl',
-  char_name text not null default '',
-  race_id text not null default 'human',
-  discipline_id text not null default 'warrior',
-  circle integer not null default 1,
-  current_damage integer not null default 0,
-  blood_damage integer not null default 0,
-  wounds integer not null default 0,
-  eff_uncon integer not null default 30,
-  eff_death integer not null default 40,
-  karma_current integer not null default 0,
-  karma_max integer not null default 0,
-  init_step integer not null default 5,
-  dex_val integer not null default 10,
-  pd integer not null default 8,
-  md integer not null default 8,
-  pa integer not null default 0,
-  ma integer not null default 0,
-  statuses jsonb not null default '{}'::jsonb,
-  options jsonb not null default '{}'::jsonb,
-  spells_summary jsonb not null default '[]'::jsonb,
-  gear_summary jsonb not null default '[]'::jsonb,
-  background text not null default '',
-  updated_at timestamptz not null default now()
-);
-
-alter table public.room_characters add column if not exists background text not null default '';
-
-alter publication supabase_realtime add table public.rooms, public.room_logs, public.room_characters;
-
-alter table public.rooms enable row level security;
-alter table public.room_logs enable row level security;
-alter table public.room_characters enable row level security;
-
-create policy "rooms_anon_all" on public.rooms for all using (true) with check (true);
-create policy "room_logs_anon_all" on public.room_logs for all using (true) with check (true);
-create policy "room_characters_anon_all" on public.room_characters for all using (true) with check (true);`;

@@ -9,6 +9,16 @@ import {
   type PendingSpellCast,
 } from '../engine/spellRules';
 
+import {
+  btnCls,
+  btnPrimaryCls,
+  btnSmCls,
+  getDisciplineBonusTags,
+  inputCls,
+  noSpinInputCls,
+  sectionCls,
+} from './uiShared';
+
 interface PlSheetViewProps {
   pl: any;
   monsters: any[];
@@ -44,18 +54,6 @@ interface PlSheetViewProps {
   onOpenExport: () => void;
   onLog: (text: string, detail?: string, type?: string) => void;
 }
-
-const inputCls =
-  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
-const noSpinInputCls =
-  `${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`;
-const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const btnSmCls =
-  'inline-flex h-6 items-center justify-center rounded border border-border bg-secondary px-2 text-[11px] font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const sectionCls = 'tactile-card p-3';
 
 export function PlSheetView(props: PlSheetViewProps) {
   const {
@@ -131,15 +129,7 @@ export function PlSheetView(props: PlSheetViewProps) {
   const matrixSpells = (pl.spells || []).filter((sp: any) => sp.inMatrix !== false);
   const grimoireSpells = (pl.spells || []).filter((sp: any) => sp.inMatrix === false);
 
-  const bonusTags = [
-    `耐久 +${d.durabilityTotal}`,
-    prog.pd ? `门类物防 +${prog.pd}` : '',
-    prog.md ? `门类秘防 +${prog.md}` : '',
-    prog.sd ? `门类社防 +${prog.sd}` : '',
-    prog.init ? `门类先攻 +${prog.init}` : '',
-    prog.rec ? `门类回复 +${prog.rec}` : '',
-    prog.ma ? `门类秘甲 +${prog.ma}` : '',
-  ].filter(Boolean);
+  const bonusTags = getDisciplineBonusTags(d);
 
   // 统一更新装备或脉路物品列表项
   const updateListField = (listKey: 'gear' | 'threadItems', idx: number, field: string, val: any) => {

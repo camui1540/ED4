@@ -1,6 +1,7 @@
 import React from 'react';
 import ED4Engine from '../engine/ed4_engine.js';
 import { getEffectiveActionMod, getPlDerivedView } from '../engine/combatHelpers';
+import { getDisciplineBonusTags } from './uiShared';
 
 export type PdfPrintMode = 'bw' | 'theme';
 
@@ -86,15 +87,7 @@ export function PrintSheetView({ pl, printMode = 'bw' }: PrintSheetViewProps) {
   const scInfo = ED4Engine.getSpellcastingStep(pl, d);
   const twInfo = ED4Engine.getThreadWeavingStep(pl, d);
 
-  const bonusTags = [
-    `耐久 +${d.durabilityTotal}`,
-    prog.pd ? `门类物防 +${prog.pd}` : '',
-    prog.md ? `门类秘防 +${prog.md}` : '',
-    prog.sd ? `门类社防 +${prog.sd}` : '',
-    prog.init ? `门类先攻 +${prog.init}` : '',
-    prog.rec ? `门类回复 +${prog.rec}` : '',
-    prog.ma ? `门类秘甲 +${prog.ma}` : '',
-  ].filter(Boolean);
+  const bonusTags = getDisciplineBonusTags(d);
 
   return (
     <div className={`print-sheet hidden print:block ${c.page}`}>

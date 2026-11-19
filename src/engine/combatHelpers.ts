@@ -189,38 +189,65 @@ export function createMonsterInstance(tpl: any, existingCount: number, totalToAd
   };
 }
 
-// 结算怪物受创（复用 ED4Engine.resolveDamage 与 ED4Engine.rollStepTest）
-export function applyDamageToMonsterPure(
-  monster: any,
-  rawDamage: number,
-  armorType: 'pa' | 'ma' | 'none' = 'pa',
-  isKnockdownOnly = false,
-  isStun = false,
-  sourceName = ''
-) {
-  const armor = armorType === 'none' ? 0 : (Number(monster[armorType]) || 0);
-  const net = Math.max(0, rawDamage - armor);
-  const next = { ...monster };
+// 统一受创、负伤与击倒结算核心（按目标类型分流）
+function applyDamageCore(params: {
+  targetType: 'monster' | 'pl';
+  name: string;
+  rawDamage: number;
+  armor: number;
+  currentDamage: number;
+  wounds: number;
+  uncon: number;
+  death: number;
+  woundThreshold: number;
+  hasUncon: boolean;
+  getKdStep: (nextWounds: number) => number;
+  isKnockdownOnly: boolean;
+  isStun: boolean;
+  sourceName: string;
+}) {
+  const {
+    targetType,
+    name,
+    rawDamage,
+    armor,
+    currentDamage,
+    wounds,
+    uncon,
+    death,
+    woundThreshold,
+    hasUncon,
+    getKdStep,
+    isKnockdownOnly,
+    isStun,
+    sourceName,
+  } = params;
+  const isMonster = targetType === 'monster';
 
   if (isKnockdownOnly) {
+    const net = Math.max(0, rawDamage - armor);
     if (net > 0) {
-      const kdStep = Math.max(1, next.kdStep - next.wounds);
-      const kdRes = ED4Engine.rollStepTest(kdStep, { dn: net, isAction: true });
-      if (!kdRes.isSuccess) next.knockedDown = true;
+      const kdRes = ED4Engine.rollStepTest(getKdStep(wounds), { dn: net, isAction: true });
       return {
-        monster: next,
+        nextDamage: currentDamage,
+        nextWounds: wounds,
+        knockedDown: !kdRes.isSuccess,
+        harried: false,
         log: {
-          text: `${sourceName} 对 ${next.name} 发动击倒攻击（击倒难度 ${net}）→ ${kdRes.isSuccess ? '站稳' : '被击倒倒地'}`,
+          text: `${sourceName} 对 ${name} 发动击倒攻击（${isMonster ? '击倒难度' : '难度'} ${net}）→ ${kdRes.isSuccess ? '站稳' : '被击倒倒地'}`,
           detail: kdRes.trace,
           type: kdRes.isSuccess ? '' : 'warn',
-          blindText: `${sourceName} 对 ${next.name} 发动击倒攻击 → ${kdRes.isSuccess ? '目标站稳' : '目标被击倒'}`,
+          blindText: isMonster ? `${sourceName} 对 ${name} 发动击倒攻击 → ${kdRes.isSuccess ? '目标站稳' : '目标被击倒'}` : '',
         },
       };
     }
     return {
-      monster: next,
+      nextDamage: currentDamage,
+      nextWounds: wounds,
+      knockedDown: false,
+      harried: false,
       log: {
-        text: `${sourceName} 对 ${next.name} 的击倒攻击被护甲完全抵消`,
+        text: `${sourceName} 对 ${name} 的击倒攻击被护甲${isMonster ? '完全' : ''}抵消`,
         detail: '',
         type: '',
         blindText: '',
@@ -231,45 +258,92 @@ export function applyDamageToMonsterPure(
   const dmgResult = ED4Engine.resolveDamage({
     rawDamage,
     armor,
-    currentDamage: next.currentDamage,
-    uncon: Number(next.uncon) || 999,
-    death: Number(next.death) || 999,
-    woundThreshold: next.woundThreshold,
+    currentDamage,
+    uncon,
+    death,
+    woundThreshold,
     isStun,
   });
 
-  next.currentDamage = dmgResult.nextDamage;
-  let woundMsg = '';
+  let nextWounds = wounds;
+  let knockedDown = false;
+  let harried = false;
+  let extra = '';
 
   if (!isStun && dmgResult.causedWound) {
-    next.wounds += 1;
-    woundMsg = '，造成 1 处负伤';
-    if (dmgResult.net >= next.woundThreshold + 5) {
-      const kdDn = dmgResult.net - next.woundThreshold;
-      const kdRes = ED4Engine.rollStepTest(Math.max(1, next.kdStep - next.wounds), { dn: kdDn, isAction: true });
+    nextWounds += 1;
+    extra = isMonster ? '，造成 1 处负伤' : '，承受 1 处负伤';
+    if (dmgResult.net >= woundThreshold + 5) {
+      const kdRes = ED4Engine.rollStepTest(getKdStep(nextWounds), { dn: dmgResult.net - woundThreshold, isAction: true });
       if (!kdRes.isSuccess) {
-        next.knockedDown = true;
-        woundMsg += '并击倒目标';
+        knockedDown = true;
+        extra += isMonster ? '并击倒目标' : '并被击倒';
       }
     }
   } else if (isStun && dmgResult.causedWound) {
-    next.harried = true;
-    woundMsg = '，目标陷入受扰';
+    harried = true;
+    extra = isMonster ? '，目标陷入受扰' : '，陷入受扰状态';
   }
 
-  const statusFlag = dmgResult.isDead ? '【已死亡】' : (next.uncon !== 'NA' && dmgResult.isUnconscious ? '【意识丧失】' : '');
+  const statusFlag = dmgResult.isDead
+    ? (isMonster ? '【已死亡】' : '【角色死亡】')
+    : (hasUncon && dmgResult.isUnconscious ? '【意识丧失】' : '');
+
   return {
-    monster: next,
+    nextDamage: dmgResult.nextDamage,
+    nextWounds,
+    knockedDown,
+    harried,
     log: {
-      text: `${sourceName} 对 ${next.name} 造成 ${dmgResult.net} 点${isStun ? '震慑' : ''}伤害（原始 ${rawDamage} - 护甲 ${armor}）${woundMsg} ${statusFlag}`,
-      detail: `当前累计伤害 ${next.currentDamage} / 死亡 ${next.death}`,
-      type: 'hit',
-      blindText: `${sourceName} 重创 ${next.name}${woundMsg} ${statusFlag}`,
+      text: `${sourceName} 对 ${name} 造成 ${dmgResult.net} 点${isMonster && isStun ? '震慑' : ''}伤害（原始 ${rawDamage} - 护甲 ${armor}）${extra} ${statusFlag}`,
+      detail: isMonster
+        ? `当前累计伤害 ${dmgResult.nextDamage} / 死亡 ${death}`
+        : `当前伤害 ${dmgResult.nextDamage} / 意识丧失 ${uncon} / 死亡 ${death}`,
+      type: isMonster ? 'hit' : 'fail',
+      blindText: isMonster ? `${sourceName} 重创 ${name}${extra} ${statusFlag}` : '',
     },
   };
 }
 
-// 结算玩家受创（复用 ED4Engine.resolveDamage 与 ED4Engine.rollStepTest）
+// 结算怪物受创
+export function applyDamageToMonsterPure(
+  monster: any,
+  rawDamage: number,
+  armorType: 'pa' | 'ma' | 'none' = 'pa',
+  isKnockdownOnly = false,
+  isStun = false,
+  sourceName = ''
+) {
+  const armor = armorType === 'none' ? 0 : (Number(monster[armorType]) || 0);
+  const res = applyDamageCore({
+    targetType: 'monster',
+    name: monster.name,
+    rawDamage,
+    armor,
+    currentDamage: monster.currentDamage,
+    wounds: monster.wounds,
+    uncon: Number(monster.uncon) || 999,
+    death: Number(monster.death) || 999,
+    woundThreshold: monster.woundThreshold,
+    hasUncon: monster.uncon !== 'NA',
+    getKdStep: (w) => Math.max(1, monster.kdStep - w),
+    isKnockdownOnly,
+    isStun,
+    sourceName,
+  });
+  return {
+    monster: {
+      ...monster,
+      currentDamage: res.nextDamage,
+      wounds: res.nextWounds,
+      knockedDown: monster.knockedDown || res.knockedDown,
+      harried: monster.harried || res.harried,
+    },
+    log: res.log,
+  };
+}
+
+// 结算玩家受创
 export function applyDamageToPlPure(
   pl: any,
   rawDamage: number,
@@ -280,68 +354,35 @@ export function applyDamageToPlPure(
 ) {
   const d = getPlDerivedView(pl);
   const armor = armorType === 'none' ? 0 : (armorType === 'ma' ? d.ma : d.pa);
-  const next = { ...pl, statuses: { ...pl.statuses } };
-  const wb = next.talents.find((t: any) => t.name.includes('负伤平衡') || t.name.toLowerCase().includes('wound balance'));
-
-  if (isKnockdownOnly) {
-    const net = Math.max(0, rawDamage - armor);
-    if (net > 0) {
-      const kdStep = Math.max(1, d.steps.STR + (wb ? wb.rank : 0) + getEffectiveActionMod(next));
-      const kdRes = ED4Engine.rollStepTest(kdStep, { dn: net, isAction: true });
-      if (!kdRes.isSuccess) next.statuses.knockedDown = true;
-      return {
-        pl: next,
-        log: {
-          text: `${sourceName} 对 ${next.name} 发动击倒攻击（难度 ${net}）→ ${kdRes.isSuccess ? '站稳' : '被击倒倒地'}`,
-          detail: kdRes.trace,
-          type: kdRes.isSuccess ? '' : 'warn',
-        },
-      };
-    }
-    return {
-      pl: next,
-      log: { text: `${sourceName} 对 ${next.name} 的击倒攻击被护甲抵消`, detail: '', type: '' },
-    };
-  }
-
-  const dmgResult = ED4Engine.resolveDamage({
+  const wb = pl.talents.find((t: any) => t.name.includes('负伤平衡') || t.name.toLowerCase().includes('wound balance'));
+  const res = applyDamageCore({
+    targetType: 'pl',
+    name: pl.name,
     rawDamage,
     armor,
-    currentDamage: next.currentDamage,
+    currentDamage: pl.currentDamage,
+    wounds: pl.wounds,
     uncon: d.effUncon,
     death: d.effDeath,
     woundThreshold: d.woundThreshold,
+    hasUncon: true,
+    getKdStep: (w) => Math.max(1, d.steps.STR + (wb ? wb.rank : 0) + getEffectiveActionMod({ ...pl, wounds: w })),
+    isKnockdownOnly,
     isStun,
+    sourceName,
   });
-
-  next.currentDamage = dmgResult.nextDamage;
-  let extra = '';
-
-  if (!isStun && dmgResult.causedWound) {
-    next.wounds += 1;
-    extra = '，承受 1 处负伤';
-    if (dmgResult.net >= d.woundThreshold + 5) {
-      const kdDn = dmgResult.net - d.woundThreshold;
-      const kdStep = Math.max(1, d.steps.STR + (wb ? wb.rank : 0) + getEffectiveActionMod(next));
-      const kdRes = ED4Engine.rollStepTest(kdStep, { dn: kdDn, isAction: true });
-      if (!kdRes.isSuccess) {
-        next.statuses.knockedDown = true;
-        extra += '并被击倒';
-      }
-    }
-  } else if (isStun && dmgResult.causedWound) {
-    next.statuses.harried = true;
-    extra = '，陷入受扰状态';
-  }
-
-  const stateText = dmgResult.isDead ? '【角色死亡】' : (dmgResult.isUnconscious ? '【意识丧失】' : '');
   return {
-    pl: next,
-    log: {
-      text: `${sourceName} 对 ${next.name} 造成 ${dmgResult.net} 点伤害（原始 ${rawDamage} - 护甲 ${armor}）${extra} ${stateText}`,
-      detail: `当前伤害 ${next.currentDamage} / 意识丧失 ${d.effUncon} / 死亡 ${d.effDeath}`,
-      type: 'fail',
+    pl: {
+      ...pl,
+      currentDamage: res.nextDamage,
+      wounds: res.nextWounds,
+      statuses: {
+        ...pl.statuses,
+        knockedDown: pl.statuses.knockedDown || res.knockedDown,
+        harried: pl.statuses.harried || res.harried,
+      },
     },
+    log: res.log,
   };
 }
 

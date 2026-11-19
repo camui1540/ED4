@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { btnCls, btnPrimaryCls, inputCls } from './uiShared';
 
 interface GmMonsterViewProps {
   plName: string;
@@ -6,6 +7,8 @@ interface GmMonsterViewProps {
   templates: any[];
   monsters: any[];
   showAddForm: boolean;
+  gmSecretRoll: boolean;
+  onToggleGmSecretRoll: (checked: boolean) => void;
   onToggleAddForm: () => void;
   onSaveTemplate: (tpl: any) => void;
   onDeleteTemplate: (templateId: string) => void;
@@ -16,13 +19,6 @@ interface GmMonsterViewProps {
   onToggleMonsterFlag: (instanceId: string, flag: 'knockedDown' | 'blindsided' | 'harried') => void;
   onManualApplyDamage: (target: string, rawDmg: number, armorType: 'pa' | 'ma') => void;
 }
-
-const inputCls =
-  'h-7 rounded border border-input bg-background px-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none';
-const btnCls =
-  'inline-flex h-7 items-center justify-center rounded border border-border bg-secondary px-2.5 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
-const btnPrimaryCls =
-  'inline-flex h-7 items-center justify-center rounded border border-primary bg-primary px-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-40 cursor-pointer whitespace-nowrap';
 
 const DEFAULT_FORM = {
   name: '',
@@ -48,6 +44,8 @@ export function GmMonsterView(props: GmMonsterViewProps) {
     templates,
     monsters,
     showAddForm,
+    gmSecretRoll,
+    onToggleGmSecretRoll,
     onToggleAddForm,
     onSaveTemplate,
     onDeleteTemplate,
@@ -183,6 +181,15 @@ export function GmMonsterView(props: GmMonsterViewProps) {
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
           <span className="font-serif text-sm font-semibold text-card-foreground">已加入战斗的怪物 ({monsters.length})</span>
           <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={gmSecretRoll}
+                onChange={(e) => onToggleGmSecretRoll(e.target.checked)}
+                className="accent-primary"
+              />
+              暗骰
+            </label>
             {plTargets.length > 0 && (
               <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span>攻击目标</span>

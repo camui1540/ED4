@@ -10,6 +10,7 @@ import {
   type RoomSession,
 } from '../engine/supabaseSync';
 import { unlockBrowserAudio } from '../engine/bgmAudioEngine';
+import { copyText, downloadBlob } from '../engine/browserUtils';
 
 interface SpellJsonModalProps {
   open: boolean;
@@ -21,21 +22,13 @@ export function SpellJsonModal({ open, onClose, onCopied }: SpellJsonModalProps)
   if (!open) return null;
   const jsonStr = JSON.stringify(ED4Engine.SPELLS_DB, null, 2);
 
-  const handleCopy = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(jsonStr);
-    }
+  const handleCopy = async () => {
+    await copyText(jsonStr);
     onCopied();
   };
 
   const handleDownload = () => {
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ed4_spells.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadBlob('ed4_spells.json', jsonStr, 'application/json');
   };
 
   return (
@@ -136,7 +129,7 @@ export function ManualModal({ open, onClose }: ManualModalProps) {
             <h3 className="mb-1 font-semibold text-foreground">4. GM 面板、先攻与反应</h3>
             <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
               <li>在怪物面板可维护模板并生成怪物；右侧先攻栏支持全员投先攻、顺位与轮次推进、全队休整及待确认反应（回避打击/反击）。</li>
-              <li>顶部「GM脱敏」可在战报与目标选项中隐藏敌方精确防御与血量阈值。</li>
+              <li>顶部「GM脱敏」可在战报与目标选项中隐藏敌方精确防御与血量阈值；GM 视角掷骰区勾选「暗骰」时，完整点数仅留存 GM 本地并标记 [暗骰]，联机广播仅向玩家端提示「GM 进行了暗骰」。</li>
             </ul>
           </div>
           <div>

@@ -32,81 +32,21 @@ const RACES = {
     };
 
     const DISCIPLINES = {
-      swordmaster: {
-        name: '剑术大师', en: 'Swordmaster', aliases: ['剑术大师', '剑圣', 'Swordmaster'],
-        durability: 7, isCaster: false, weavingName: '武器编织',
-        bonuses: { 2: { sd: 1 }, 4: { pd: 1 }, 6: { sd: 2 }, 7: { init: 1 }, 8: { pd: 2 } }
-      },
-      warrior: {
-        name: '战士', en: 'Warrior', aliases: ['战士', 'Warrior'],
-        durability: 7, isCaster: false, weavingName: '战争编织',
-        bonuses: { 2: { pd: 1 }, 4: { md: 1 }, 6: { pd: 2 }, 7: { rec: 1 }, 8: { pd: 3 } }
-      },
-      sky_raider: {
-        name: '空贼', en: 'Sky Raider', aliases: ['空贼', '天空掠夺者', 'Sky Raider'],
-        durability: 7, isCaster: false, weavingName: '天空编织',
-        bonuses: { 2: { pd: 1 }, 4: { sd: 1 }, 6: { pd: 2 }, 7: { rec: 1 }, 8: { pd: 3 } }
-      },
-      cavalryman: {
-        name: '骑兵', en: 'Cavalryman', aliases: ['骑兵', 'Cavalryman'],
-        durability: 7, isCaster: false, weavingName: '骑乘编织',
-        bonuses: { 2: { pd: 1 }, 4: { sd: 1 }, 6: { pd: 2 }, 7: { rec: 1 }, 8: { pd: 3 } }
-      },
-      beastmaster: {
-        name: '驯兽师', en: 'Beastmaster', aliases: ['驯兽师', 'Beastmaster'],
-        durability: 7, isCaster: false, weavingName: '野兽编织',
-        bonuses: { 2: { pd: 1 }, 4: { sd: 1 }, 6: { pd: 2 }, 7: { rec: 1 }, 8: { pd: 3 } }
-      },
-      air_sailor: {
-        name: '空帆手', en: 'Air Sailor', aliases: ['空帆手', '飞空水手', 'Air Sailor'],
-        durability: 5, isCaster: false, weavingName: '航行编织',
-        bonuses: { 2: { pd: 1 }, 4: { sd: 1 }, 6: { pd: 2 }, 7: { rec: 1 }, 8: { pd: 3 } }
-      },
-      archer: {
-        name: '弓箭手', en: 'Archer', aliases: ['弓箭手', 'Archer'],
-        durability: 5, isCaster: false, weavingName: '箭矢编织',
-        bonuses: { 2: { pd: 1 }, 4: { md: 1 }, 6: { pd: 2 }, 7: { init: 1 }, 8: { pd: 3 } }
-      },
-      scout: {
-        name: '斥候', en: 'Scout', aliases: ['斥候', 'Scout'],
-        durability: 5, isCaster: false, weavingName: '斥候编织',
-        bonuses: { 2: { pd: 1 }, 4: { md: 1 }, 6: { pd: 2 }, 7: { init: 1 }, 8: { pd: 3 } }
-      },
-      thief: {
-        name: '盗贼', en: 'Thief', aliases: ['盗贼', 'Thief'],
-        durability: 5, isCaster: false, weavingName: '窃贼编织',
-        bonuses: { 2: { pd: 1 }, 4: { sd: 1 }, 6: { pd: 2 }, 7: { init: 1 }, 8: { pd: 3 } }
-      },
-      troubadour: {
-        name: '吟游诗人', en: 'Troubadour', aliases: ['吟游诗人', 'Troubadour'],
-        durability: 5, isCaster: false, weavingName: '故事编织',
-        bonuses: { 2: { sd: 1 }, 4: { md: 1 }, 6: { sd: 2 }, 7: { init: 1 }, 8: { sd: 3 } }
-      },
-      weaponsmith: {
-        name: '武器匠', en: 'Weaponsmith', aliases: ['武器匠', 'Weaponsmith'],
-        durability: 5, isCaster: false, weavingName: '匠脉编织',
-        bonuses: { 2: { md: 1 }, 4: { pd: 1 }, 6: { md: 2 }, 7: { ma: 1 }, 8: { md: 3 } }
-      },
-      elementalist: {
-        name: '元素师', en: 'Elementalist', aliases: ['元素师', '元素使', 'Elementalist'],
-        durability: 3, isCaster: true, weavingName: '元素编织',
-        bonuses: { 2: { md: 1 }, 4: { pd: 1 }, 6: { md: 2 }, 7: { rec: 1 }, 8: { md: 3 } }
-      },
-      illusionist: {
-        name: '幻术师', en: 'Illusionist', aliases: ['幻术师', 'Illusionist'],
-        durability: 3, isCaster: true, weavingName: '幻术编织',
-        bonuses: { 2: { md: 1 }, 4: { sd: 1 }, 6: { md: 2 }, 7: { init: 1 }, 8: { md: 3 } }
-      },
-      nethermancer: {
-        name: '下界术士', en: 'Nethermancer', aliases: ['下界术士', '死灵法师', 'Nethermancer'],
-        durability: 3, isCaster: true, weavingName: '下界编织',
-        bonuses: { 2: { md: 1 }, 4: { sd: 1 }, 6: { md: 2 }, 7: { ma: 1 }, 8: { md: 3 } }
-      },
-      wizard: {
-        name: '巫师', en: 'Wizard', aliases: ['巫师', 'Wizard'],
-        durability: 3, isCaster: true, weavingName: '巫术编织',
-        bonuses: { 2: { md: 1 }, 4: { sd: 1 }, 6: { md: 2 }, 7: { ma: 1 }, 8: { md: 3 } }
-      }
+      swordmaster: { name: '剑术大师', en: 'Swordmaster', aliases: ['剑术大师', '剑圣', 'Swordmaster'], durability: 7, isCaster: false, weavingName: '武器编织', c2: 'sd', c4: 'pd', c6: 'sd', c7: 'init', c8: 'pd' },
+      warrior: { name: '战士', en: 'Warrior', aliases: ['战士', 'Warrior'], durability: 7, isCaster: false, weavingName: '战争编织', c2: 'pd', c4: 'md', c6: 'pd', c7: 'rec', c8: 'pd' },
+      sky_raider: { name: '空贼', en: 'Sky Raider', aliases: ['空贼', '天空掠夺者', 'Sky Raider'], durability: 7, isCaster: false, weavingName: '天空编织', c2: 'pd', c4: 'sd', c6: 'pd', c7: 'rec', c8: 'pd' },
+      cavalryman: { name: '骑兵', en: 'Cavalryman', aliases: ['骑兵', 'Cavalryman'], durability: 7, isCaster: false, weavingName: '骑乘编织', c2: 'pd', c4: 'sd', c6: 'pd', c7: 'rec', c8: 'pd' },
+      beastmaster: { name: '驯兽师', en: 'Beastmaster', aliases: ['驯兽师', 'Beastmaster'], durability: 7, isCaster: false, weavingName: '野兽编织', c2: 'pd', c4: 'sd', c6: 'pd', c7: 'rec', c8: 'pd' },
+      air_sailor: { name: '空帆手', en: 'Air Sailor', aliases: ['空帆手', '飞空水手', 'Air Sailor'], durability: 5, isCaster: false, weavingName: '航行编织', c2: 'pd', c4: 'sd', c6: 'pd', c7: 'rec', c8: 'pd' },
+      archer: { name: '弓箭手', en: 'Archer', aliases: ['弓箭手', 'Archer'], durability: 5, isCaster: false, weavingName: '箭矢编织', c2: 'pd', c4: 'md', c6: 'pd', c7: 'init', c8: 'pd' },
+      scout: { name: '斥候', en: 'Scout', aliases: ['斥候', 'Scout'], durability: 5, isCaster: false, weavingName: '斥候编织', c2: 'pd', c4: 'md', c6: 'pd', c7: 'init', c8: 'pd' },
+      thief: { name: '盗贼', en: 'Thief', aliases: ['盗贼', 'Thief'], durability: 5, isCaster: false, weavingName: '窃贼编织', c2: 'pd', c4: 'sd', c6: 'pd', c7: 'init', c8: 'pd' },
+      troubadour: { name: '吟游诗人', en: 'Troubadour', aliases: ['吟游诗人', 'Troubadour'], durability: 5, isCaster: false, weavingName: '故事编织', c2: 'sd', c4: 'md', c6: 'sd', c7: 'init', c8: 'sd' },
+      weaponsmith: { name: '武器匠', en: 'Weaponsmith', aliases: ['武器匠', 'Weaponsmith'], durability: 5, isCaster: false, weavingName: '匠脉编织', c2: 'md', c4: 'pd', c6: 'md', c7: 'ma', c8: 'md' },
+      elementalist: { name: '元素师', en: 'Elementalist', aliases: ['元素师', '元素使', 'Elementalist'], durability: 3, isCaster: true, weavingName: '元素编织', c2: 'md', c4: 'pd', c6: 'md', c7: 'rec', c8: 'md' },
+      illusionist: { name: '幻术师', en: 'Illusionist', aliases: ['幻术师', 'Illusionist'], durability: 3, isCaster: true, weavingName: '幻术编织', c2: 'md', c4: 'sd', c6: 'md', c7: 'init', c8: 'md' },
+      nethermancer: { name: '下界术士', en: 'Nethermancer', aliases: ['下界术士', '死灵法师', 'Nethermancer'], durability: 3, isCaster: true, weavingName: '下界编织', c2: 'md', c4: 'sd', c6: 'md', c7: 'ma', c8: 'md' },
+      wizard: { name: '巫师', en: 'Wizard', aliases: ['巫师', 'Wizard'], durability: 3, isCaster: true, weavingName: '巫术编织', c2: 'md', c4: 'sd', c6: 'md', c7: 'ma', c8: 'md' }
     };
 
     // SPELLS_DB imported from ./ed4_spells_data.js
@@ -215,112 +155,65 @@ const RACES = {
       };
     }
 
-    
+    const normSpellKey = (str) =>
+      String(str || '').toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[（）()【】\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
 
-    const LEGACY_SPELL_ID_MAP = {
-      ele_air_armor: 'air-armor',
-      ele_earth_darts: 'earth-darts',
-      ele_flameweapon: 'flameweapon',
-      ele_heat_food: 'heat-food',
-      ele_resist_element: 'resist-element',
-      ele_shelter: 'shelter',
-      ele_air_mattress: 'air-mattress',
-      ele_icy_surface: 'icy-surface',
-      ele_shield_willow: 'shield-willow',
-      ill_assuring_touch: 'assuring-touch',
-      ill_cloak: 'cloak',
-      ill_ephemeral_bolt: 'ephemeral-bolt',
-      ill_monstrous_mantle: 'monstrous-mantle',
-      ill_unseen_voices: 'unseen-voices',
-      ill_blindness: 'blindness',
-      ill_displace_image: 'displace-image',
-      ill_phantom_flame: 'phantom-flame',
-      ill_see_unseen: 'see-the-unseen',
-      net_astral_spear: 'astral-spear',
-      net_ethereal_darkness: 'ethereal-darkness',
-      net_soul_armor: 'soul-armor',
-      net_soulless_eyes: 'soulless-eyes',
-      net_spirit_dart: 'spirit-dart',
-      net_aspect_fog_ghost: 'aspect-of-the-fog-ghost',
-      net_chilling_circle: 'chilling-circle',
-      net_nights_edge: 'night-s-edge',
-      wiz_logic_display: 'bedazzling-display-of-logical-analysis',
-      wiz_catseyes: 'catseyes',
-      wiz_flame_flash: 'flame-flash',
-      wiz_mage_armor: 'mage-armor',
-      wiz_mind_dagger: 'mind-dagger',
-      wiz_quicken_pace: 'quicken-pace',
-      wiz_astral_shield: 'astral-shield',
-      wiz_crushing_will: 'crushing-will',
-      wiz_seeking_sight: 'seeking-sight',
-      ele_ice_mace: 'ice-mace-and-chain',
-      ele_lightning_bolt: 'lightning-bolt',
-      ele_winds_deflection: 'winds-of-deflection',
-      ele_blizzard_sphere: 'blizzard-sphere',
-      ele_elemental_spear: 'elemental-spear',
-      ele_lightning_step: 'lightning-step',
-      ele_fireball: 'fireball',
-      ele_heat_armor: 'heat-armor',
-      ele_fireweave: 'fireweave',
-      ele_thunderclap: 'thunderclap',
-      ele_whirlwind: 'whirlwind',
-      ele_crushing_hand: 'crushing-hand-of-earth',
-      ill_nobody_here: 'nobody-here',
-      ill_phantom_warrior: 'phantom-warrior',
-      ill_notice_not: 'notice-not',
-      ill_phantom_lightning: 'phantom-lightning',
-      ill_eye_of_truth: 'eye-of-truth',
-      ill_phantom_fireball: 'phantom-fireball',
-      ill_astral_shadow: 'astral-shadow',
-      ill_stampede: 'stampede',
-      ill_shadow_spell: 'shadow-spell',
-      net_arrow_of_night: 'arrow-of-night',
-      net_pain: 'pain',
-      net_fog_of_fear: 'fog-of-fear',
-      net_evil_eye: 'evil-eye',
-      net_aspect_tyrant: 'aspect-of-the-menacing-tyrant',
-      net_aspect_physician: 'aspect-of-the-cruel-physician',
-      net_wither_limb: 'wither-limb',
-      net_astral_maw: 'astral-maw',
-      net_debilitating_gloom: 'debilitating-gloom',
-      net_restrain_entity: 'restrain-entity',
-      net_netherblade: 'netherblade',
-      net_shadow_tether: 'shadow-tether',
-      wiz_astral_targeting: 'astral-targeting',
-      wiz_aura_strike: 'aura-strike',
-      wiz_binding_threads: 'binding-threads',
-      wiz_wizards_cloak: 'wizard-s-cloak',
-      wiz_mystic_shock: 'mystic-shock',
-      wiz_sever_talent: 'sever-talent',
-      wiz_slow: 'slow',
-      wiz_energy_shield: 'energy-shield',
-      wiz_confusing_weave: 'confusing-weave',
-      wiz_astral_catastrophe: 'astral-catastrophe',
-      wiz_compression_bubble: 'compression-bubble',
-    };
-
-    const SPELL_ALIASES = {
-      '星界长矛': 'astral-spear',
-      '星界之矛': 'astral-spear',
-      '星质矛': 'astral-spear',
-      '灵魂甲': 'soul-armor',
-      '精神镖': 'spirit-dart',
-      '精神飞刺': 'spirit-dart',
-      '恐惧迷雾': 'fog-of-fear',
-      '夜箭': 'arrow-of-night',
-      '夜之箭': 'arrow-of-night',
-      '夜之矢': 'arrow-of-night',
-      '迷雾幽魂': 'aspect-of-the-fog-ghost',
-      '残酷医者': 'aspect-of-the-cruel-physician',
-      '险恶暴君': 'aspect-of-the-menacing-tyrant',
-      '枯萎术': 'wither-limb',
-      '凋零': 'wither-limb',
-      '寒霜法阵': 'chilling-circle',
-      '火球': 'fireball',
-      '闪电': 'lightning-bolt',
-      '法师甲': 'mage-armor',
-      '心灵匕': 'mind-dagger'
-    };
+    // 单一扁平法术索引：收敛 id、旧版 ID、中英文名与常用别称
+    const SPELL_LOOKUP_MAP = new Map();
+    const SPELL_EXTRA_ALIASES = [
+      ['ele_air_armor', 'air-armor'], ['ele_earth_darts', 'earth-darts'], ['ele_flameweapon', 'flameweapon'],
+      ['ele_heat_food', 'heat-food'], ['ele_resist_element', 'resist-element'], ['ele_shelter', 'shelter'],
+      ['ele_air_mattress', 'air-mattress'], ['ele_icy_surface', 'icy-surface'], ['ele_shield_willow', 'shield-willow'],
+      ['ill_assuring_touch', 'assuring-touch'], ['ill_cloak', 'cloak'], ['ill_ephemeral_bolt', 'ephemeral-bolt'],
+      ['ill_monstrous_mantle', 'monstrous-mantle'], ['ill_unseen_voices', 'unseen-voices'], ['ill_blindness', 'blindness'],
+      ['ill_displace_image', 'displace-image'], ['ill_phantom_flame', 'phantom-flame'], ['ill_see_unseen', 'see-the-unseen'],
+      ['net_astral_spear', 'astral-spear'], ['net_ethereal_darkness', 'ethereal-darkness'], ['net_soul_armor', 'soul-armor'],
+      ['net_soulless_eyes', 'soulless-eyes'], ['net_spirit_dart', 'spirit-dart'], ['net_aspect_fog_ghost', 'aspect-of-the-fog-ghost'],
+      ['net_chilling_circle', 'chilling-circle'], ['net_nights_edge', 'night-s-edge'],
+      ['wiz_logic_display', 'bedazzling-display-of-logical-analysis'], ['wiz_catseyes', 'catseyes'],
+      ['wiz_flame_flash', 'flame-flash'], ['wiz_mage_armor', 'mage-armor'], ['wiz_mind_dagger', 'mind-dagger'],
+      ['wiz_quicken_pace', 'quicken-pace'], ['wiz_astral_shield', 'astral-shield'], ['wiz_crushing_will', 'crushing-will'],
+      ['wiz_seeking_sight', 'seeking-sight'], ['ele_ice_mace', 'ice-mace-and-chain'], ['ele_lightning_bolt', 'lightning-bolt'],
+      ['ele_winds_deflection', 'winds-of-deflection'], ['ele_blizzard_sphere', 'blizzard-sphere'],
+      ['ele_elemental_spear', 'elemental-spear'], ['ele_lightning_step', 'lightning-step'], ['ele_fireball', 'fireball'],
+      ['ele_heat_armor', 'heat-armor'], ['ele_fireweave', 'fireweave'], ['ele_thunderclap', 'thunderclap'],
+      ['ele_whirlwind', 'whirlwind'], ['ele_crushing_hand', 'crushing-hand-of-earth'], ['ill_nobody_here', 'nobody-here'],
+      ['ill_phantom_warrior', 'phantom-warrior'], ['ill_notice_not', 'notice-not'], ['ill_phantom_lightning', 'phantom-lightning'],
+      ['ill_eye_of_truth', 'eye-of-truth'], ['ill_phantom_fireball', 'phantom-fireball'], ['ill_astral_shadow', 'astral-shadow'],
+      ['ill_stampede', 'stampede'], ['ill_shadow_spell', 'shadow-spell'], ['net_arrow_of_night', 'arrow-of-night'],
+      ['net_pain', 'pain'], ['net_fog_of_fear', 'fog-of-fear'], ['net_evil_eye', 'evil-eye'],
+      ['net_aspect_tyrant', 'aspect-of-the-menacing-tyrant'], ['net_aspect_physician', 'aspect-of-the-cruel-physician'],
+      ['net_wither_limb', 'wither-limb'], ['net_astral_maw', 'astral-maw'], ['net_debilitating_gloom', 'debilitating-gloom'],
+      ['net_restrain_entity', 'restrain-entity'], ['net_netherblade', 'netherblade'], ['net_shadow_tether', 'shadow-tether'],
+      ['wiz_astral_targeting', 'astral-targeting'], ['wiz_aura_strike', 'aura-strike'], ['wiz_binding_threads', 'binding-threads'],
+      ['wiz_wizards_cloak', 'wizard-s-cloak'], ['wiz_mystic_shock', 'mystic-shock'], ['wiz_sever_talent', 'sever-talent'],
+      ['wiz_slow', 'slow'], ['wiz_energy_shield', 'energy-shield'], ['wiz_confusing_weave', 'confusing-weave'],
+      ['wiz_astral_catastrophe', 'astral-catastrophe'], ['wiz_compression_bubble', 'compression-bubble'],
+      ['星界长矛', 'astral-spear'], ['星界之矛', 'astral-spear'], ['星质矛', 'astral-spear'],
+      ['灵魂甲', 'soul-armor'], ['精神镖', 'spirit-dart'], ['精神飞刺', 'spirit-dart'],
+      ['恐惧迷雾', 'fog-of-fear'], ['夜箭', 'arrow-of-night'], ['夜之箭', 'arrow-of-night'], ['夜之矢', 'arrow-of-night'],
+      ['迷雾幽魂', 'aspect-of-the-fog-ghost'], ['残酷医者', 'aspect-of-the-cruel-physician'],
+      ['险恶暴君', 'aspect-of-the-menacing-tyrant'], ['枯萎术', 'wither-limb'], ['凋零', 'wither-limb'],
+      ['寒霜法阵', 'chilling-circle'], ['火球', 'fireball'], ['闪电', 'lightning-bolt'],
+      ['法师甲', 'mage-armor'], ['心灵匕', 'mind-dagger']
+    ];
+    for (const sp of SPELLS_DB) {
+      SPELL_LOOKUP_MAP.set(sp.id, sp);
+      const cn = normSpellKey(sp.nameCn || sp.name);
+      if (cn) SPELL_LOOKUP_MAP.set(cn, sp);
+      const en = normSpellKey(sp.nameEn);
+      if (en) SPELL_LOOKUP_MAP.set(en, sp);
+      if (sp.aliases) {
+        for (const a of sp.aliases) {
+          const ka = normSpellKey(a);
+          if (ka && !SPELL_LOOKUP_MAP.has(ka)) SPELL_LOOKUP_MAP.set(ka, sp);
+        }
+      }
+    }
+    for (const [alias, id] of SPELL_EXTRA_ALIASES) {
+      const target = SPELL_LOOKUP_MAP.get(id);
+      if (target) SPELL_LOOKUP_MAP.set(alias, target);
+    }
 
     const WEAVING_KEYWORDS = [
       '脉路编织', '元素编织', '幻术编织', '下界编织', '巫术编织',
@@ -425,27 +318,17 @@ const RACES = {
       return null;
     }
 
-    // ========================================================================
-    // 1. 门类环数进阶、装备穿脱解析与角色衍生属性计算 (Pure Functions)
-    // ========================================================================
+    // 1. 门类环数进阶、装备穿脱解析与角色衍生属性计算
     function getDisciplineBonuses(disciplineId, circle) {
       const disc = DISCIPLINES[disciplineId] || DISCIPLINES.warrior;
       const c = Math.max(1, Math.min(15, Number(circle) || 1));
-      let pd = 0, md = 0, sd = 0, init = 0, rec = 0, ma = 0;
-      if (c >= 2) pd += 1;
-      if (c >= 4) {
-        if (disc.c4 === 'pd') pd += 1;
-        else if (disc.c4 === 'md') md += 1;
-        else if (disc.c4 === 'sd') sd += 1;
-      }
-      if (c >= 6) pd += 1;
-      if (c >= 7) {
-        if (disc.c7 === 'init') init += 1;
-        else if (disc.c7 === 'rec') rec += 1;
-        else if (disc.c7 === 'ma') ma += 1;
-      }
-      if (c >= 8) pd += 1;
-      return { disc, pd, md, sd, init, rec, ma };
+      const out = { disc, pd: 0, md: 0, sd: 0, init: 0, rec: 0, ma: 0 };
+      if (c >= 2) out[disc.c2] += 1;
+      if (c >= 4) out[disc.c4] += 1;
+      if (c >= 6) out[disc.c6] += 1;
+      if (c >= 7) out[disc.c7] += 1;
+      if (c >= 8) out[disc.c8] += 1;
+      return out;
     }
 
     function parseItemBonuses(text) {
@@ -454,7 +337,7 @@ const RACES = {
       if (!s) return b;
       const sumMatches = (re) => {
         let total = 0, m;
-        while ((m = re.exec(s)) !== null) total += Number(m[1]) || 0;
+        while ((m = re.exec(s)) !== null) total += Number(m[1]);
         return total;
       };
       b.pa = sumMatches(/物理护甲\s*([+-]?\d+)/g);
@@ -474,11 +357,11 @@ const RACES = {
 
     function calcEquippedBonuses(gear = [], threadItems = []) {
       const total = { pa: 0, ma: 0, pd: 0, md: 0, sd: 0, init: 0, DEX: 0, STR: 0, TOU: 0, PER: 0, WIL: 0, CHA: 0 };
-      [...(gear || []), ...(threadItems || [])].forEach(item => {
-        if (!item || item.equipped === false) return;
+      for (const item of [...gear, ...threadItems]) {
+        if (item.equipped === false) continue;
         const b = parseItemBonuses(`${item.name || ''} ${item.effect || ''}`);
         for (const k of Object.keys(total)) total[k] += b[k];
-      });
+      }
       return total;
     }
 
@@ -491,32 +374,32 @@ const RACES = {
       const itemBonuses = calcEquippedBonuses(pl.gear, pl.threadItems);
 
       for (const k of Object.keys(ATTR_NAMES)) {
-        const mod = (pl.attrMods && pl.attrMods[k]) || 0;
+        const mod = pl.attrMods[k] || 0;
         spentPoints += ATTR_COST[mod] !== undefined ? ATTR_COST[mod] : mod;
-        attrs[k] = race.base[k] + mod + (itemBonuses[k] || 0);
+        attrs[k] = race.base[k] + mod + itemBonuses[k];
         steps[k] = attrToStep(attrs[k]);
       }
 
-      let pd = Math.floor((attrs.DEX + 3) / 2) + (race.pdBonus || 0) + prog.pd + (itemBonuses.pd || 0);
-      let md = Math.floor((attrs.PER + 3) / 2) + prog.md + (itemBonuses.md || 0);
-      let sd = Math.floor((attrs.CHA + 3) / 2) + prog.sd + (itemBonuses.sd || 0);
+      let pd = Math.floor((attrs.DEX + 3) / 2) + (race.pdBonus || 0) + prog.pd + itemBonuses.pd;
+      let md = Math.floor((attrs.PER + 3) / 2) + prog.md + itemBonuses.md;
+      let sd = Math.floor((attrs.CHA + 3) / 2) + prog.sd + itemBonuses.sd;
 
-      if (!pl.statuses?.blindsided) {
-        pd += Number(pl.shield?.pd) || 0;
-        md += Number(pl.shield?.md) || 0;
+      if (!pl.statuses.blindsided) {
+        pd += Number(pl.shield.pd) || 0;
+        md += Number(pl.shield.md) || 0;
       }
-      if (pl.options?.defensive) { pd += 3; md += 3; }
-      if (pl.options?.aggressive) { pd -= 3; md -= 3; }
-      if (pl.statuses?.knockedDown) { pd -= 3; md -= 3; sd -= 3; }
-      if (pl.statuses?.blindsided) { pd -= 3; }
-      if (pl.statuses?.harried) { pd -= 2; md -= 2; sd -= 2; }
+      if (pl.options.defensive) { pd += 3; md += 3; }
+      if (pl.options.aggressive) { pd -= 3; md -= 3; }
+      if (pl.statuses.knockedDown) { pd -= 3; md -= 3; sd -= 3; }
+      if (pl.statuses.blindsided) { pd -= 3; }
+      if (pl.statuses.harried) { pd -= 2; md -= 2; sd -= 2; }
 
       pd = Math.max(1, pd);
       md = Math.max(1, md);
       sd = Math.max(1, sd);
 
-      const pa = (Number(pl.armor?.pa) || 0) + (race.naturalArmor || 0) + (itemBonuses.pa || 0);
-      const ma = Math.floor(attrs.WIL / 5) + (Number(pl.armor?.ma) || 0) + prog.ma + (itemBonuses.ma || 0);
+      const pa = (Number(pl.armor.pa) || 0) + (race.naturalArmor || 0) + itemBonuses.pa;
+      const ma = Math.floor(attrs.WIL / 5) + (Number(pl.armor.ma) || 0) + prog.ma + itemBonuses.ma;
 
       const uncon = attrs.TOU * 2 + prog.disc.durability * pl.circle + (Number(pl.durabilityBonus) || 0);
       const death = uncon + attrs.TOU + pl.circle + (pl.raceId === 'obsidiman' ? 10 : 0);
@@ -524,8 +407,8 @@ const RACES = {
       const recoveryMax = Math.max(1, Math.round(attrs.TOU / 6)) + prog.rec;
       const karmaMax = pl.circle * race.karmaMod;
 
-      const initPen = (Number(pl.armor?.initPen) || 0) + (Number(pl.shield?.initPen) || 0);
-      const initStep = Math.max(1, steps.DEX - initPen + (Number(pl.initBonus) || 0) + prog.init + (itemBonuses.init || 0));
+      const initPen = (Number(pl.armor.initPen) || 0) + (Number(pl.shield.initPen) || 0);
+      const initStep = Math.max(1, steps.DEX - initPen + (Number(pl.initBonus) || 0) + prog.init + itemBonuses.init);
 
       return {
         race, prog, attrs, steps, spentPoints, itemBonuses,
@@ -536,43 +419,26 @@ const RACES = {
 
     function getPlActionMod(pl) {
       let mod = -Math.max(0, Number(pl.wounds) || 0);
-      if (pl.options?.defensive) mod -= 3;
-      if (pl.options?.knockdownAttack) mod -= 2;
-      if (pl.options?.splitMove) mod -= 2;
-      if (pl.statuses?.knockedDown) mod -= 3;
-      if (pl.statuses?.harried) mod -= 2;
+      if (pl.options.defensive) mod -= 3;
+      if (pl.options.knockdown) mod -= 2;
+      if (pl.options.splitMove) mod -= 2;
+      if (pl.statuses.knockedDown) mod -= 3;
+      if (pl.statuses.harried) mod -= 2;
       return mod;
     }
 
-    // ========================================================================
     // 2. 法术匹配、脉路编织与效果计算
-    // ========================================================================
     function findSpellInDb(name) {
       const raw = (name || '').trim();
       if (!raw) return null;
-      const mappedLegacyId = LEGACY_SPELL_ID_MAP[raw];
-      if (mappedLegacyId) {
-        const legacyHit = SPELLS_DB.find(s => s.id === mappedLegacyId);
-        if (legacyHit) return legacyHit;
-      }
-      const byId = SPELLS_DB.find(s => s.id === raw);
-      if (byId) return byId;
-
-      const norm = (str) => String(str || '').toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[（）()【】\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
-      const clean = norm(raw);
-
-      const exact = SPELLS_DB.find(s => {
-        const cn = norm(s.nameCn || s.name);
-        const en = norm(s.nameEn);
-        const aliasList = Array.isArray(s.aliases) ? s.aliases.map(norm) : [];
-        return cn === clean || en === clean || aliasList.includes(clean);
-      });
+      const clean = normSpellKey(raw);
+      const exact = SPELL_LOOKUP_MAP.get(raw) || SPELL_LOOKUP_MAP.get(clean);
       if (exact) return exact;
 
       const fuzzy = SPELLS_DB.find(s => {
-        const cn = norm(s.nameCn || s.name);
-        const en = norm(s.nameEn);
-        const aliasList = Array.isArray(s.aliases) ? s.aliases.map(norm) : [];
+        const cn = normSpellKey(s.nameCn || s.name);
+        const en = normSpellKey(s.nameEn);
+        const aliasList = s.aliases ? s.aliases.map(normSpellKey) : [];
         return (
           (clean.length >= 2 && (cn.includes(clean) || clean.includes(cn))) ||
           (en && clean.length >= 3 && (en.includes(clean) || clean.includes(en))) ||
@@ -581,8 +447,8 @@ const RACES = {
       });
       if (fuzzy) return fuzzy;
 
-      for (const [alias, id] of Object.entries(SPELL_ALIASES)) {
-        if (clean.includes(alias)) return SPELLS_DB.find(s => s.id === id) || null;
+      for (const [alias, id] of SPELL_EXTRA_ALIASES) {
+        if (!alias.includes('_') && clean.includes(alias)) return SPELL_LOOKUP_MAP.get(id) || null;
       }
       return null;
     }
@@ -590,34 +456,30 @@ const RACES = {
     function hasSpellEffectRoll(sp) {
       if (!sp) return false;
       if (sp.effectStepBonus !== null && sp.effectStepBonus !== undefined) return true;
-      if (sp.usesCircleAsBase) return true;
-      if (sp.effectType === 'damage') return true;
-      const f = String(sp.effectFormula || '');
+      if (sp.usesCircleAsBase || sp.effectType === 'damage') return true;
       if (sp.effectType === 'buff') return false;
-      return /\bWIL\b|意志|\bCIRCLE\b|环数/i.test(f);
+      return /\bWIL\b|意志|\bCIRCLE\b|环数/i.test(String(sp.effectFormula || ''));
     }
 
     function getThreadWeavingStep(pl, derived = null, spell = null) {
       const d = derived || calcPlDerived(pl);
       const talents = pl.talents || [];
-      const disc = spell?.discipline ? DISCIPLINES[spell.discipline] : null;
-      const discWeaving = disc?.weavingName ? disc.weavingName.toLowerCase() : '';
-      let t = null;
-      if (discWeaving) {
-        t = talents.find(x => (x.name || '').toLowerCase().includes(discWeaving));
-      }
+      const disc = DISCIPLINES[(spell && spell.discipline) || pl.disciplineId] || null;
+      const discWeaving = disc ? disc.weavingName.toLowerCase() : '';
+      let t = discWeaving ? talents.find(x => x.name.toLowerCase().includes(discWeaving)) : null;
       if (!t) {
         t = talents.find(x => {
-          const nm = (x.name || '').toLowerCase();
+          const nm = x.name.toLowerCase();
           return nm.includes('编织') || WEAVING_KEYWORDS.some(k => nm.includes(k));
         });
       }
       const rank = t ? t.rank : 0;
+      const nm = t ? t.name.toLowerCase() : '';
       return {
         step: Math.max(1, d.steps.PER + rank + getPlActionMod(pl)),
         rank,
-        talentName: t ? t.name : (disc?.weavingName || '脉路编织'),
-        isVersatilityTalent: Boolean(t && (t.isVersatility || (t.name || '').includes('多才多艺') || (t.name || '').toLowerCase().includes('versatility')))
+        talentName: t ? t.name : (disc ? disc.weavingName : '脉路编织'),
+        isVersatilityTalent: Boolean(t && (t.isVersatility || nm.includes('多才多艺') || nm.includes('versatility')))
       };
     }
 
@@ -837,6 +699,16 @@ function matchRaceId(raw) {
         }
       }
 
+      const extractExcelActionStrain = (name, rawAction, strainText, category = '') => {
+        const parsedAction = normalizeActionType(rawAction);
+        const rule = lookupTalentSkillRule(name, category);
+        const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
+        const strainMatch = strainText.match(/\d+/);
+        const rawStrain = strainMatch ? Number(strainMatch[0]) : undefined;
+        const strain = (rawStrain !== undefined && rawStrain > 0) ? rawStrain : (rule?.strain ?? 0);
+        return { action, strain };
+      };
+
       const talAnchor = findCell('天赋', 1, maxR, 1, 7);
       if (talAnchor) {
         let hr = talAnchor.r;
@@ -859,14 +731,7 @@ function matchRaceId(raw) {
           const rank = cellNum(r, rankCol);
           if (rank === undefined && !cellStr(r, attrCol)) continue;
           const attr = parseAttrKey(cellStr(r, attrCol));
-          const rawAction = cellStr(r, actionCol);
-          const parsedAction = normalizeActionType(rawAction);
-          const rule = lookupTalentSkillRule(tName);
-          const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
-          const strainText = strainCol > 0 ? cellStr(r, strainCol) : '';
-          const strainMatch = strainText.match(/\d+/);
-          const rawStrain = strainMatch ? Number(strainMatch[0]) : undefined;
-          const strain = (rawStrain !== undefined && rawStrain > 0) ? rawStrain : (rule?.strain ?? 0);
+          const { action, strain } = extractExcelActionStrain(tName, cellStr(r, actionCol), strainCol > 0 ? cellStr(r, strainCol) : '');
           const isAttack = tName.includes('攻击') || tName.includes('武器') || tName.includes('徒手') || tName.toLowerCase().includes('weapon');
           data.talents.push({ id: `t_imp_${r}`, name: tName, attr, rank: rank || 1, action, strain, isAttack });
         }
@@ -1113,14 +978,7 @@ function matchRaceId(raw) {
           const cat = cellStr(r, catCol) || '通用技能';
           const rank = cellNum(r, rankCol) || 1;
           const attr = parseAttrKey(cellStr(r, attrCol));
-          const rawAction = cellStr(r, actionCol);
-          const parsedAction = normalizeActionType(rawAction);
-          const rule = lookupTalentSkillRule(skName, cat);
-          const action = parsedAction || (!rawAction || rawAction === '攻击' ? (rule?.action || '') : '');
-          const strainText = strainCol > 0 ? cellStr(r, strainCol) : '';
-          const strainMatch = strainText.match(/\d+/);
-          const rawStrain = strainMatch ? Number(strainMatch[0]) : undefined;
-          const strain = (rawStrain !== undefined && rawStrain > 0) ? rawStrain : (rule?.strain ?? 0);
+          const { action, strain } = extractExcelActionStrain(skName, cellStr(r, actionCol), strainCol > 0 ? cellStr(r, strainCol) : '', cat);
           data.skills.push({
             id: `sk_imp_${r}`,
             category: cat,
@@ -1472,7 +1330,7 @@ function matchRaceId(raw) {
     }
 
     const ED4Engine = {
-      ATTR_NAMES, ATTR_COST, CARRY_TABLE, STEP_BASE, STEP_CYCLE, RACES, DISCIPLINES, SPELLS_DB, SPELL_ALIASES, LEGACY_SPELL_ID_MAP, WEAVING_KEYWORDS,
+      ATTR_NAMES, ATTR_COST, CARRY_TABLE, STEP_BASE, STEP_CYCLE, RACES, DISCIPLINES, SPELLS_DB, SPELL_LOOKUP_MAP, WEAVING_KEYWORDS,
       ACTION_TYPES, TALENT_SKILL_RULES, normalizeActionType, lookupTalentSkillRule,
       attrToStep, getStepDice, rollExplodingDie, rollStepTest,
       getDisciplineBonuses, parseItemBonuses, calcEquippedBonuses, calcPlDerived, getPlActionMod,

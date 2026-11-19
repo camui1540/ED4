@@ -132,12 +132,9 @@ export function emptyBuffModifiers(): ActiveBuffModifiers {
 export function enrichSpellWithDb<T extends Record<string, any>>(
   sp: T
 ): T & Record<string, any> & { extraThreads: string[]; extraEffectStepPerThread: number } {
-  if (!sp || typeof sp !== 'object') {
-    return sp as T & Record<string, any> & { extraThreads: string[]; extraEffectStepPerThread: number };
-  }
-  const mappedId = sp.id && ED4Engine.LEGACY_SPELL_ID_MAP ? ED4Engine.LEGACY_SPELL_ID_MAP[sp.id] || sp.id : sp.id;
-  const dbById = mappedId ? ED4Engine.SPELLS_DB.find((item: any) => item.id === mappedId) : null;
-  const dbMatch = dbById || ED4Engine.findSpellInDb(sp.nameCn || sp.name || sp.nameEn || '');
+  const dbMatch =
+    (sp.id ? ED4Engine.findSpellInDb(sp.id) : null) ||
+    ED4Engine.findSpellInDb(sp.nameCn || sp.name || sp.nameEn || '');
   if (dbMatch && sp.matchedDb !== false) {
     return {
       ...dbMatch,
@@ -162,25 +159,24 @@ export function enrichSpellWithDb<T extends Record<string, any>>(
       successLevelValue: dbMatch.successLevelValue ?? 0,
       successLevelUnit: dbMatch.successLevelUnit ?? null,
       desc: dbMatch.desc || dbMatch.description || sp.desc || '',
-      extraThreads: Array.isArray(dbMatch.extraThreads) ? dbMatch.extraThreads : [],
-      extraEffectStepPerThread:
-        typeof dbMatch.extraEffectStepPerThread === 'number' ? dbMatch.extraEffectStepPerThread : 0,
+      extraThreads: dbMatch.extraThreads || [],
+      extraEffectStepPerThread: dbMatch.extraEffectStepPerThread || 0,
     };
   }
   return {
     ...sp,
     nameCn: sp.nameCn || sp.name || '',
-    extraThreads: Array.isArray(sp.extraThreads) ? sp.extraThreads : [],
-    extraEffectStepPerThread: Number(sp.extraEffectStepPerThread) || 0,
+    extraThreads: sp.extraThreads || [],
+    extraEffectStepPerThread: sp.extraEffectStepPerThread || 0,
   };
 }
 
 export function hydrateSpellsWithDb(spells: any[] = []): any[] {
-  return (spells || []).map((sp) => enrichSpellWithDb(sp));
+  return spells.map((sp) => enrichSpellWithDb(sp));
 }
 
 export function getCircleExtraThreadCap(circle: number): number {
-  const c = Math.max(1, Math.min(15, Math.floor(Number(circle) || 1)));
+  const c = Math.max(1, Math.min(15, Math.floor(circle || 1)));
   if (c <= 4) return 1;
   if (c <= 8) return 2;
   if (c <= 12) return 3;
@@ -189,30 +185,10 @@ export function getCircleExtraThreadCap(circle: number): number {
 
 export function isVersatilityWeaving(pl: any, spell: any): boolean {
   const sp = enrichSpellWithDb(spell);
-  const plDiscId = pl?.disciplineId;
-  const plDisc = ED4Engine.DISCIPLINES[plDiscId];
-  const spellDiscId = sp?.discipline;
-
+  const plDisc = ED4Engine.DISCIPLINES[pl.disciplineId];
   if (!plDisc || !plDisc.isCaster) return true;
-  if (spellDiscId && ED4Engine.DISCIPLINES[spellDiscId] && spellDiscId !== plDiscId) return true;
-
-  const talents: any[] = Array.isArray(pl?.talents) ? pl.talents : [];
-  const discWeaving = plDisc.weavingName ? String(plDisc.weavingName).toLowerCase() : '';
-  const matchedTalent =
-    (discWeaving && talents.find((t) => String(t?.name || '').toLowerCase().includes(discWeaving))) ||
-    talents.find((t) => {
-      const nm = String(t?.name || '').toLowerCase();
-      return nm.includes('编织') || ED4Engine.WEAVING_KEYWORDS.some((k: string) => nm.includes(k));
-    });
-
-  if (matchedTalent) {
-    const nm = String(matchedTalent.name || '').toLowerCase();
-    if (matchedTalent.isVersatility || nm.includes('多才多艺') || nm.includes('versatility')) {
-      return true;
-    }
-  }
-
-  return false;
+  if (sp.discipline && ED4Engine.DISCIPLINES[sp.discipline] && sp.discipline !== pl.disciplineId) return true;
+  return Boolean(ED4Engine.getThreadWeavingStep(pl, null, sp).isVersatilityTalent);
 }
 
 export function getExtraThreadRuleInfo(pl: any, spell: any): ExtraThreadRuleInfo {
@@ -605,97 +581,199 @@ export function computeSpellDurationPlan(params: {
   };
 }
 
-function buildPlayerNonRollSummary(
+// 单一扁平 Buff 法术评估表：统一生成数值修正与玩家端摘要
+type BuffEvalResult = { mods: ActiveBuffModifiers; shortEffect: string; playerSummary?: string };
+
+const BUFF_EVALUATORS: Record<string, (opts: string[], nonStepTags: Array<{ label: string; count: number }>) => BuffEvalResult> = {
+  'air-armor': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.pa = 3 + opts.filter((s) => s.includes('增强效果')).length;
+    return { mods, shortEffect: `物理护甲 +${mods.pa}`, playerSummary: `本次生效强化：物理护甲 +${mods.pa}（需穿着衣物或护甲）` };
+  },
+  'mage-armor': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.pa = 3 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    return { mods, shortEffect: `物理护甲 +${mods.pa}` };
+  },
+  ironskin: (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.pa = v;
+    mods.woundThreshold = v;
+    mods.notes.push(`击倒检定 +${v}`);
+    return { mods, shortEffect: `物理护甲 +${v}、负伤阈值 +${v}、击倒检定 +${v}` };
+  },
+  'soul-armor': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.ma = 3 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    return { mods, shortEffect: `秘法护甲 +${mods.ma}` };
+  },
+  'circle-of-astral-protection': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.ma = 4 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    return { mods, shortEffect: `秘法护甲 +${mods.ma}` };
+  },
+  'astral-shield': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.md = 2;
+    mods.ma = opts.filter((s) => s.includes('秘法护甲')).length * 2;
+    return { mods, shortEffect: mods.ma > 0 ? `秘法防御 +2、秘法护甲 +${mods.ma}` : '秘法防御 +2' };
+  },
+  'shield-willow': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 2 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.pd = v;
+    mods.md = v;
+    return { mods, shortEffect: `盾牌物防/秘防 +${v}`, playerSummary: `本次生效强化：盾牌物理防御 +${v}、秘法防御 +${v}` };
+  },
+  'lightning-step': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 2 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.init = v;
+    mods.move = v;
+    mods.pd = v;
+    return { mods, shortEffect: `先攻 +${v}、移速 +${v}、物防 +${v}`, playerSummary: `本次生效强化：先攻 +${v}、移动速率 +${v}、物理防御 +${v}` };
+  },
+  'monstrous-mantle': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 2 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.meleeAtk = v;
+    mods.meleeDmgStep = v;
+    mods.pd = v;
+    return { mods, shortEffect: `近战攻伤 +${v}、物防 +${v}`, playerSummary: `本次生效强化：近战攻击与伤害 +${v}、物理防御 +${v}` };
+  },
+  'aspect-of-the-fog-ghost': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.meleeAtk = v;
+    mods.meleeDmgStep = v;
+    mods.pd = v;
+    return { mods, shortEffect: `近战攻伤 +${v}、物防 +${v}`, playerSummary: `本次生效强化：近战攻击与伤害 +${v}、物理防御 +${v}` };
+  },
+  'aspect-of-the-casual-murderer': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 5 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.allAtk = v;
+    mods.allDmgStep = v;
+    return { mods, shortEffect: `攻击与伤害检定 +${v}` };
+  },
+  flameweapon: (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.weaponExtraDieStep = 4 + opts.filter((s) => isStepEnhancementOption(s)).length * 2;
+    mods.weaponExtraDieElement = '火焰';
+    const label = ED4Engine.getStepDice(mods.weaponExtraDieStep).label;
+    return {
+      mods,
+      shortEffect: `附加火焰伤害 Step ${mods.weaponExtraDieStep} (${label})`,
+      playerSummary: `本次生效强化：武器附着火焰，攻击命中后额外追加 Step ${mods.weaponExtraDieStep} (${label}) 火焰伤害`,
+    };
+  },
+  'night-s-edge': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.weaponExtraDieStep = 3 + opts.filter((s) => isStepEnhancementOption(s)).length * 2;
+    mods.weaponExtraDieElement = '寒冷';
+    mods.notes.push('命中目标秘法防御 -2');
+    const label = ED4Engine.getStepDice(mods.weaponExtraDieStep).label;
+    return {
+      mods,
+      shortEffect: `附加寒冷伤害 Step ${mods.weaponExtraDieStep} (${label})，目标秘防 -2`,
+      playerSummary: `本次生效强化：武器附加 Step ${mods.weaponExtraDieStep} (${label}) 寒冷伤害，受创目标秘法防御 -2`,
+    };
+  },
+  'arrow-of-night': (opts, nonStepTags) => {
+    const mods = emptyBuffModifiers();
+    const dmgVal = 6 + opts.filter((s) => s.includes('增强效果') && s.includes('伤害')).length * 2;
+    const maPenVal = 2 + opts.filter((s) => s.includes('增强效果') && s.includes('秘法护甲')).length * 2;
+    mods.rangedDmgStep = dmgVal;
+    mods.notes.push(`命中目标秘法护甲 -${maPenVal}`);
+    const otherTags = nonStepTags.filter((t) => !t.label.includes('增强效果') && !t.label.includes('持续时间'));
+    const parts = [`远程伤害 +${dmgVal}`, `目标秘法护甲 -${maPenVal}`, ...otherTags.map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label))];
+    return {
+      mods,
+      shortEffect: `远程伤害 +${dmgVal}、目标秘法护甲 -${maPenVal}`,
+      playerSummary: `本次生效强化：${parts.join('、')}（请在后续攻击或结算时计入）`,
+    };
+  },
+  'venomous-fury': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length;
+    mods.meleeDmgStep = v;
+    mods.notes.push('命中附加中毒麻痹效果');
+    return { mods, shortEffect: `近战伤害 +${v}、附带麻痹毒素` };
+  },
+  netherblade: (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = opts.filter((s) => s.includes('伤害')).length * 2;
+    mods.meleeDmgStep = v;
+    mods.notes.push('武器可击中星界目标');
+    return { mods, shortEffect: v > 0 ? `可击中星界目标、伤害 +${v}` : '武器可击中星界目标' };
+  },
+  'iron-hand': () => {
+    const mods = emptyBuffModifiers();
+    mods.meleeDmgStep = 3;
+    return { mods, shortEffect: '近战伤害检定 +3' };
+  },
+  'giant-size': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 4 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    mods.allDmgStep = v;
+    mods.notes.push(`力量/体质相关检定 +${v}`);
+    return { mods, shortEffect: `力量/体质检定与伤害 +${v}` };
+  },
+  rampage: (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    mods.meleeAtk = v;
+    mods.meleeDmgStep = v;
+    return { mods, shortEffect: `近战攻击与伤害 +${v}` };
+  },
+  'combat-fury': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 2 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    mods.meleeAtk = v;
+    return { mods, shortEffect: `近战攻击检定 +${v}` };
+  },
+  'seeking-sight': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    mods.rangedAtk = v;
+    return { mods, shortEffect: `远程攻击检定 +${v}` };
+  },
+  'quicken-pace': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 2 + opts.filter((s) => s.includes('移动速率')).length * 2;
+    mods.move = v;
+    return { mods, shortEffect: `移动速率 +${v} 码` };
+  },
+  'mantle-of-the-lightning-vanguard': (opts) => {
+    const mods = emptyBuffModifiers();
+    mods.move = 4 + opts.filter((s) => s.includes('移动速率')).length * 2;
+    mods.init = 2 + opts.filter((s) => s.includes('先攻')).length * 2;
+    return { mods, shortEffect: `飞行移速 16（移速 +${mods.move}）、先攻 +${mods.init}` };
+  },
+  'assuring-touch': (opts) => {
+    const mods = emptyBuffModifiers();
+    const v = 3 + opts.filter((s) => s.includes('增强效果')).length * 2;
+    mods.notes.push(`对抗恐惧秘防/社防/意志 +${v}`);
+    return { mods, shortEffect: `对抗恐惧秘防/社防 +${v}、意志检定 +${v}` };
+  },
+};
+
+function evaluateBuffSpell(
   sp: any,
   selectedOptions: string[],
   nonStepTags: Array<{ label: string; count: number }>
-): string {
-  const id = sp?.id;
-  const baseFormula = String(sp?.effectFormula || '').trim();
-  const extraEffects = selectedOptions.filter((o) => o.includes('增强效果'));
-  const otherTags = nonStepTags.filter((t) => !t.label.includes('增强效果') && !t.label.includes('持续时间'));
-
-  // Specific clean combinations for common Buff spells
-  if (id === 'arrow-of-night') {
-    const dmgBoost = extraEffects.filter((o) => o.includes('伤害')).length * 2;
-    const maPen = extraEffects.filter((o) => o.includes('秘法护甲')).length * 2;
-    const parts = [`远程伤害 +${6 + dmgBoost}`, `目标秘法护甲 -${2 + maPen}`];
-    if (otherTags.length > 0) {
-      parts.push(...otherTags.map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label)));
-    }
-    return `本次生效强化：${parts.join('、')}（请在后续攻击或结算时计入）`;
-  }
-
-  if (id === 'flameweapon') {
-    const stepBoost = selectedOptions.filter((o) => isStepEnhancementOption(o)).length * 2;
-    const finalDieStep = 4 + stepBoost;
-    const dieLabel = ED4Engine.getStepDice(finalDieStep).label;
-    return `本次生效强化：武器附着火焰，攻击命中后额外追加 Step ${finalDieStep} (${dieLabel}) 火焰伤害`;
-  }
-
-  if (id === 'night-s-edge') {
-    const stepBoost = selectedOptions.filter((o) => isStepEnhancementOption(o)).length * 2;
-    const finalDieStep = 3 + stepBoost;
-    const dieLabel = ED4Engine.getStepDice(finalDieStep).label;
-    return `本次生效强化：武器附加 Step ${finalDieStep} (${dieLabel}) 寒冷伤害，受创目标秘法防御 -2`;
-  }
-
-  if (id === 'shield-willow') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：盾牌物理防御 +${2 + bonus}、秘法防御 +${2 + bonus}`;
-  }
-
-  if (id === 'air-armor') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：物理护甲 +${3 + bonus}（需穿着衣物或护甲）`;
-  }
-
-  if (id === 'mage-armor') {
-    const bonus = extraEffects.length * 2;
-    return `本次生效强化：物理护甲 +${3 + bonus}`;
-  }
-
-  if (id === 'soul-armor') {
-    const bonus = extraEffects.length * 2;
-    return `本次生效强化：秘法护甲 +${3 + bonus}`;
-  }
-
-  if (id === 'circle-of-astral-protection') {
-    const bonus = extraEffects.length * 2;
-    return `本次生效强化：秘法护甲 +${4 + bonus}`;
-  }
-
-  if (id === 'ironskin') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：物理护甲 +${3 + bonus}、负伤阈值 +${3 + bonus}、击倒检定 +${3 + bonus}`;
-  }
-
-  if (id === 'lightning-step') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：先攻 +${2 + bonus}、移动速率 +${2 + bonus}、物理防御 +${2 + bonus}`;
-  }
-
-  if (id === 'monstrous-mantle') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：近战攻击与伤害 +${2 + bonus}、物理防御 +${2 + bonus}`;
-  }
-
-  if (id === 'aspect-of-the-fog-ghost') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：近战攻击与伤害 +${3 + bonus}、物理防御 +${3 + bonus}`;
-  }
-
-  if (id === 'aspect-of-the-casual-murderer') {
-    const bonus = extraEffects.length * 1;
-    return `本次生效强化：攻击与伤害检定 +${5 + bonus}`;
-  }
-
-  const allExtraNotes = nonStepTags.filter((t) => !t.label.includes('持续时间'));
-  const noteStr =
-    allExtraNotes.length > 0
-      ? `；附加强化：${allExtraNotes.map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label)).join('、')}`
-      : '';
-  return `本次生效强化：${baseFormula || sp?.desc || '见法术说明'}${noteStr}（请在后续攻击或结算时计入）`;
+): BuffEvalResult {
+  const fn = BUFF_EVALUATORS[sp.id];
+  if (fn) return fn(selectedOptions, nonStepTags);
+  const extraNotes = nonStepTags.filter((t) => !t.label.includes('持续时间'));
+  const baseFormula = String(sp.effectFormula || '').trim();
+  const enh = extraNotes.map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label)).join('、');
+  return {
+    mods: emptyBuffModifiers(),
+    shortEffect: enh ? `${baseFormula}（${enh}）` : baseFormula,
+    playerSummary: `本次生效强化：${baseFormula || sp.desc || '见法术说明'}${enh ? `；附加强化：${enh}` : ''}（请在后续攻击或结算时计入）`,
+  };
 }
 
 export function computeSpellEffectPlan(params: {
@@ -707,10 +785,10 @@ export function computeSpellEffectPlan(params: {
   castingExtraSuccesses: number;
 }): SpellEffectPlan {
   const sp = enrichSpellWithDb(params.spell);
-  const extraThreadsCount = Math.max(0, Math.floor(Number(params.extraThreadsCount) || 0));
-  const castingExtraSuccesses = Math.max(0, Math.floor(Number(params.castingExtraSuccesses) || 0));
-  const supportsStepBoost = Number(sp?.extraEffectStepPerThread) === 2;
-  const availableOpts: string[] = Array.isArray(sp?.extraThreads) ? sp.extraThreads : [];
+  const extraThreadsCount = Math.max(0, Math.floor(params.extraThreadsCount || 0));
+  const castingExtraSuccesses = Math.max(0, Math.floor(params.castingExtraSuccesses || 0));
+  const supportsStepBoost = sp.extraEffectStepPerThread === 2;
+  const availableOpts: string[] = sp.extraThreads;
 
   const normalizedSelected = Array.from({ length: extraThreadsCount }, (_, i) => {
     const raw = params.selectedExtraOptions?.[i];
@@ -775,13 +853,14 @@ export function computeSpellEffectPlan(params: {
       ? nonStepTags.map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label)).join('、')
       : '';
 
+  const buffEval = hasBaseRoll ? null : evaluateBuffSpell(sp, normalizedSelected, nonStepTags);
   const playerSummaryText = hasBaseRoll
     ? `${breakdownText}${durationPlan.hasExtension ? `；${durationPlan.summaryText}` : ''}`
-    : buildPlayerNonRollSummary(sp, normalizedSelected, nonStepTags);
+    : buffEval!.playerSummary || `本次生效强化：${buffEval!.shortEffect}`;
 
   return {
     hasBaseRoll,
-    baseFormula: sp?.effectFormula || '-',
+    baseFormula: sp.effectFormula || '-',
     baseStep,
     willforceRank,
     willforceStrain,
@@ -817,9 +896,8 @@ const SHIELD_BUFF_IDS = new Set(['shield-willow']);
 
 export function getBuffTargetKind(spell: any): BuffTargetKind {
   const sp = enrichSpellWithDb(spell);
-  const id = String(sp?.id || '');
-  if (WEAPON_BUFF_IDS.has(id)) return 'weapon';
-  if (SHIELD_BUFF_IDS.has(id)) return 'shield';
+  if (WEAPON_BUFF_IDS.has(sp.id)) return 'weapon';
+  if (SHIELD_BUFF_IDS.has(sp.id)) return 'shield';
   return 'character';
 }
 
@@ -832,205 +910,7 @@ export function buildActiveBuffEntry(params: {
   const sp = enrichSpellWithDb(params.spell);
   const { plan } = params;
   const targetKind = getBuffTargetKind(sp);
-  const mods = emptyBuffModifiers();
-  const opts = plan.selectedExtraOptions;
-  const countOpt = (pred: (s: string) => boolean) => opts.filter(pred).length;
-
-  let shortEffect = String(sp.effectFormula || '');
-
-  switch (sp.id) {
-    case 'air-armor': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      mods.pa += 3 + extra;
-      shortEffect = `物理护甲 +${mods.pa}`;
-      break;
-    }
-    case 'mage-armor': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      mods.pa += 3 + extra;
-      shortEffect = `物理护甲 +${mods.pa}`;
-      break;
-    }
-    case 'ironskin': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 3 + extra;
-      mods.pa += val;
-      mods.woundThreshold += val;
-      mods.notes.push(`击倒检定 +${val}`);
-      shortEffect = `物理护甲 +${val}、负伤阈值 +${val}、击倒检定 +${val}`;
-      break;
-    }
-    case 'soul-armor': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      mods.ma += 3 + extra;
-      shortEffect = `秘法护甲 +${mods.ma}`;
-      break;
-    }
-    case 'circle-of-astral-protection': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      mods.ma += 4 + extra;
-      shortEffect = `秘法护甲 +${mods.ma}`;
-      break;
-    }
-    case 'astral-shield': {
-      const extraMa = countOpt((s) => s.includes('秘法护甲')) * 2;
-      mods.md += 2;
-      mods.ma += extraMa;
-      shortEffect = extraMa > 0 ? `秘法防御 +2、秘法护甲 +${extraMa}` : '秘法防御 +2';
-      break;
-    }
-    case 'shield-willow': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 2 + extra;
-      mods.pd += val;
-      mods.md += val;
-      shortEffect = `盾牌物防/秘防 +${val}`;
-      break;
-    }
-    case 'lightning-step': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 2 + extra;
-      mods.init += val;
-      mods.move += val;
-      mods.pd += val;
-      shortEffect = `先攻 +${val}、移速 +${val}、物防 +${val}`;
-      break;
-    }
-    case 'monstrous-mantle': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 2 + extra;
-      mods.meleeAtk += val;
-      mods.meleeDmgStep += val;
-      mods.pd += val;
-      shortEffect = `近战攻伤 +${val}、物防 +${val}`;
-      break;
-    }
-    case 'aspect-of-the-fog-ghost': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 3 + extra;
-      mods.meleeAtk += val;
-      mods.meleeDmgStep += val;
-      mods.pd += val;
-      shortEffect = `近战攻伤 +${val}、物防 +${val}`;
-      break;
-    }
-    case 'aspect-of-the-casual-murderer': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const val = 5 + extra;
-      mods.allAtk += val;
-      mods.allDmgStep += val;
-      shortEffect = `攻击与伤害检定 +${val}`;
-      break;
-    }
-    case 'flameweapon': {
-      const stepBoost = countOpt((s) => isStepEnhancementOption(s)) * 2;
-      mods.weaponExtraDieStep = 4 + stepBoost;
-      mods.weaponExtraDieElement = '火焰';
-      const label = ED4Engine.getStepDice(mods.weaponExtraDieStep).label;
-      shortEffect = `附加火焰伤害 Step ${mods.weaponExtraDieStep} (${label})`;
-      break;
-    }
-    case 'night-s-edge': {
-      const stepBoost = countOpt((s) => isStepEnhancementOption(s)) * 2;
-      mods.weaponExtraDieStep = 3 + stepBoost;
-      mods.weaponExtraDieElement = '寒冷';
-      mods.notes.push('命中目标秘法防御 -2');
-      const label = ED4Engine.getStepDice(mods.weaponExtraDieStep).label;
-      shortEffect = `附加寒冷伤害 Step ${mods.weaponExtraDieStep} (${label})，目标秘防 -2`;
-      break;
-    }
-    case 'arrow-of-night': {
-      const dmgBoost = countOpt((s) => s.includes('伤害')) * 2;
-      const maPen = countOpt((s) => s.includes('秘法护甲')) * 2;
-      const dmgVal = 6 + dmgBoost;
-      const maPenVal = 2 + maPen;
-      mods.rangedDmgStep += dmgVal;
-      mods.notes.push(`命中目标秘法护甲 -${maPenVal}`);
-      shortEffect = `远程伤害 +${dmgVal}、目标秘法护甲 -${maPenVal}`;
-      break;
-    }
-    case 'venomous-fury': {
-      const extra = countOpt((s) => s.includes('增强效果'));
-      const dmgVal = 3 + extra;
-      mods.meleeDmgStep += dmgVal;
-      mods.notes.push('命中附加中毒麻痹效果');
-      shortEffect = `近战伤害 +${dmgVal}、附带麻痹毒素`;
-      break;
-    }
-    case 'netherblade': {
-      const extra = countOpt((s) => s.includes('伤害')) * 2;
-      mods.meleeDmgStep += extra;
-      mods.notes.push('武器可击中星界目标');
-      shortEffect = extra > 0 ? `可击中星界目标、伤害 +${extra}` : '武器可击中星界目标';
-      break;
-    }
-    case 'iron-hand': {
-      mods.meleeDmgStep += 3;
-      shortEffect = '近战伤害检定 +3';
-      break;
-    }
-    case 'giant-size': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      const val = 4 + extra;
-      mods.allDmgStep += val;
-      mods.notes.push(`力量/体质相关检定 +${val}`);
-      shortEffect = `力量/体质检定与伤害 +${val}`;
-      break;
-    }
-    case 'rampage': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      const val = 3 + extra;
-      mods.meleeAtk += val;
-      mods.meleeDmgStep += val;
-      shortEffect = `近战攻击与伤害 +${val}`;
-      break;
-    }
-    case 'combat-fury': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      const val = 2 + extra;
-      mods.meleeAtk += val;
-      shortEffect = `近战攻击检定 +${val}`;
-      break;
-    }
-    case 'seeking-sight': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      const val = 3 + extra;
-      mods.rangedAtk += val;
-      shortEffect = `远程攻击检定 +${val}`;
-      break;
-    }
-    case 'quicken-pace': {
-      const extra = countOpt((s) => s.includes('移动速率')) * 2;
-      const val = 2 + extra;
-      mods.move += val;
-      shortEffect = `移动速率 +${val} 码`;
-      break;
-    }
-    case 'mantle-of-the-lightning-vanguard': {
-      const extraMove = countOpt((s) => s.includes('移动速率')) * 2;
-      const extraInit = countOpt((s) => s.includes('先攻')) * 2;
-      mods.move += 4 + extraMove;
-      mods.init += 2 + extraInit;
-      shortEffect = `飞行移速 16（移速 +${mods.move}）、先攻 +${mods.init}`;
-      break;
-    }
-    case 'assuring-touch': {
-      const extra = countOpt((s) => s.includes('增强效果')) * 2;
-      const val = 3 + extra;
-      mods.notes.push(`对抗恐惧秘防/社防/意志 +${val}`);
-      shortEffect = `对抗恐惧秘防/社防 +${val}、意志检定 +${val}`;
-      break;
-    }
-    default: {
-      if (plan.effectEnhancements.length > 0) {
-        const enh = plan.effectEnhancements
-          .map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label))
-          .join('、');
-        shortEffect = `${shortEffect}（${enh}）`;
-      }
-      break;
-    }
-  }
+  const { mods, shortEffect } = evaluateBuffSpell(sp, plan.selectedExtraOptions, plan.nonStepTags);
 
   return {
     id: `buff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -1051,42 +931,37 @@ export function computeActiveBuffModifiers(activeBuffs: ActiveBuff[] = [], pl?: 
   const total = emptyBuffModifiers();
   const isBlindsided = Boolean(pl?.statuses?.blindsided);
 
-  for (const buff of activeBuffs || []) {
-    if (!buff || !buff.modifiers) continue;
+  for (const buff of activeBuffs) {
+    if (buff.targetKind === 'shield' && isBlindsided) continue;
     const m = buff.modifiers;
-    // Shield buffs follow shield blindsided rule
-    if (buff.targetKind === 'shield' && isBlindsided) {
-      continue;
-    }
-    total.pa += Number(m.pa) || 0;
-    total.ma += Number(m.ma) || 0;
-    total.pd += Number(m.pd) || 0;
-    total.md += Number(m.md) || 0;
-    total.sd += Number(m.sd) || 0;
-    total.init += Number(m.init) || 0;
-    total.move += Number(m.move) || 0;
-    total.woundThreshold += Number(m.woundThreshold) || 0;
+    total.pa += m.pa;
+    total.ma += m.ma;
+    total.pd += m.pd;
+    total.md += m.md;
+    total.sd += m.sd;
+    total.init += m.init;
+    total.move += m.move;
+    total.woundThreshold += m.woundThreshold;
 
     if (buff.targetKind === 'character') {
-      total.meleeAtk += Number(m.meleeAtk) || 0;
-      total.rangedAtk += Number(m.rangedAtk) || 0;
-      total.allAtk += Number(m.allAtk) || 0;
-      total.meleeDmgStep += Number(m.meleeDmgStep) || 0;
-      total.rangedDmgStep += Number(m.rangedDmgStep) || 0;
-      total.allDmgStep += Number(m.allDmgStep) || 0;
+      total.meleeAtk += m.meleeAtk;
+      total.rangedAtk += m.rangedAtk;
+      total.allAtk += m.allAtk;
+      total.meleeDmgStep += m.meleeDmgStep;
+      total.rangedDmgStep += m.rangedDmgStep;
+      total.allDmgStep += m.allDmgStep;
     }
 
-    if (Array.isArray(m.notes)) {
-      total.notes.push(...m.notes);
-    }
+    if (m.notes.length > 0) total.notes.push(...m.notes);
   }
 
   return total;
 }
 
 export function isRangedWeaponName(name: string): boolean {
-  const s = String(name || '').toLowerCase();
-  return /弓|弩|箭|飞镖|投掷|投枪|标枪|弹弓|火铳|bow|crossbow|arrow|dart|sling|thrown|javelin|missile/.test(s);
+  return /弓|弩|箭|飞镖|投掷|投枪|标枪|弹弓|火铳|bow|crossbow|arrow|dart|sling|thrown|javelin|missile/.test(
+    String(name || '').toLowerCase()
+  );
 }
 
 export function getWeaponBuffEffects(
@@ -1105,37 +980,32 @@ export function getWeaponBuffEffects(
   const notes: string[] = [];
   const buffNames: string[] = [];
 
-  for (const buff of activeBuffs || []) {
-    if (!buff || !buff.modifiers) continue;
+  for (const buff of activeBuffs) {
     const m = buff.modifiers;
-
     if (buff.targetKind === 'weapon') {
       if (buff.targetItemId && buff.targetItemId !== weaponId) continue;
       let applies = false;
-      const wBonus = (Number(m.meleeDmgStep) || 0) + (Number(m.rangedDmgStep) || 0) + (Number(m.allDmgStep) || 0);
+      const wBonus = m.meleeDmgStep + m.rangedDmgStep + m.allDmgStep;
       if (wBonus !== 0) {
         dmgStepBonus += wBonus;
         applies = true;
       }
-      if (Number(m.weaponExtraDieStep) > 0) {
-        const step = Number(m.weaponExtraDieStep);
+      if (m.weaponExtraDieStep > 0) {
         extraDice.push({
-          step,
-          label: ED4Engine.getStepDice(step).label,
+          step: m.weaponExtraDieStep,
+          label: ED4Engine.getStepDice(m.weaponExtraDieStep).label,
           element: m.weaponExtraDieElement || '附魔',
           spellName: buff.nameCn,
         });
         applies = true;
       }
-      if (Array.isArray(m.notes) && m.notes.length > 0) {
+      if (m.notes.length > 0) {
         notes.push(...m.notes);
         applies = true;
       }
       if (applies) buffNames.push(buff.nameCn);
     } else if (buff.targetKind === 'character') {
-      const charBonus =
-        (Number(m.allDmgStep) || 0) +
-        (isRanged ? Number(m.rangedDmgStep) || 0 : Number(m.meleeDmgStep) || 0);
+      const charBonus = m.allDmgStep + (isRanged ? m.rangedDmgStep : m.meleeDmgStep);
       if (charBonus !== 0) {
         dmgStepBonus += charBonus;
         buffNames.push(buff.nameCn);

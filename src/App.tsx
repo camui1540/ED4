@@ -35,14 +35,14 @@ import {
 } from './engine/spellRules';
 import { PrintSheetView, type PdfPrintMode } from './components/PrintSheetView';
 import {
-  downloadExcelBuffer,
-  downloadTextFile,
   exportCharacterExcelBuffer,
   extractPortraitFromXlsxBuffer,
   getExportBaseName,
   serializeCharacterToTxt,
 } from './engine/characterExport';
+import { copyText, downloadBlob } from './engine/browserUtils';
 import {
+  buildBlindRollPayload,
   buildCharacterSyncPayload,
   buildLogInsertPayload,
   buildRoomInviteUrl,
@@ -52,13 +52,17 @@ import {
   getSessionClientId,
   isSupabaseConfigured,
   joinRoomInSupabase,
+  mapBlindRollToLog,
+  mapRemoteLogRow,
   mergeCharacterList,
   mergeIncomingLogs,
   pushCharacterToSupabase,
   pushLogsToSupabase,
   pushRoomStateToSupabase,
   removeCharacterFromSupabase,
+  serializeRoomCore,
   subscribeRoomRealtime,
+  type BlindRollBroadcastPayload,
   type RoomCharacterRow,
   type RoomRole,
   type RoomSession,
@@ -110,10 +114,12 @@ export default function App() {
     clientId: getSessionClientId(),
   }));
   const [roomCharacters, setRoomCharacters] = useState<RoomCharacterRow[]>([]);
+  const [gmSecretRoll, setGmSecretRoll] = useState(false);
   const knownLogIdsRef = useRef<Set<string>>(new Set());
   const isApplyingRemoteStateRef = useRef(false);
   const lastSyncedRoomJsonRef = useRef('');
   const importedXlsxBufferRef = useRef<ArrayBuffer | null>(null);
+  const broadcastBlindRollRef = useRef<(payload: BlindRollBroadcastPayload) => void>(() => {});
 
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem('ed4_sidebar_width'));
@@ -150,21 +156,14 @@ export default function App() {
     }
   }, [state.pl]);
 
-  // 订阅 Supabase Realtime Postgres Changes（rooms / room_logs / room_characters）
+  // 订阅 Supabase Realtime（rooms / room_logs / room_characters / BLIND_ROLL）
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode) return;
 
-    const unsubscribe = subscribeRoomRealtime(roomSession.roomCode, {
+    const { unsubscribe, broadcastBlindRoll } = subscribeRoomRealtime(roomSession.roomCode, {
       onRoomState: (nextState) => {
         if (!nextState || nextState.updatedBy === roomSession.clientId) return;
-        const incomingCore = JSON.stringify({
-          round: nextState.round,
-          turnIndex: nextState.turnIndex,
-          initiativeList: nextState.initiativeList,
-          monsters: nextState.monsters,
-          pendingReaction: nextState.pendingReaction,
-          gmBlind: nextState.gmBlind,
-        });
+        const incomingCore = serializeRoomCore(nextState);
         if (incomingCore === lastSyncedRoomJsonRef.current) return;
         lastSyncedRoomJsonRef.current = incomingCore;
         isApplyingRemoteStateRef.current = true;
@@ -194,21 +193,16 @@ export default function App() {
         const logId = String(row.id);
         if (knownLogIdsRef.current.has(logId)) return;
         knownLogIdsRef.current.add(logId);
-        const mapped = {
-          id: logId,
-          time: row.time || formatTime(),
-          text:
-            roomSession.role === 'pl' && state.gmBlind && row.blind_text
-              ? row.blind_text
-              : row.sender_name && !String(row.text || '').startsWith(row.sender_name)
-                ? `[${row.sender_name}] ${row.text}`
-                : row.text,
-          detail:
-            roomSession.role === 'pl' && state.gmBlind && row.blind_text
-              ? '（GM脱敏模式已隐藏具体抗性与阈值）'
-              : row.detail || '',
-          type: row.type || '',
-        };
+        const mapped = mapRemoteLogRow(row, roomSession.role, state.gmBlind);
+        setState((prev) => ({
+          ...prev,
+          logs: mergeIncomingLogs(prev.logs, [mapped]),
+        }));
+      },
+      onBlindRoll: (payload) => {
+        const mapped = mapBlindRollToLog(payload);
+        if (knownLogIdsRef.current.has(mapped.id)) return;
+        knownLogIdsRef.current.add(mapped.id);
         setState((prev) => ({
           ...prev,
           logs: mergeIncomingLogs(prev.logs, [mapped]),
@@ -218,30 +212,39 @@ export default function App() {
         setRoomCharacters((prev) => mergeCharacterList(prev, eventType, newRow, oldRow));
       },
     });
+    broadcastBlindRollRef.current = broadcastBlindRoll;
 
     return () => {
+      broadcastBlindRollRef.current = () => {};
       unsubscribe();
     };
   }, [roomSession.connected, roomSession.roomCode, roomSession.clientId, roomSession.role, state.gmBlind]);
 
-  // 本地新增战报实时推送到 room_logs
+  // 本地新增战报同步：暗骰仅发送极简脱敏广播，普通战报推送 room_logs
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode || !roomSession.role) return;
     const unsent = state.logs.filter((l) => !knownLogIdsRef.current.has(String(l.id)));
     if (unsent.length === 0) return;
     unsent.forEach((l) => knownLogIdsRef.current.add(String(l.id)));
-    const senderName =
-      roomSession.nickname.trim() || (roomSession.role === 'gm' ? 'GM' : state.pl.name || '玩家');
-    const rows = unsent.map((log) =>
-      buildLogInsertPayload({
-        roomCode: roomSession.roomCode,
-        clientId: roomSession.clientId,
-        senderName,
-        senderRole: roomSession.role!,
-        log,
-      })
-    );
-    pushLogsToSupabase(rows);
+    const blindLogs = unsent.filter((l) => l.isBlindRoll);
+    const normalLogs = unsent.filter((l) => !l.isBlindRoll);
+    blindLogs.forEach((log) => {
+      broadcastBlindRollRef.current(buildBlindRollPayload(log, 'GM'));
+    });
+    if (normalLogs.length > 0) {
+      const senderName =
+        roomSession.nickname.trim() || (roomSession.role === 'gm' ? 'GM' : state.pl.name || '玩家');
+      const rows = normalLogs.map((log) =>
+        buildLogInsertPayload({
+          roomCode: roomSession.roomCode,
+          clientId: roomSession.clientId,
+          senderName,
+          senderRole: roomSession.role!,
+          log,
+        })
+      );
+      pushLogsToSupabase(rows);
+    }
   }, [
     state.logs,
     roomSession.connected,
@@ -278,14 +281,7 @@ export default function App() {
   // 共享房间战斗状态（回合、先攻、怪物、反应、脱敏）同步至 rooms.state
   useEffect(() => {
     if (!roomSession.connected || !roomSession.roomCode) return;
-    const coreJson = JSON.stringify({
-      round: state.round,
-      turnIndex: state.turnIndex,
-      initiativeList: state.initiativeList,
-      monsters: state.monsters,
-      pendingReaction: state.pendingReaction,
-      gmBlind: state.gmBlind,
-    });
+    const coreJson = serializeRoomCore(state);
     if (isApplyingRemoteStateRef.current) {
       isApplyingRemoteStateRef.current = false;
       lastSyncedRoomJsonRef.current = coreJson;
@@ -337,18 +333,19 @@ export default function App() {
   }, [draggingResizer, sidebarWidth]);
 
   // 统一日志追加函数
-  const makeLog = (text: string, detail = '', type = '', blindText = '', gmBlind = state.gmBlind) => ({
+  const makeLog = (text: string, detail = '', type = '', blindText = '', gmBlind = state.gmBlind, isBlindRoll = false) => ({
     id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     time: formatTime(),
     text: gmBlind && blindText ? blindText : text,
     detail: gmBlind && blindText ? '（GM脱敏模式已隐藏具体抗性与阈值）' : detail,
     type,
+    ...(isBlindRoll ? { isBlindRoll: true } : {}),
   });
 
-  const pushLog = (text: string, detail = '', type = '', blindText = '') => {
+  const pushLog = (text: string, detail = '', type = '', blindText = '', isBlindRoll = false) => {
     setState((prev) => ({
       ...prev,
-      logs: [makeLog(text, detail, type, blindText, prev.gmBlind), ...prev.logs].slice(0, 60),
+      logs: [makeLog(text, detail, type, blindText, prev.gmBlind, isBlindRoll), ...prev.logs].slice(0, 60),
     }));
   };
 
@@ -1161,6 +1158,7 @@ export default function App() {
   };
 
   const handleMonsterAttackPl = (instanceId: string, targetClientId?: string) => {
+    const isBlind = roomSession.role !== 'pl' && gmSecretRoll;
     setState((prev) => {
       const m = prev.monsters.find((x) => x.instanceId === instanceId);
       if (!m) return prev;
@@ -1173,7 +1171,18 @@ export default function App() {
       const atkStep = Math.max(1, m.atkStep - m.wounds);
       const res = ED4Engine.rollStepTest(atkStep, { dn: targetPd, isAction: true, karmaDie: prev.pl.karmaDie });
       if (!res.isSuccess) {
-        const log = makeLog(`${m.name} 攻击 ${targetName} → 未命中 (${res.total} vs ${targetPd})`, res.trace, '', '', prev.gmBlind);
+        const log = makeLog(`${m.name} 攻击 ${targetName} → 未命中 (${res.total} vs ${targetPd})`, res.trace, '', '', prev.gmBlind, isBlind);
+        return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
+      }
+      if (isBlind) {
+        const log = makeLog(
+          `${m.name} 命中 ${targetName} (${res.total} vs ${targetPd}，额外成功 +${res.extraSuccesses})`,
+          res.trace,
+          'warn',
+          '',
+          prev.gmBlind,
+          true
+        );
         return { ...prev, logs: [log, ...prev.logs].slice(0, 60) };
       }
       const nextPending = {
@@ -1405,50 +1414,31 @@ export default function App() {
   };
 
   const handleRollFreeTest = (step: number, dn: string, karma: boolean) => {
+    const isBlind = roomSession.role !== 'pl' && gmSecretRoll;
     const res = ED4Engine.rollStepTest(step, { karma, karmaDie: state.pl.karmaDie, dn, isAction: true });
     let suffix = '';
     if (res.isRuleOfOne) suffix = ' [全一规则大失败]';
     else if (res.isSuccess === true) suffix = ` [成功，额外成功 +${res.extraSuccesses}]`;
     else if (res.isSuccess === false) suffix = ' [失败]';
-    pushLog(`自由检定 (Step ${step}) → ${res.total}${suffix}`, res.trace, res.isSuccess === true ? 'hit' : res.isSuccess === false ? 'fail' : '');
+    pushLog(
+      `自由检定 (Step ${step}) → ${res.total}${suffix}`,
+      res.trace,
+      res.isSuccess === true ? 'hit' : res.isSuccess === false ? 'fail' : '',
+      '',
+      isBlind
+    );
   };
 
   // 角色卡导出：TXT / 剪贴板 / Excel / PDF 打印
   const handleExportTxt = () => {
     const txt = serializeCharacterToTxt(state.pl);
     const fileName = `${getExportBaseName(state.pl)}.txt`;
-    downloadTextFile(fileName, txt);
+    downloadBlob(fileName, txt, 'text/plain;charset=utf-8');
     pushLog(`已导出角色卡 TXT：${fileName}`, '', 'hit');
   };
 
   const handleCopyTxt = async (): Promise<boolean> => {
-    const txt = serializeCharacterToTxt(state.pl);
-    let copied = false;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(txt);
-        copied = true;
-      }
-    } catch {
-      copied = false;
-    }
-
-    if (!copied) {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = txt;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        copied = document.execCommand('copy');
-        document.body.removeChild(ta);
-      } catch {
-        copied = false;
-      }
-    }
-
+    const copied = await copyText(serializeCharacterToTxt(state.pl));
     if (copied) {
       pushLog(`已复制角色卡【${state.pl.name}】TXT 文本到剪贴板`, '', 'hit');
       return true;
@@ -1461,7 +1451,7 @@ export default function App() {
     try {
       const buf = await exportCharacterExcelBuffer(state.pl, importedXlsxBufferRef.current);
       const fileName = `${getExportBaseName(state.pl)}.xlsx`;
-      downloadExcelBuffer(fileName, buf);
+      downloadBlob(fileName, buf, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       pushLog(`已导出角色卡 Excel：${fileName}`, '', 'hit');
     } catch (err: any) {
       pushLog(`导出 Excel 失败：${err?.message || '模板加载异常'}`, '', 'fail');
@@ -1547,32 +1537,8 @@ export default function App() {
   };
 
   // 联机大厅：身份切换、建房、进房、退房与复制邀请链接
-  const copyPlainText = async (content: string): Promise<boolean> => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(content);
-        return true;
-      }
-    } catch {
-      // 降级 execCommand
-    }
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = content;
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return ok;
-    } catch {
-      return false;
-    }
-  };
-
   const handleSelectRole = (role: RoomRole) => {
+    if (role === 'pl') setGmSecretRoll(false);
     setRoomSession((prev) => ({
       ...prev,
       role,
@@ -1590,14 +1556,7 @@ export default function App() {
     const res = await createRoomInSupabase(cleanCode, roomPayload);
     if (!res.ok) return res.error;
 
-    lastSyncedRoomJsonRef.current = JSON.stringify({
-      round: roomPayload.round,
-      turnIndex: roomPayload.turnIndex,
-      initiativeList: roomPayload.initiativeList,
-      monsters: roomPayload.monsters,
-      pendingReaction: roomPayload.pendingReaction,
-      gmBlind: roomPayload.gmBlind,
-    });
+    lastSyncedRoomJsonRef.current = serializeRoomCore(roomPayload);
     state.logs.forEach((l) => knownLogIdsRef.current.add(String(l.id)));
 
     const nextSession: RoomSession = {
@@ -1628,33 +1587,12 @@ export default function App() {
 
     const mappedLogs = (res.logs || []).map((row: any) => {
       knownLogIdsRef.current.add(String(row.id));
-      return {
-        id: String(row.id),
-        time: row.time || formatTime(),
-        text:
-          role === 'pl' && res.roomState?.gmBlind && row.blind_text
-            ? row.blind_text
-            : row.sender_name && !String(row.text || '').startsWith(row.sender_name)
-              ? `[${row.sender_name}] ${row.text}`
-              : row.text,
-        detail:
-          role === 'pl' && res.roomState?.gmBlind && row.blind_text
-            ? '（GM脱敏模式已隐藏具体抗性与阈值）'
-            : row.detail || '',
-        type: row.type || '',
-      };
+      return mapRemoteLogRow(row, role, Boolean(res.roomState?.gmBlind));
     });
 
     if (res.roomState) {
       const rs = res.roomState;
-      lastSyncedRoomJsonRef.current = JSON.stringify({
-        round: Number(rs.round) || 1,
-        turnIndex: Number(rs.turnIndex) || 0,
-        initiativeList: Array.isArray(rs.initiativeList) ? rs.initiativeList : [],
-        monsters: Array.isArray(rs.monsters) ? rs.monsters : [],
-        pendingReaction: rs.pendingReaction ?? null,
-        gmBlind: Boolean(rs.gmBlind),
-      });
+      lastSyncedRoomJsonRef.current = serializeRoomCore(rs);
       isApplyingRemoteStateRef.current = true;
       setState((prev) => ({
         ...prev,
@@ -1849,6 +1787,8 @@ export default function App() {
               templates={state.monsterTemplates}
               monsters={state.monsters}
               showAddForm={state.showAddMonsterForm}
+              gmSecretRoll={gmSecretRoll}
+              onToggleGmSecretRoll={setGmSecretRoll}
               onToggleAddForm={() => setState((p) => ({ ...p, showAddMonsterForm: !p.showAddMonsterForm }))}
               onSaveTemplate={(tpl) =>
                 setState((p) => ({
@@ -1884,8 +1824,9 @@ export default function App() {
           {state.activeTab === 'step' && (
             <StepTableView
               onQuickRollStep={(step) => {
+                const isBlind = roomSession.role !== 'pl' && gmSecretRoll;
                 const res = ED4Engine.rollStepTest(step, { isAction: true, karmaDie: state.pl.karmaDie });
-                pushLog(`STEP表快捷掷骰 (Step ${step}) → ${res.total}`, res.trace);
+                pushLog(`STEP表快捷掷骰 (Step ${step}) → ${res.total}`, res.trace, '', '', isBlind);
               }}
             />
           )}
@@ -1914,10 +1855,12 @@ export default function App() {
             pl={state.pl}
             monsters={state.monsters}
             gmBlind={state.gmBlind}
+            gmSecretRoll={gmSecretRoll}
             pendingReaction={state.pendingReaction}
             logs={state.logs}
             roomSession={roomSession}
             roomCharacters={roomCharacters}
+            onToggleGmSecretRoll={setGmSecretRoll}
             onRollAllInitiative={handleRollAllInitiative}
             onNextTurn={() =>
               setState((p) => ({
@@ -1971,7 +1914,7 @@ export default function App() {
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
         onLeaveRoom={handleLeaveRoom}
-        onCopyInviteLink={(code) => copyPlainText(buildRoomInviteUrl(code))}
+        onCopyInviteLink={(code) => copyText(buildRoomInviteUrl(code))}
       />
       <SpellEffectModal
         open={Boolean(spellEffectModal)}

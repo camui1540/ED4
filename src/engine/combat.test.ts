@@ -18,6 +18,7 @@ import {
   serializeCharacterToTxt,
 } from './characterExport.ts';
 import {
+  buildBlindRollPayload,
   buildCharacterSyncPayload,
   buildLogInsertPayload,
   buildRoomInviteUrl,
@@ -25,6 +26,8 @@ import {
   extractRoomCodeFromUrl,
   generateRoomCode,
   isSupabaseConfigured,
+  mapBlindRollToLog,
+  mapRemoteLogRow,
   mergeCharacterList,
   mergeIncomingLogs,
 } from './supabaseSync.ts';
@@ -109,7 +112,7 @@ test('Spell DB matching and effect roll detection work for aliases and formulas'
   const sp1 = ED4Engine.findSpellInDb('星界之矛');
   assert.equal(sp1?.id, 'astral-spear');
   assert.equal(ED4Engine.hasSpellEffectRoll(sp1), true);
-  assert.equal(ED4Engine.LEGACY_SPELL_ID_MAP.net_astral_spear, 'astral-spear');
+  assert.equal(ED4Engine.findSpellInDb('net_astral_spear')?.id, 'astral-spear');
 
   const sp2 = ED4Engine.findSpellInDb('Catseyes');
   assert.equal(sp2?.id, 'catseyes');
@@ -817,6 +820,59 @@ test('Excel portrait export preserves original aspect ratio and avoids duplicate
   assert.deepEqual((imgs2[0].range as any).ext, { width: 209, height: 314 });
 });
 
+test('Discipline bonuses and knockdown action modifier follow fixed flat rules', () => {
+  const wiz8 = ED4Engine.getDisciplineBonuses('wizard', 8);
+  assert.equal(wiz8.md, 3);
+  assert.equal(wiz8.sd, 1);
+  assert.equal(wiz8.ma, 1);
+  assert.equal(wiz8.pd, 0);
 
+  const sm8 = ED4Engine.getDisciplineBonuses('swordmaster', 8);
+  assert.equal(sm8.sd, 2);
+  assert.equal(sm8.pd, 2);
+  assert.equal(sm8.init, 1);
 
+  const st = createInitialState();
+  const kdPl = { ...st.pl, options: { ...st.pl.options, knockdown: true } };
+  assert.equal(ED4Engine.getPlActionMod(kdPl), -2);
+});
 
+test('GM blind roll sender-side desensitization strips dice details and renders minimal player row', () => {
+  const secretLog = {
+    id: 'log_secret_1',
+    time: '21:10:00',
+    text: '自由检定 (Step 12) → 23 [成功，额外成功 +2]',
+    detail: '2D10[10+7=17, 6]',
+    type: 'hit',
+    isBlindRoll: true,
+  };
+
+  const broadcast = buildBlindRollPayload(secretLog, 'GM');
+  assert.deepEqual(Object.keys(broadcast).sort(), ['id', 'sender', 'timestamp', 'type']);
+  assert.equal(broadcast.id, 'log_secret_1');
+  assert.equal(broadcast.type, 'BLIND_ROLL');
+  assert.equal(broadcast.sender, 'GM');
+  assert.equal(typeof broadcast.timestamp, 'number');
+
+  const playerLog = mapBlindRollToLog(broadcast);
+  assert.equal(playerLog.id, 'log_secret_1');
+  assert.equal(playerLog.text, 'GM 进行了暗骰');
+  assert.equal(playerLog.detail, '');
+  assert.equal(playerLog.type, 'BLIND_ROLL');
+
+  const fallbackRow = buildLogInsertPayload({
+    roomCode: '114514',
+    clientId: 'gm_1',
+    senderName: 'GM',
+    senderRole: 'gm',
+    log: secretLog,
+  });
+  assert.equal(fallbackRow.type, 'BLIND_ROLL');
+  assert.equal(fallbackRow.text, 'GM 进行了暗骰');
+  assert.equal(fallbackRow.detail, '');
+
+  const mappedRemote = mapRemoteLogRow(fallbackRow, 'pl', false);
+  assert.equal(mappedRemote.text, 'GM 进行了暗骰');
+  assert.equal(mappedRemote.detail, '');
+  assert.equal(mappedRemote.type, 'BLIND_ROLL');
+});
