@@ -1,6 +1,6 @@
 {
-  "name": "Earthdawn 4E 战术辅助面板",
-  "description": "《地球黎明》第四版（Earthdawn 4E）角色卡管理、骰池检定、法术矩阵、怪物面板与先攻战报战术辅助工具。",
+  "name": "Earthdawn 4E VTT面板",
+  "description": "《EARTHDAWN》第四版（Earthdawn 4E）角色卡管理、骰池检定、法术矩阵、怪物面板与先攻战报辅助工具。",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
