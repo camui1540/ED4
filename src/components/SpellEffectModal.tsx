@@ -186,7 +186,7 @@ export function SpellEffectModal({
                             return next;
                           });
                         }}
-                        className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+                        className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
                       >
                         {rule.extraThreadsOptions.map((opt) => (
                           <option key={opt} value={opt}>
@@ -301,7 +301,7 @@ export function SpellEffectModal({
                     aria-label="选择增益作用的武器"
                     value={selectedTargetItemId}
                     onChange={(e) => setSelectedTargetItemId(e.target.value)}
-                    className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+                    className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
                   >
                     {weaponsList.length > 0 ? (
                       weaponsList.map((w) => (
@@ -323,7 +323,7 @@ export function SpellEffectModal({
                     aria-label="选择增益作用的盾牌"
                     value={selectedTargetItemId || 'shield'}
                     onChange={(e) => setSelectedTargetItemId(e.target.value)}
-                    className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring focus:outline-none"
+                    className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-xs text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
                   >
                     <option value="shield">
                       {shieldName}（物防 +{pl?.shield?.pd || 0} / 秘防 +{pl?.shield?.md || 0}）

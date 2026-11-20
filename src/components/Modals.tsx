@@ -70,7 +70,7 @@ export function SpellJsonModal({ open, onClose, onCopied }: SpellJsonModalProps)
         <textarea
           readOnly
           value={jsonStr}
-          className="h-[58vh] w-full resize-none rounded border border-input bg-muted/60 p-2.5 font-mono text-[11px] text-foreground focus:border-ring focus:outline-none"
+          className="h-[58vh] w-full resize-none rounded border border-input bg-muted/60 p-2.5 font-mono text-[11px] text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
         />
       </div>
     </div>
@@ -498,7 +498,7 @@ export function RoomModal({
               onUpdateNickname(e.target.value);
             }}
             placeholder={activeRole === 'gm' ? '玩家昵称（选填，留空默认为 GM）' : `玩家昵称（留空默认为 ${charDefaultName || '玩家'}）`}
-            className="h-8 w-full rounded border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+            className="h-8 w-full rounded border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
           />
         </div>
 
@@ -539,7 +539,13 @@ export function RoomModal({
         {/* 创建与加入房间 */}
         {!session.connected && (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <div className="flex flex-col gap-2 rounded border border-border bg-background/60 p-2.5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!busy && isSupabaseConfigured && createCode.trim()) void handleCreate();
+              }}
+              className="flex flex-col gap-2 rounded border border-border bg-background/60 p-2.5"
+            >
               <b className="text-xs text-foreground">创建房间</b>
               <div className="flex gap-1">
                 <input
@@ -547,7 +553,7 @@ export function RoomModal({
                   value={createCode}
                   onChange={(e) => setCreateCode(e.target.value)}
                   placeholder="房间码（支持中文/数字）"
-                  className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
+                  className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 font-mono text-xs text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
                 />
                 <button
                   type="button"
@@ -559,33 +565,37 @@ export function RoomModal({
                 </button>
               </div>
               <button
-                type="button"
+                type="submit"
                 disabled={busy || !isSupabaseConfigured || !createCode.trim()}
-                onClick={handleCreate}
                 className="inline-flex h-8 items-center justify-center rounded border border-primary bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? '处理中...' : '创建房间'}
               </button>
-            </div>
+            </form>
 
-            <div className="flex flex-col gap-2 rounded border border-border bg-background/60 p-2.5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!busy && isSupabaseConfigured && joinCode.trim()) void handleJoin();
+              }}
+              className="flex flex-col gap-2 rounded border border-border bg-background/60 p-2.5"
+            >
               <b className="text-xs text-foreground">加入房间</b>
               <input
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value)}
                 placeholder="输入房间码（如 114514）"
-                className="h-7 w-full rounded border border-input bg-background px-2 font-mono text-xs text-foreground focus:border-ring focus:outline-none"
+                className="h-7 w-full rounded border border-input bg-background px-2 font-mono text-xs text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
               />
               <button
-                type="button"
+                type="submit"
                 disabled={busy || !isSupabaseConfigured || !joinCode.trim()}
-                onClick={handleJoin}
                 className="inline-flex h-8 items-center justify-center rounded border border-border bg-secondary px-3 text-xs font-semibold text-secondary-foreground hover:bg-muted cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {busy ? '验证中...' : '加入房间'}
               </button>
-            </div>
+            </form>
           </div>
         )}
 

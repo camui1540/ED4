@@ -1,8 +1,11 @@
-import ExcelJS from 'exceljs';
-import JSZip from 'jszip';
+import type { Workbook, Worksheet } from 'exceljs';
 import ED4Engine from './ed4_engine.js';
 import { getPlDerivedView } from './combatHelpers';
-import { ED4_TEMPLATE_BASE64 } from '../templates/ed4TemplateBase64';
+
+async function getExcelJS(): Promise<{ Workbook: new () => Workbook }> {
+  const mod = await import('exceljs');
+  return (mod as any).default ?? mod;
+}
 
 /**
  * 构建用于导出的完整装备清单：
@@ -122,6 +125,8 @@ function getImageDimensions(bytes: Uint8Array, ext: string): { width: number; he
  * 规范化 WPS / Office 生成的 .xlsx zip 内的注释与关系路径，确保 exceljs 稳定加载。
  */
 async function normalizeXlsxForExcelJs(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const mod = await import('jszip');
+  const JSZip = (mod as any).default ?? mod;
   const zip = await JSZip.loadAsync(buffer);
   const renameMap: Record<string, string> = {};
   for (const name of Object.keys(zip.files)) {
@@ -206,7 +211,7 @@ function shiftFormulaRowRefs(
  * 严禁影响左右相邻分栏的排版与行号。
  */
 export function shiftColumnBlockDown(
-  sheet: ExcelJS.Worksheet,
+  sheet: Worksheet,
   colStart: number,
   colEnd: number,
   fromRow: number,
@@ -280,7 +285,7 @@ export function shiftColumnBlockDown(
 }
 
 function cloneRowBandStyle(
-  sheet: ExcelJS.Worksheet,
+  sheet: Worksheet,
   srcRow: number,
   dstRow: number,
   colStart: number,
@@ -299,7 +304,7 @@ function cloneRowBandStyle(
  */
 export async function extractPortraitFromXlsxBuffer(buffer: ArrayBuffer): Promise<string> {
   try {
-    const normBuf = await normalizeXlsxForExcelJs(buffer);
+    const [ExcelJS, normBuf] = await Promise.all([getExcelJS(), normalizeXlsxForExcelJs(buffer)]);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(normBuf);
     const sheet = wb.worksheets[0];
@@ -338,7 +343,7 @@ function unwrapExcelJsCellValue(val: unknown): string | number | boolean | null 
  * 使用 exceljs 读取 .xlsx 字节流并转为 parseExcelWorkbook 兼容的扁平工作簿结构。
  */
 export async function readExcelBufferToWorkbook(buffer: ArrayBuffer) {
-  const normBuf = await normalizeXlsxForExcelJs(buffer);
+  const [ExcelJS, normBuf] = await Promise.all([getExcelJS(), normalizeXlsxForExcelJs(buffer)]);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(normBuf);
 
@@ -382,10 +387,14 @@ export async function exportCharacterExcelBuffer(
   pl: any,
   cachedTemplateBuffer?: ArrayBuffer | null
 ): Promise<ArrayBuffer> {
-  const rawBuf = cachedTemplateBuffer
-    ? cachedTemplateBuffer.slice(0)
-    : decodeBase64ToArrayBuffer(ED4_TEMPLATE_BASE64);
-  const normBuf = await normalizeXlsxForExcelJs(rawBuf);
+  let rawBuf: ArrayBuffer;
+  if (cachedTemplateBuffer) {
+    rawBuf = cachedTemplateBuffer.slice(0);
+  } else {
+    const { ED4_TEMPLATE_BASE64 } = await import('../templates/ed4TemplateBase64');
+    rawBuf = decodeBase64ToArrayBuffer(ED4_TEMPLATE_BASE64);
+  }
+  const [ExcelJS, normBuf] = await Promise.all([getExcelJS(), normalizeXlsxForExcelJs(rawBuf)]);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(normBuf);
 

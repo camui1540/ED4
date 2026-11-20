@@ -652,7 +652,7 @@ export function BgmPlayer({ roomSession }: BgmPlayerProps) {
               value={playMode}
               onChange={(e) => handleChangePlayMode(e.target.value as BgmPlayMode)}
               title="播放模式"
-              className="h-7 cursor-pointer rounded border border-input bg-background px-1.5 text-[11px] text-foreground focus:border-ring focus:outline-none"
+              className="h-7 cursor-pointer rounded border border-input bg-background px-1.5 text-[11px] text-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
             >
               <option value="loop">循环播放</option>
               <option value="once">只播一次</option>

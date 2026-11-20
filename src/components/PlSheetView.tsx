@@ -1927,7 +1927,7 @@ export function PlSheetView(props: PlSheetViewProps) {
                 value={pl.background || ''}
                 onChange={(e) => onUpdatePl((p) => ({ ...p, background: e.target.value }))}
                 placeholder="填写角色出身、经历与羁绊..."
-                className="field-sizing-content font-pixel min-h-36 max-h-96 w-full flex-1 resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
+                className="field-sizing-content font-pixel min-h-36 max-h-96 w-full flex-1 resize-y overflow-y-auto rounded border border-input bg-background/70 p-2.5 text-xs leading-relaxed text-foreground placeholder:text-muted-foreground focus:border-ring outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1"
               />
             </div>
           </div>

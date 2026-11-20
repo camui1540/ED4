@@ -1177,31 +1177,38 @@ export default function App() {
     reader.onload = async (e) => {
       const result = e.target?.result;
       if (!result) return;
-      let data: any;
-      if (ext === 'txt') {
-        importedXlsxBufferRef.current = null;
-        data = ED4Engine.parseTxtSheet(String(result));
-      } else {
-        const buf = result as ArrayBuffer;
-        importedXlsxBufferRef.current = buf.slice(0);
-        data = ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(buf));
-        const portraitUrl = await extractPortraitFromXlsxBuffer(buf);
-        if (portraitUrl) data.portraitUrl = portraitUrl;
-      }
+      try {
+        let data: any;
+        if (ext === 'txt') {
+          importedXlsxBufferRef.current = null;
+          data = ED4Engine.parseTxtSheet(String(result));
+        } else {
+          const buf = result as ArrayBuffer;
+          importedXlsxBufferRef.current = buf.slice(0);
+          data = ED4Engine.parseExcelWorkbook(await readExcelBufferToWorkbook(buf));
+          const portraitUrl = await extractPortraitFromXlsxBuffer(buf);
+          if (portraitUrl) data.portraitUrl = portraitUrl;
+        }
 
-      setState((prev) => {
-        const nextPl = applyImportedCharacter(prev.pl, data);
-        const d = getPlDerivedView(nextPl);
-        const matchedSpells = (nextPl.spells || []).filter((s: any) => s.matchedDb).length;
-        const log = makeLog(
-          `已导入角色【${nextPl.name}】（${d.race.name} · ${d.prog.disc.name} ${nextPl.circle}环）`,
-          `天赋 ${nextPl.talents.length} 项 | 技能 ${nextPl.skills.length} 项 | 武器 ${nextPl.weapons.length} 件 | 装备 ${nextPl.gear.length} 件 | 脉路物品 ${nextPl.threadItems.length} 件 | 法术 ${nextPl.spells.length} 个（匹配库 ${matchedSpells} 个）`,
-          'hit',
-          '',
-          prev.gmBlind
-        );
-        return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
-      });
+        setState((prev) => {
+          const nextPl = applyImportedCharacter(prev.pl, data);
+          const d = getPlDerivedView(nextPl);
+          const matchedSpells = (nextPl.spells || []).filter((s: any) => s.matchedDb).length;
+          const log = makeLog(
+            `已导入角色【${nextPl.name}】（${d.race.name} · ${d.prog.disc.name} ${nextPl.circle}环）`,
+            `天赋 ${nextPl.talents.length} 项 | 技能 ${nextPl.skills.length} 项 | 武器 ${nextPl.weapons.length} 件 | 装备 ${nextPl.gear.length} 件 | 脉路物品 ${nextPl.threadItems.length} 件 | 法术 ${nextPl.spells.length} 个（匹配库 ${matchedSpells} 个）`,
+            'hit',
+            '',
+            prev.gmBlind
+          );
+          return { ...prev, pl: nextPl, logs: [log, ...prev.logs] };
+        });
+      } catch (err: any) {
+        pushLog(`导入角色卡失败：${err?.message || '文件解析异常'}`, '', 'fail');
+      }
+    };
+    reader.onerror = () => {
+      pushLog('导入角色卡失败：文件读取异常', '', 'fail');
     };
     if (ext === 'txt') reader.readAsText(file, 'utf-8');
     else reader.readAsArrayBuffer(file);
